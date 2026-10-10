@@ -4,33 +4,42 @@
       <stop offset="0" stop-color="#113236"/>
       <stop offset="1" stop-color="#06171b"/>
     </linearGradient>
-    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#9af0cd"/>
-      <stop offset="1" stop-color="#6fd4ac"/>
+    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b9f7dc"/>
+      <stop offset="0.5" stop-color="#7ee0b9"/>
+      <stop offset="1" stop-color="#5cc79c"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e8d2a6"/>
-      <stop offset="1" stop-color="#cdb27c"/>
+      <stop offset="0" stop-color="#ecd7ad"/>
+      <stop offset="1" stop-color="#c9ad76"/>
     </linearGradient>
-    <mask id="crescent">
-      <rect width="512" height="512" fill="#fff"/>
-      <circle cx="350" cy="140" r="100" fill="#000"/>
-    </mask>
   </defs>
 
   <!-- fondo -->
   <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)" stroke="#3f7a74" stroke-width="8"/>
 
-  <!-- luna creciente -->
-  <circle cx="304" cy="176" r="116" fill="url(#mint)" mask="url(#crescent)"/>
+  <!-- espada, de abajo-izquierda a arriba-derecha -->
+  <g transform="translate(222 246) rotate(38)">
+    <!-- hoja -->
+    <path d="M0 -206 L-24 -160 L-24 36 L24 36 L24 -160 Z" fill="url(#blade)"/>
+    <!-- vaceo central -->
+    <path d="M0 -176 L-6 -150 L-6 24 L6 24 L6 -150 Z" fill="#2f7a64" opacity="0.55"/>
+    <!-- guarda -->
+    <rect x="-78" y="36" width="156" height="28" rx="12" fill="url(#gold)"/>
+    <!-- empuñadura -->
+    <rect x="-13" y="64" width="26" height="84" rx="8" fill="#1a3b3e"/>
+    <rect x="-13" y="80" width="26" height="8" fill="#c9ad76" opacity="0.7"/>
+    <rect x="-13" y="104" width="26" height="8" fill="#c9ad76" opacity="0.7"/>
+    <rect x="-13" y="128" width="26" height="8" fill="#c9ad76" opacity="0.7"/>
+    <!-- pomo -->
+    <circle cx="0" cy="164" r="19" fill="url(#gold)"/>
+  </g>
 
-  <!-- estrella de cuatro puntas -->
-  <path d="M412 70 L424 102 L456 114 L424 126 L412 158 L400 126 L368 114 L400 102 Z" fill="#9af0cd"/>
+  <!-- destello en la punta -->
+  <path d="M398 62 L407 86 L431 95 L407 104 L398 128 L389 104 L365 95 L389 86 Z" fill="#c9fbe4"/>
 
-  <!-- bocadillo de conversación -->
-  <path d="M112 270 h200 a36 36 0 0 1 36 36 v84 a36 36 0 0 1 -36 36 h-104 l-56 46 v-46 h-40 a36 36 0 0 1 -36 -36 v-84 a36 36 0 0 1 36 -36 z" fill="url(#gold)"/>
-
-  <!-- cruceta dentro del bocadillo -->
-  <rect x="196" y="302" width="32" height="92" rx="11" fill="#0b2226"/>
-  <rect x="166" y="332" width="92" height="32" rx="11" fill="#0b2226"/>
+  <!-- bocadillo de conversación con cruceta -->
+  <path d="M312 318 h118 a30 30 0 0 1 30 30 v70 a30 30 0 0 1 -30 30 h-74 l-44 36 v-36 a30 30 0 0 1 -30 -30 v-70 a30 30 0 0 1 30 -30 z" fill="url(#gold)"/>
+  <rect x="359" y="340" width="24" height="76" rx="9" fill="#0b2226"/>
+  <rect x="333" y="366" width="76" height="24" rx="9" fill="#0b2226"/>
 </svg>
