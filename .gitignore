@@ -1,0 +1,34 @@
+# Notas privadas
+.notes/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Datos de usuario (nunca se suben)
+data/
+*.gguf
+*.onnx
+*.bin
+*.sav
+*.log
+*.pcm
+*.wav
+secrets*
+*.key
+
+# Iconos intermedios
+assets/icon.iconset/
+
+# Sistema
+.DS_Store
+Thumbs.db
+.env

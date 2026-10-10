@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#113236"/>
+      <stop offset="1" stop-color="#06171b"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9af0cd"/>
+      <stop offset="1" stop-color="#6fd4ac"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8d2a6"/>
+      <stop offset="1" stop-color="#cdb27c"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="512" height="512" fill="#fff"/>
+      <circle cx="350" cy="140" r="100" fill="#000"/>
+    </mask>
+  </defs>
+
+  <!-- fondo -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)" stroke="#3f7a74" stroke-width="8"/>
+
+  <!-- luna creciente -->
+  <circle cx="304" cy="176" r="116" fill="url(#mint)" mask="url(#crescent)"/>
+
+  <!-- estrella de cuatro puntas -->
+  <path d="M412 70 L424 102 L456 114 L424 126 L412 158 L400 126 L368 114 L400 102 Z" fill="#9af0cd"/>
+
+  <!-- bocadillo de conversación -->
+  <path d="M112 270 h200 a36 36 0 0 1 36 36 v84 a36 36 0 0 1 -36 36 h-104 l-56 46 v-46 h-40 a36 36 0 0 1 -36 -36 v-84 a36 36 0 0 1 36 -36 z" fill="url(#gold)"/>
+
+  <!-- cruceta dentro del bocadillo -->
+  <rect x="196" y="302" width="32" height="92" rx="11" fill="#0b2226"/>
+  <rect x="166" y="332" width="92" height="32" rx="11" fill="#0b2226"/>
+</svg>
