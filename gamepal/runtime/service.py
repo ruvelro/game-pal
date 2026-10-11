@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import threading
 import time
 from collections.abc import Awaitable, Callable
@@ -135,6 +136,14 @@ class EngineService:
         for entry in entries:
             if not self.runtime.model_installed(entry):
                 self._publish(entry.id, label=entry.name, total=entry.size, state="queued")
+        needed = sum(int(d["total"]) for d in self.downloads.values())
+        self.runtime.root.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(self.runtime.root).free
+        if needed and free < needed * 1.05:
+            self.downloads = {}
+            raise EngineError(
+                f"No hay espacio suficiente: hacen falta {needed / 1e9:.1f} GB y quedan {free / 1e9:.1f} GB libres"
+            )
         self._stop.clear()
         self._job = asyncio.create_task(self._run_job(variant, entries), name="engine-install")
 

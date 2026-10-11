@@ -64,10 +64,14 @@ El asistente de configuración detecta RAM, GPU y VRAM y propone un nivel. El ju
 
 | Nivel | Requisito | Visión | Razonamiento | Voz |
 | --- | --- | --- | --- | --- |
-| 0 · Ligero | Cualquier equipo | Solo OCR y reglas del perfil | Modelo de texto 1-4B o nube | Whisper tiny/base, Piper |
-| 1 · Básico | 8 GB RAM, GPU integrada | VLM 2-4B (Qwen3-VL 2B/4B, Gemma 3 4B) | Texto 4-8B | Whisper small, Piper |
-| 2 · Medio | 16 GB RAM o 8 GB VRAM | VLM 7-12B | Texto 8-14B | Whisper medium, Kokoro |
-| 3 · Alto | 32 GB+ o 16 GB+ VRAM | VLM 27-35B | Texto 27-70B | Whisper large-v3-turbo, Kokoro |
+| 0 · Ligero | Cualquier equipo | Solo OCR y reglas del perfil | Qwen 3.5 2B o nube | Whisper base, Piper |
+| 1 · Básico | 8 GB RAM, GPU integrada | Gemma 4 E4B | Gemma 4 E4B | Whisper small, Piper |
+| 2 · Medio | 16 GB con GPU o memoria unificada, o 8 GB VRAM | Gemma 4 12B (QAT) | Gemma 4 12B (QAT) | Whisper medium, Piper |
+| 3 · Alto | 32 GB+ con 16 GB+ para modelos | Gemma 4 26B A4B | Gemma 4 26B A4B | Whisper large-v3-turbo, Piper |
+
+Las tareas rápidas usan Qwen 3.5 0.8B en los niveles 0-2 y Gemma 4 E4B en el 3. Sin gráfica dedicada ni memoria unificada, el nivel propuesto no pasa de 1: los modelos grandes en CPU son demasiado lentos para jugar. En Apple Silicon se cuentan dos tercios de la memoria como disponibles para modelos.
+
+Los modelos y su motor están en `models/catalog.yaml`, fijados por revisión y SHA-256 (sección 4.4).
 
 En el nivel 0 el OCR hace todo el reconocimiento y el razonamiento recae en un modelo de texto (local pequeño o nube). Es el camino que garantiza que game-pal sea útil en un portátil modesto.
 
@@ -94,7 +98,7 @@ En el nivel 0 el OCR hace todo el reconocimiento y el razonamiento recae en un m
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Un único proceso daemon con módulos desacoplados por un bus de eventos interno. La GUI es una app web servida en loopback. El overlay y la bandeja son procesos nativos ligeros que hablan con el daemon por WebSocket local autenticado con token.
+Un único proceso daemon con módulos desacoplados por un bus de eventos interno. La GUI es una app web servida en loopback. El overlay es un proceso nativo ligero que habla con el daemon por WebSocket local autenticado con token; la bandeja vive en el hilo principal de la app instalada.
 
 ### 4.1 Captura
 
@@ -158,6 +162,8 @@ Políticas híbridas por rol, elegibles en la GUI:
 - **Local, nube si falla**: la nube solo entra con error o timeout local.
 - **Nube para razonar, local para mirar**: la visión y el OCR en local, la pregunta y el contexto a la nube.
 - **Nube para todo lo que se pida**: lo proactivo en local, las preguntas del jugador en la nube.
+
+Motor gestionado (M7): game-pal descarga una versión fijada de llama.cpp (b11429, la de la versión estable v0.6.0) en la variante que corresponde al equipo (Metal en macOS, Vulkan con gráfica dedicada en Windows x64 y Linux, CPU en el resto) y la lanza en modo router: un solo proceso sirve todos los modelos instalados del catálogo y carga cada uno cuando se le pide, hasta un máximo a la vez. Escucha en 127.0.0.1 en un puerto libre, con una clave aleatoria por arranque que viaja por variable de entorno, sin interfaz web, sin acceso a red (`--offline`) y con el entorno limpio de las variables del usuario. Las descargas son reanudables, solo desde Hugging Face y GitHub, y cada fichero se verifica con su SHA-256 antes de usarse; los paquetes se descomprimen sin dejar salir nada de su carpeta. Si game-pal se cierra de golpe, un vigía en POSIX y un trabajo de Windows con cierre automático terminan el motor y sus modelos.
 
 Implementación (M6): cada rol (`reasoning`, `fast`, `vision`) tiene un proveedor principal y un respaldo opcional en `routing`; la GUI ofrece cuatro preajustes (solo local, local con respaldo en la nube, híbrido y nube) y permite ajustar cada rol a mano. El respaldo entra cuando el principal falla, nunca después de haber mostrado parte de una respuesta, y usa su propio modelo para esa tarea. OpenAI y OpenRouter comparten el cliente compatible con OpenAI; Claude usa el SDK oficial de Anthropic, con `claude-opus-5-5` para razonar y `claude-haiku-5-5` para lo rápido por defecto, esfuerzo bajo o medio según la longitud de la respuesta y el respaldo del servidor ante rechazos activado en los modelos que lo admiten. Las capturas solo van a la nube si el jugador lo permite expresamente (`cloud.allow_images`). Las claves se guardan con `keyring` en el almacén del sistema y la API nunca las devuelve.
 
@@ -290,7 +296,7 @@ Una pantalla se confirma con dos lecturas coincidentes, o con una sola si la pun
 
 ## 6. GUI
 
-App web local (React + Vite, servida por el daemon) empaquetada con ventana nativa (pywebview) y bandeja del sistema. Objetivo: que cualquier persona configure game-pal sin tocar ficheros.
+App web local (React + Vite, servida por el daemon) que se abre en el navegador, con icono en la bandeja del sistema en la app instalada. Envolverla en una ventana nativa (pywebview) queda para más adelante. Objetivo: que cualquier persona configure game-pal sin tocar ficheros.
 
 Páginas:
 
@@ -317,7 +323,7 @@ Overlay y bandeja: la bandeja ofrece iniciar, pausar, silenciar proactivo, abrir
 - Captura solo de la ventana del juego. Aviso antes de enviar la primera captura a un proveedor remoto.
 - Perfiles y plugins de terceros muestran un resumen de permisos al instalarse; los plugins solo pueden leer las rutas declaradas.
 - Sin telemetría. Los registros de diagnóstico se guardan en local, rotan y pueden exportarse con un botón que elimina rutas de usuario y transcripciones.
-- Dependencias fijadas con hashes; escaneo de vulnerabilidades en CI; releases firmadas (Sigstore) con sumas SHA-256.
+- Dependencias fijadas con hashes (uv.lock y package-lock.json) y acciones de CI fijadas por commit; escaneo de vulnerabilidades en CI con pip-audit y npm audit; releases con atestación de procedencia SLSA firmada con Sigstore (`gh attestation verify`) y sumas SHA-256. La firma de código de Apple (notarización) y de Windows (Authenticode) necesita certificados de pago y queda pendiente.
 
 ## 8. Stack técnico
 
@@ -339,7 +345,7 @@ Overlay y bandeja: la bandeja ofrece iniciar, pausar, silenciar proactivo, abrir
 | Mando y atajos | SDL2 (pysdl2 + pysdl2-dll) para mandos; pynput para teclas globales |
 | Overlay | Proceso aparte con ventana nativa: NSPanel (PyObjC) en macOS, Win32 por ctypes en Windows, Tk como respaldo en Linux |
 | GUI | React + TypeScript + Vite, estilos con tokens de diseño, servida por el daemon (FastAPI + WebSocket) y envuelta con pywebview |
-| Empaquetado | PyInstaller por plataforma; instaladores MSIX/MSI, DMG notarizado, AppImage y Flatpak; actualizador opcional con verificación de firma |
+| Empaquetado | PyInstaller por plataforma: DMG con app de barra de menús (macOS), instalador Inno Setup y zip portable (Windows x64 y ARM64), AppImage y tar.gz (Linux). Icono en la bandeja para abrir, pausar, silenciar y salir, y una sola instancia a la vez. Pendientes: notarización, MSIX, Flatpak y actualizador |
 | Tests | pytest, fixtures sintéticas de capturas y guardados, snapshot tests de prompts, tests de contrato por proveedor con grabaciones |
 | CI | GitHub Actions en Windows x64/ARM64, macOS ARM y Linux x64: lint, tipos, tests, build y escaneo de dependencias |
 
@@ -378,7 +384,7 @@ game-pal/
 | M4 · Saber ✅ | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
 | M5 · Recordar ✅ | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
 | M6 · Abrir ✅ | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
-| M7 · Pulir | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |
+| M7 · Pulir ✅ | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |
 
 ## 11. Riesgos y mitigaciones
 

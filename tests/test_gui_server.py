@@ -232,3 +232,20 @@ def test_engine_rejects_unknown_models(client: TestClient) -> None:
     assert response.status_code == 409
     assert client.delete("/api/engine/models/nada", headers=AUTH).status_code == 409
     assert client.post("/api/shutdown", headers=AUTH).status_code == 409
+
+
+def test_instance_endpoints(app_paths: AppPaths, repo_profiles: Path) -> None:
+    shown: list[int] = []
+    daemon = Daemon(
+        app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore(),
+        hardware=lambda: HardwareInfo("linux", "x64", "cpu", 8, 16.0, [], vulkan=False),
+    )  # fmt: skip
+    save_config(AppConfig(ocr=OcrConfig(backend="none")), app_paths.config_file)
+    app = create_app(daemon, TOKEN, PORT, show=lambda: shown.append(1))
+    with TestClient(app, base_url=f"http://127.0.0.1:{PORT}") as client:
+        assert client.get("/api/instance", headers=HOST).json()["app"] == "game-pal"
+        evil = {**HOST, "origin": "https://evil.example"}
+        assert client.post("/api/instance/show", headers=evil).status_code == 403
+        assert client.post("/api/instance/show", headers=HOST).status_code == 200
+        assert client.post("/api/instance/show", headers=HOST).status_code == 429
+        assert shown == [1]

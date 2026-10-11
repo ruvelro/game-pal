@@ -117,7 +117,13 @@ class SetupDoneRequest(BaseModel):
     done: bool = True
 
 
-def create_app(daemon: Daemon, token: str, port: int, shutdown: Callable[[], None] | None = None) -> FastAPI:
+def create_app(
+    daemon: Daemon,
+    token: str,
+    port: int,
+    shutdown: Callable[[], None] | None = None,
+    show: Callable[[], object] | None = None,
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # El daemon vive en el mismo bucle de eventos que el servidor.
@@ -140,6 +146,24 @@ def create_app(daemon: Daemon, token: str, port: int, shutdown: Callable[[], Non
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token no válido")
 
     auth = [Depends(require_token)]
+    last_show = [0.0]
+
+    # Sin token: solo sirven para que una segunda instancia de game-pal pida abrir la GUI de esta.
+    @app.get("/api/instance")
+    async def instance() -> dict[str, str]:
+        return {"app": "game-pal", "version": __version__}
+
+    @app.post("/api/instance/show")
+    async def instance_show(request: Request) -> dict[str, bool]:
+        # Un navegador siempre manda Origin en un POST entre sitios: así una web no puede usarlo.
+        if request.headers.get("origin") is not None or show is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No permitido")
+        now = time.monotonic()
+        if now - last_show[0] < 2:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Espera un momento")
+        last_show[0] = now
+        await asyncio.to_thread(show)
+        return {"ok": True}
 
     @app.get("/api/status", dependencies=auth)
     async def get_status() -> dict[str, Any]:

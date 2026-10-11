@@ -6,10 +6,10 @@ import asyncio
 import contextlib
 import logging
 import os
-import sys
 
 from gamepal.bus import EventBus
 from gamepal.events import StatusChanged
+from gamepal.paths import module_command
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class OverlayProcess:
                 "GAMEPAL_TOKEN": self._token,
             }
             self._process = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "gamepal.overlay",
+                *module_command("gamepal.overlay"),
                 env=env, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
             )  # fmt: skip
             self._bus.publish(StatusChanged(component="overlay", state="running", detail="Overlay activo"))

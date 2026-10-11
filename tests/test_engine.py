@@ -323,8 +323,25 @@ def test_watchdog_kills_server_when_parent_dies() -> None:
         parent.kill()
         parent.wait()
         server.wait(timeout=8)  # el vigía cierra el grupo del servidor
-        watchdog.wait(timeout=15)
     finally:
         for proc in (parent, server, watchdog):
             if proc.poll() is None:
                 proc.kill()
+
+
+async def test_install_checks_free_space(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil
+    from collections import namedtuple
+
+    async def changed() -> None:
+        return None
+
+    service = EngineService(
+        EventBus(), tmp_path / "engine", tmp_path / "logs", bundled_catalog(),
+        config=AppConfig, on_change=changed, hardware=lambda: hw("macos", "arm64", 16),
+    )  # fmt: skip
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: usage(10**12, 0, 10**9))
+    with pytest.raises(EngineError, match="espacio"):
+        await service.install(["gemma-4-12b"])
+    assert not service.busy
