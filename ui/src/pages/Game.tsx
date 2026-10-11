@@ -115,7 +115,10 @@ export function Game() {
       <PageHeader title={t("game.title")} subtitle={t("game.subtitle")} />
       <Card>
         <Field label={t("game.profile")} hint={selected?.description}>
-          <select value={config.profile} onChange={(e) => setConfig({ ...config, profile: e.target.value })}>
+          <select
+            value={config.profile}
+            onChange={(e) => setConfig({ ...config, profile: e.target.value, auto_detect_game: false })}
+          >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -123,6 +126,17 @@ export function Game() {
             ))}
           </select>
         </Field>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={config.auto_detect_game}
+            onChange={(e) => setConfig({ ...config, auto_detect_game: e.target.checked })}
+          />
+          <span>
+            {t("game.auto")}
+            <span className="field-hint block">{t("game.auto.hint")}</span>
+          </span>
+        </label>
         <Field label={t("game.window")} hint={t("game.window.hint")}>
           <div className="row">
             <select

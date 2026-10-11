@@ -379,6 +379,11 @@ button.chip {
   border-radius: 999px;
 }
 
+button.chip.active {
+  color: var(--text);
+  border-color: var(--mint);
+}
+
 input,
 select {
   font: inherit;

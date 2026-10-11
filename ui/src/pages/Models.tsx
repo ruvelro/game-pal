@@ -24,23 +24,25 @@ const ROLES: Array<[Role, Key, Key]> = [
   ["fast", "models.role.fast", "models.role.fast.hint"],
   ["vision", "models.role.vision", "models.role.vision.hint"],
 ];
-const LOCAL_PRESETS: Array<[string, string]> = [
-  ["Ollama", "http://127.0.0.1:11434/v1"],
-  ["LM Studio", "http://127.0.0.1:1234/v1"],
-  ["llama.cpp", "http://127.0.0.1:8080/v1"],
-  ["MLX", "http://127.0.0.1:8081/v1"],
-];
+interface LocalServer {
+  name: string;
+  url: string;
+  models: string[];
+  recommended: string | null;
+}
 
 function ModelPicker({
   value,
   models,
   onChange,
   placeholder,
+  recommended,
 }: {
   value: string;
   models: string[] | undefined;
   onChange: (v: string) => void;
   placeholder?: string;
+  recommended?: string | null;
 }) {
   if (models && models.length > 0) {
     return (
@@ -48,7 +50,7 @@ function ModelPicker({
         <option value="">{placeholder ?? "—"}</option>
         {models.map((m) => (
           <option key={m} value={m}>
-            {m}
+            {m === recommended ? `${m} · ${t("models.recommended")}` : m}
           </option>
         ))}
       </select>
@@ -161,6 +163,7 @@ export function Models() {
   const [summary, setSummary] = useState("");
   const [localModels, setLocalModels] = useState<string[]>();
   const [localError, setLocalError] = useState<string | null>(null);
+  const [servers, setServers] = useState<LocalServer[]>();
 
   const loadProviders = useCallback(() => {
     api
@@ -173,9 +176,26 @@ export function Models() {
   }, []);
   useEffect(loadProviders, [loadProviders]);
 
+  const discover = useCallback(() => {
+    setServers(undefined);
+    api
+      .get<{ servers: LocalServer[] }>("/api/providers/local/discover")
+      .then((data) => setServers(data.servers))
+      .catch(() => setServers([]));
+  }, []);
+  useEffect(discover, [discover]);
+
   if (!config) return null;
   const provider = config.provider;
   const updateLocal = (patch: Partial<typeof provider>) => setConfig({ ...config, provider: { ...provider, ...patch } });
+  const current = servers?.find((server) => server.url === provider.base_url.replace(/\/+$/, ""));
+  const shownModels = localModels ?? current?.models;
+  const chooseServer = (server: LocalServer) => {
+    const model = server.models.includes(provider.model) ? provider.model : (server.recommended ?? "");
+    updateLocal({ base_url: server.url, model });
+    setLocalModels(server.models);
+    setLocalError(null);
+  };
   const firstCloud = (CLOUDS.find(([id]) => keys[id])?.[0] ?? null) as Cloud | null;
 
   const applyPreset = (preset: string) => {
@@ -296,33 +316,49 @@ export function Models() {
           </div>
         </Field>
         <div className="row wrap">
-          <span className="muted small">{t("models.presets")}:</span>
-          {LOCAL_PRESETS.map(([name, url]) => (
-            <button key={name} className="chip" onClick={() => updateLocal({ base_url: url })}>
-              {name}
+          <span className="muted small">{t("models.detected")}:</span>
+          {servers?.map((server) => (
+            <button
+              key={server.url}
+              className={server.url === current?.url ? "chip active" : "chip"}
+              onClick={() => chooseServer(server)}
+            >
+              {server.name} · {server.models.length} {t("models.detect.count")}
             </button>
           ))}
+          <button className="chip" onClick={discover} disabled={!servers}>
+            {t("models.detect")}
+          </button>
         </div>
+        {servers?.length === 0 && <p className="notice small">{t("models.detect.none")}</p>}
+        {servers && servers.length > 0 && !current && !localModels && (
+          <p className="muted small">{t("models.notresponding")}</p>
+        )}
         <div className="two-col tight">
           <Field label={t("models.role.reasoning")}>
-            <ModelPicker value={provider.model} models={localModels} onChange={(model) => updateLocal({ model })} />
+            <ModelPicker
+              value={provider.model}
+              models={shownModels}
+              recommended={current?.recommended}
+              onChange={(model) => updateLocal({ model })}
+            />
           </Field>
           <Field label={t("models.fast")} hint={t("models.fast.hint")}>
             <ModelPicker
               value={provider.fast_model}
-              models={localModels}
+              models={shownModels}
               onChange={(fast_model) => updateLocal({ fast_model })}
             />
           </Field>
           <Field label={t("models.vision")} hint={t("models.vision.hint")}>
             <ModelPicker
               value={provider.vision_model}
-              models={localModels}
+              models={shownModels}
               onChange={(vision_model) => updateLocal({ vision_model })}
             />
           </Field>
         </div>
-        {localModels?.length === 0 && <p className="muted">{t("models.none")}</p>}
+        {shownModels?.length === 0 && <p className="muted">{t("models.none")}</p>}
         {localError && <p className="error-text">{localError}</p>}
         <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
       </Card>

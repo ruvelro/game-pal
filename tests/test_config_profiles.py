@@ -15,8 +15,15 @@ def test_config_roundtrip(tmp_path: Path) -> None:
     assert not list(tmp_path.glob(".config-*"))
 
 
-def test_missing_config_gives_defaults(tmp_path: Path) -> None:
+def test_missing_config_gives_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("gamepal.system.system_language", lambda: None)
     assert load_config(tmp_path / "nope.yaml") == AppConfig()
+
+
+def test_first_run_uses_system_language(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("gamepal.system.system_language", lambda: "fr")
+    config = load_config(tmp_path / "nope.yaml")
+    assert (config.game_language, config.output_language) == ("fr", "fr")
 
 
 def test_config_rejects_unknown_keys(tmp_path: Path) -> None:

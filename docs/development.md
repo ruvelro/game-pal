@@ -22,6 +22,16 @@ uv run game-pal doctor          # --json para usarlo desde scripts
 
 La GUI obtiene las mismas comprobaciones de `GET /api/setup`.
 
+### Detección automática
+
+game-pal rellena lo que falte sin tocar lo que el jugador eligió a mano:
+
+- **Modelo local**: si no hay ninguno elegido, prueba el servidor configurado y los puertos de Ollama (11434), LM Studio (1234), llama.cpp (8080) y MLX (8081), y elige el modelo de conversación más capaz que cabe en la mitad de la RAM, sin pasar de 14B. Lo intenta al arrancar y, mientras falte, cada 30 segundos.
+- **Juego**: cada 5 segundos, si el juego del perfil activo no está abierto y sí el de otro perfil, cambia a ese perfil. Se desactiva al elegir un perfil o una ventana a mano (`auto_detect_game`).
+- **Idiomas**: sin configuración guardada, el del juego y el de las respuestas son el del sistema.
+
+`POST /api/setup/autodetect` lo lanza al momento y `GET /api/providers/local/discover` lista los servidores en marcha con su modelo recomendado.
+
 En macOS, la primera vez el sistema pedirá permisos para la app desde la que lances game-pal (Terminal, iTerm, VS Code…). Concédelos y vuelve a arrancar:
 
 - **Grabación de pantalla**, para ver la ventana del juego.
@@ -95,6 +105,8 @@ gamepal/
   gui_server/            API REST + WebSocket en loopback con token
   daemon.py, cli.py      orquestación y línea de comandos
   checks.py              comprobaciones de puesta en marcha (game-pal doctor y /api/setup)
+  autodetect.py          elección automática de servidor y modelo local y del perfil del juego abierto
+  system.py              idioma del sistema y memoria del equipo
   ui_build.py            compilación de la GUI al arrancar desde el repositorio
 ui/                      GUI en React + TypeScript (Vite)
 profiles/                perfiles incluidos

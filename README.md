@@ -46,7 +46,9 @@ Instala lo que falte, compila la GUI y la abre en el navegador. Si algo no está
 uv run game-pal doctor
 ```
 
-Para dar consejos necesita un modelo de IA: lo más sencillo es instalar [Ollama](https://ollama.com) y descargar uno con `ollama pull qwen3:4b`. También vale una clave de OpenAI, Claude u OpenRouter.
+Para dar consejos necesita un modelo de IA: lo más sencillo es instalar [Ollama](https://ollama.com) y descargar uno con `ollama pull qwen3:4b`. game-pal encuentra solo Ollama, LM Studio, llama.cpp o MLX y elige un modelo que quepa en tu equipo. También vale una clave de OpenAI, Claude u OpenRouter.
+
+Tampoco hace falta elegir el juego: si tiene perfil, game-pal lo reconoce al abrirlo. Los idiomas se toman del sistema la primera vez.
 
 Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md).
 

@@ -206,6 +206,8 @@ class GuiConfig(_Model):
 class AppConfig(_Model):
     version: int = 1
     profile: str = "generic"
+    # Cambia solo al perfil del juego que esté abierto. Elegir un perfil a mano lo desactiva.
+    auto_detect_game: bool = True
     # Ventana elegida a mano cuando el perfil no identifica el juego.
     window_title: str | None = None
     # Carpeta de instalación elegida por el usuario, por id de perfil.
@@ -228,9 +230,19 @@ class AppConfig(_Model):
     gui: GuiConfig = Field(default_factory=GuiConfig)
 
 
+def first_run_config() -> AppConfig:
+    """Sin configuración guardada: el juego y las respuestas, en el idioma del sistema."""
+    from gamepal.system import system_language
+
+    language = system_language()
+    if language is None:
+        return AppConfig()
+    return AppConfig(game_language=language, output_language=language)
+
+
 def load_config(path: Path) -> AppConfig:
     if not path.exists():
-        return AppConfig()
+        return first_run_config()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"{path} no contiene un objeto YAML")
