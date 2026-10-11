@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   connectEvents,
@@ -117,34 +117,73 @@ export function useStatus(intervalMs = 3000) {
   return { status, refresh };
 }
 
+// Espera tras el último cambio antes de guardar: agrupa las teclas y el arrastre de los controles.
+const AUTOSAVE_MS = 700;
+
+/**
+ * La configuración, que se guarda sola poco después de cada cambio hecho con `setConfig`.
+ * `save` guarda al momento (para los botones que prueban algo y necesitan la configuración ya aplicada).
+ */
 export function useConfig() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [config, setLocal] = useState<AppConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Cambios aún sin guardar y su temporizador.
+  const pending = useRef<AppConfig | null>(null);
+  const timer = useRef<number | undefined>(undefined);
 
   const reload = useCallback(
     () =>
       api
         .get<AppConfig>("/api/config")
-        .then(setConfig)
+        .then(setLocal)
         .catch((e: Error) => setError(e.message)),
     [],
   );
   useEffect(() => void reload(), [reload]);
 
   const save = useCallback(async (next: AppConfig) => {
+    window.clearTimeout(timer.current);
+    pending.current = null;
     setError(null);
     setSaved(false);
+    setSaving(true);
     try {
-      setConfig(await api.put<AppConfig>("/api/config", next));
+      const stored = await api.put<AppConfig>("/api/config", next);
+      // Si se ha seguido editando mientras se guardaba, no se pisa lo nuevo.
+      if (pending.current === null) setLocal(stored);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
       return true;
     } catch (e) {
       setError((e as Error).message);
       return false;
+    } finally {
+      setSaving(false);
     }
   }, []);
 
-  return { config, setConfig, save, reload, error, saved };
+  const setConfig = useCallback(
+    (next: AppConfig) => {
+      setLocal(next);
+      pending.current = next;
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => {
+        if (pending.current) void save(pending.current);
+      }, AUTOSAVE_MS);
+    },
+    [save],
+  );
+
+  // Al salir de la página no se pierde lo último que se cambió.
+  useEffect(
+    () => () => {
+      window.clearTimeout(timer.current);
+      if (pending.current) void api.put("/api/config", pending.current).catch(() => undefined);
+    },
+    [],
+  );
+
+  return { config, setConfig, save, reload, error, saved, saving };
 }

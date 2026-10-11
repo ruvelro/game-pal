@@ -26,6 +26,13 @@ La GUI obtiene las mismas comprobaciones de `GET /api/setup`.
 
 Mientras `setup_completed` sea falso, la GUI abre un asistente en cuatro pasos: juego (con detección y selector de ventana), modelo (servidores locales detectados o una clave de la nube, con un botón para probarlo), comprobación (`/api/setup` con la solución de cada problema y botón para abrir el panel de permisos del sistema) y voz. Terminarlo o saltarlo lo marca como hecho; se puede volver a abrir desde Ajustes. `POST /api/setup/settings/{pane}` abre solo paneles de una lista fija (`system.SETTINGS_PANES`).
 
+### La GUI
+
+- El menú tiene arriba lo que casi todo el mundo usa (Inicio, Juego, Modelos, Voz y respuestas) y en «Más» lo demás (Conocimiento, Memoria, Actividad, Avanzado).
+- Los cambios se guardan solos: `useConfig().setConfig` guarda 700 ms después del último cambio y, al salir de la página, guarda lo pendiente. `save` guarda al momento, para los botones que prueban algo. El daemon solo reinicia la captura si cambia algo que la afecta.
+- Lo que casi nadie necesita va dentro de «Opciones avanzadas» (`<Advanced>`).
+- Inicio muestra «Lo que falta», con las comprobaciones de `/api/setup` y un botón para ir a arreglarlo.
+
 ### Detección automática
 
 game-pal rellena lo que falte sin tocar lo que el jugador eligió a mano:
