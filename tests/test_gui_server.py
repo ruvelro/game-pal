@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from starlette.websockets import WebSocketDisconnect
 from gamepal.config import AppConfig, KnowledgeConfig, OcrConfig, OutputConfig, OverlayConfig, save_config
 from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
+from gamepal.keystore import MemorySecretStore
 from gamepal.paths import AppPaths
 from tests.conftest import FakeBackend
 
@@ -26,7 +28,7 @@ def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
         update={"knowledge": KnowledgeConfig(embeddings="none")}
     )
     save_config(config, app_paths.config_file)
-    daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles)
+    daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore())
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
         yield test_client
 
@@ -53,7 +55,7 @@ def test_status_and_security_headers(client: TestClient) -> None:
 
 def test_profiles_and_windows(client: TestClient) -> None:
     profiles = client.get("/api/profiles", headers=AUTH).json()
-    assert {p["id"] for p in profiles["profiles"]} == {"generic", "hades-2"}
+    assert {p["id"] for p in profiles["profiles"]} == {"generic", "hades-2", "stardew-valley"}
     windows = client.get("/api/windows", headers=AUTH).json()
     assert windows[0]["title"] == "Mi Juego"
 
@@ -165,3 +167,24 @@ def test_evidence_and_memory_endpoints(client: TestClient) -> None:
     export = client.get("/api/memory/export", headers=AUTH)
     assert export.headers["content-disposition"].startswith("attachment")
     assert export.json()["profile"] == "generic"
+
+
+def test_provider_keys_are_never_returned(client: TestClient) -> None:
+    info = client.get("/api/providers", headers=AUTH).json()
+    assert info["keys"] == {"openai": False, "anthropic": False, "openrouter": False}
+    assert (
+        client.put("/api/providers/anthropic/key", headers=AUTH, json={"key": "sk-ant-test-123456"}).status_code == 200
+    )
+    assert client.put("/api/providers/otro/key", headers=AUTH, json={"key": "sk-test-123456"}).status_code == 404
+    assert client.put("/api/providers/openai/key", headers=AUTH, json={"key": "con espacios no"}).status_code == 422
+    info = client.get("/api/providers", headers=AUTH).json()
+    assert info["keys"]["anthropic"] is True
+    assert "sk-ant" not in json.dumps(info)
+    assert "sk-ant" not in client.get("/api/config", headers=AUTH).text
+    assert client.delete("/api/providers/anthropic/key", headers=AUTH).json() == {"configured": False}
+
+
+def test_activity_endpoint(client: TestClient) -> None:
+    data = client.get("/api/activity", headers=AUTH).json()
+    assert data["total"] == 0
+    assert data["recent"] == []

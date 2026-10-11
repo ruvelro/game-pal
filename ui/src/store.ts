@@ -29,6 +29,7 @@ export interface LiveState {
   answers: AnswerUpdate[];
   knowledge: Record<number, KnowledgeProgress>;
   evidence: EvidenceSnapshot | null;
+  activity: number;
 }
 
 const initial: LiveState = {
@@ -43,6 +44,7 @@ const initial: LiveState = {
   answers: [],
   knowledge: {},
   evidence: null,
+  activity: 0,
 };
 
 const MAX_ANSWERS = 6;
@@ -69,6 +71,8 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
     }
     case "evidence":
       return { ...state, evidence: (message.data as { snapshot: EvidenceSnapshot }).snapshot };
+    case "activity":
+      return { ...state, activity: state.activity + 1 };
     case "voice.state":
       return { ...state, voice: message.data as VoiceStateEvent };
     case "voice.speaking":

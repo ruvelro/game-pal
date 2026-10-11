@@ -42,6 +42,10 @@ dependencies = [
     "winrt-Windows.Media.Ocr>=3.2; sys_platform == 'win32'",
     "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
     "rapidfuzz>=3.9",
+    # Proveedores en la nube y claves en el almacén del sistema
+    "anthropic>=0.70",
+    "keyring>=25.0",
+    "defusedxml>=0.7",
     # Conocimiento
     "trafilatura>=2.0",
     "pypdf>=5.0",
@@ -100,7 +104,7 @@ packages = ["gamepal"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*", "trafilatura.*", "tokenizers.*", "huggingface_hub.*", "pypdf.*", "lxml.*"]
+module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*", "trafilatura.*", "tokenizers.*", "huggingface_hub.*", "pypdf.*", "lxml.*", "keyring.*", "defusedxml.*"]
 ignore_missing_imports = true
 
 # pywinrt solo se instala en Windows; el motor lo usa como Any para que los tipos no dependan del sistema.

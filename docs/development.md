@@ -73,7 +73,9 @@ gamepal/
   capture/               un backend por sistema y la elección de ventana
   perception/            hash perceptual, OCR enchufable y bucle de observación
   profiles/              esquema y carga de perfiles de juego
-  providers/             interfaz de modelos y proveedor local OpenAI-compatible
+  providers/             interfaz de modelos, proveedor local, OpenAI, OpenRouter, Claude y enrutado por tarea
+  keystore.py            claves de API en el almacén de credenciales del sistema
+  activity.py            registro local de peticiones, tokens y coste
   voice/                 micrófono, detector de voz, Whisper, Piper, frases clave, atajos y mando
   overlay/               proceso del overlay: lógica común y ventana nativa por sistema
   evidence/              decodificadores LZ4 y LuaBins, registro de hechos por rangos y vigilancia del guardado
@@ -93,6 +95,7 @@ tests/
 - El servidor solo escucha en `127.0.0.1`, comprueba la cabecera `Host` y exige un token aleatorio por arranque.
 - El token viaja en el fragmento de la URL, que el navegador nunca envía al servidor, y no se escribe en el registro.
 - Los proveedores locales solo aceptan direcciones de loopback, sin proxies ni redirecciones.
+- Las claves de la nube viven en el almacén del sistema (Llavero, Credential Manager o Secret Service); la API solo dice si existen y nunca las devuelve. Las capturas no salen a la nube salvo que el jugador lo active.
 - Los perfiles se validan con un esquema estricto y sus rutas no pueden salir de su carpeta.
 - Los guardados se leen sin escribirlos nunca, con límites de tamaño y profundidad; los plugins de perfiles de terceros solo se cargan tras confiar en ellos por su hash.
 - Las fuentes de conocimiento solo se descargan de direcciones públicas, también tras redirecciones, respetando `robots.txt`; los ficheros subidos se guardan con un nombre saneado dentro de la carpeta del perfil.

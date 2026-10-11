@@ -96,7 +96,7 @@ class VisionReader:
         ]
         try:
             result = await self.provider.chat(
-                messages, model=self.model, max_tokens=700, temperature=0, json_schema=build_schema(screens)
+                messages, model=self.model or None, max_tokens=700, temperature=0, json_schema=build_schema(screens)
             )
             raw = json.loads(result.text)
         except (ProviderError, ValueError) as exc:

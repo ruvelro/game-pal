@@ -1,0 +1,1 @@
+El día ha terminado y se ve lo que se ha vendido. Resume en una frase cómo ha ido y da UN consejo concreto para mañana, teniendo en cuenta la estación, el tiempo previsto y la suerte del día si la conoces.

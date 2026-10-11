@@ -10,6 +10,7 @@ import asyncio
 import io
 import json
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +26,7 @@ from gamepal import __version__
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
+from gamepal.keystore import CLOUDS, SecretStoreError
 from gamepal.knowledge import KnowledgeError
 from gamepal.knowledge.service import MAX_FILE_BYTES as MAX_UPLOAD_BYTES
 from gamepal.perception.classifier import classify
@@ -84,6 +86,10 @@ class RefreshRequest(BaseModel):
 
 class LessonRequest(BaseModel):
     text: str = Field(min_length=2, max_length=600)
+
+
+class SecretRequest(BaseModel):
+    key: str = Field(min_length=8, max_length=400, pattern=r"^[A-Za-z0-9_\-.:]+$")
 
 
 class MuteRequest(BaseModel):
@@ -384,6 +390,55 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             {"title": h.title, "heading": h.heading, "text": h.text[:600], "url": h.url, "score": round(h.score, 4)}
             for h in hits
         ]
+
+    # Proveedores, claves y actividad ---------------------------------------------------------
+
+    @app.get("/api/providers", dependencies=auth)
+    async def providers_info() -> dict[str, Any]:
+        configured = await asyncio.to_thread(daemon.secrets.configured)
+        return {
+            "keys": configured,
+            "routing": daemon.config.routing.model_dump(),
+            "summary": daemon.routing_summary(),
+            "vision_enabled": daemon.vision_enabled(),
+        }
+
+    @app.put("/api/providers/{name}/key", dependencies=auth)
+    async def provider_set_key(name: str, body: SecretRequest) -> dict[str, bool]:
+        if name not in CLOUDS:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Proveedor desconocido")
+        try:
+            await asyncio.to_thread(daemon.secrets.set, name, body.key)  # type: ignore[arg-type]
+        except SecretStoreError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+        await daemon.refresh_providers()
+        return {"configured": True}
+
+    @app.delete("/api/providers/{name}/key", dependencies=auth)
+    async def provider_delete_key(name: str) -> dict[str, bool]:
+        if name not in CLOUDS:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Proveedor desconocido")
+        await asyncio.to_thread(daemon.secrets.delete, name)  # type: ignore[arg-type]
+        await daemon.refresh_providers()
+        return {"configured": False}
+
+    @app.get("/api/providers/{name}/models", dependencies=auth)
+    async def provider_list_models(name: str) -> dict[str, Any]:
+        if name not in ("local", *CLOUDS):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Proveedor desconocido")
+        try:
+            caps = await daemon.hub.client(name).capabilities()
+        except ProviderError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        return {"models": list(caps.models)}
+
+    @app.get("/api/activity", dependencies=auth)
+    async def activity(hours: int = 24) -> dict[str, Any]:
+        since = time.time() - max(1, min(hours, 24 * 30)) * 3600
+        summary = await asyncio.to_thread(daemon.activity.summary, since)
+        summary["recent"] = await asyncio.to_thread(daemon.activity.recent, 40)
+        summary["hours"] = hours
+        return summary
 
     # Evidencia y memoria -----------------------------------------------------------------------
 

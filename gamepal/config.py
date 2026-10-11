@@ -62,6 +62,39 @@ class ProviderConfig(_Model):
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
 
 
+Role = Literal["reasoning", "fast", "vision"]
+ProviderName = Literal["local", "openai", "anthropic", "openrouter"]
+
+
+class CloudProviderConfig(_Model):
+    """Modelos de un proveedor en la nube para cada tarea. Vacío: el de razonamiento o el recomendado."""
+
+    model: str = ""
+    fast_model: str = ""
+    vision_model: str = ""
+
+
+class CloudConfig(_Model):
+    openai: CloudProviderConfig = Field(default_factory=CloudProviderConfig)
+    anthropic: CloudProviderConfig = Field(default_factory=CloudProviderConfig)
+    openrouter: CloudProviderConfig = Field(default_factory=CloudProviderConfig)
+    # Enviar capturas de pantalla a la nube es opcional y se activa a mano: pueden verse datos personales.
+    allow_images: bool = False
+
+
+class RoleRoute(_Model):
+    provider: ProviderName = "local"
+    fallback: Literal["none", "local", "openai", "anthropic", "openrouter"] = "none"
+
+
+class RoutingConfig(_Model):
+    """Qué proveedor hace cada tarea. Por defecto, todo en local."""
+
+    reasoning: RoleRoute = Field(default_factory=RoleRoute)
+    fast: RoleRoute = Field(default_factory=RoleRoute)
+    vision: RoleRoute = Field(default_factory=RoleRoute)
+
+
 class WakeConfig(_Model):
     enabled: bool = True
     # Frases en cualquier idioma. Se reconocen transcribiendo fragmentos cortos de voz.
@@ -186,6 +219,8 @@ class AppConfig(_Model):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    cloud: CloudConfig = Field(default_factory=CloudConfig)
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)

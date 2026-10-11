@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, token } from "./api";
 import { t, type Key } from "./i18n";
+import { Activity } from "./pages/Activity";
 import { Game } from "./pages/Game";
 import { Home } from "./pages/Home";
 import { Knowledge } from "./pages/Knowledge";
@@ -11,7 +12,7 @@ import { Settings } from "./pages/Settings";
 import { Voice } from "./pages/Voice";
 import { useLive, useStatus } from "./store";
 
-type Page = "home" | "game" | "knowledge" | "memory" | "voice" | "output" | "models" | "settings";
+type Page = "home" | "game" | "knowledge" | "memory" | "voice" | "output" | "models" | "activity" | "settings";
 
 const NAV: Array<[Page, Key, string]> = [
   ["home", "nav.home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
@@ -21,6 +22,7 @@ const NAV: Array<[Page, Key, string]> = [
   ["voice", "nav.voice", "M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3"],
   ["output", "nav.output", "M4 5h16v11H4zM8 20h8M12 16v4"],
   ["models", "nav.models", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"],
+  ["activity", "nav.activity", "M4 20V10M10 20V4M16 20v-7M22 20H2"],
   ["settings", "nav.settings", "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4"],
 ];
 
@@ -77,6 +79,7 @@ function Shell() {
         {page === "voice" && <Voice />}
         {page === "output" && <Output />}
         {page === "models" && <Models />}
+        {page === "activity" && <Activity live={live} />}
         {page === "settings" && <Settings />}
       </main>
     </div>
