@@ -51,6 +51,21 @@ for package in ("keyring", "rapidocr", "faster_whisper", "onnxruntime", "hugging
     except Exception:
         pass
 
+# En Windows, PyInstaller importa todos los paquetes recogidos en un mismo proceso para ver qué carpetas de
+# DLL añaden. onnxruntime se cae ahí (0xC0000005) si otro paquete (los de winrt, por ejemplo) cargó antes un
+# msvcp140.dll más antiguo que el que necesita. Como PyInstaller hace con Qt, se importa el primero.
+if sys.platform == "win32":
+    import PyInstaller.building.build_main as build_main
+
+    _find_binary_dependencies = build_main.find_binary_dependencies
+
+    def _onnxruntime_first(binaries, import_packages, *args):
+        first = [p for p in import_packages if p == "onnxruntime" or p.startswith("onnxruntime.")]
+        rest = [p for p in import_packages if p not in first]
+        return _find_binary_dependencies(binaries, first + rest, *args)
+
+    build_main.find_binary_dependencies = _onnxruntime_first
+
 icon = {
     "win32": str(ROOT / "packaging" / "icon.ico"),
     "darwin": str(ROOT / "packaging" / "icon.icns"),
