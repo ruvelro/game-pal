@@ -76,7 +76,8 @@ gamepal/
   providers/             interfaz de modelos y proveedor local OpenAI-compatible
   voice/                 micrófono, detector de voz, Whisper, Piper, frases clave, atajos y mando
   overlay/               proceso del overlay: lógica común y ventana nativa por sistema
-  assistant.py           preguntas, enrutado rápido/razonado y avisos proactivos
+  knowledge/             descarga segura, extracción, troceado, embeddings, índice SQLite y búsqueda híbrida
+  assistant.py           preguntas, enrutado rápido/razonado, conocimiento con citas y avisos proactivos
   gui_server/            API REST + WebSocket en loopback con token
   daemon.py, cli.py      orquestación y línea de comandos
 ui/                      GUI en React + TypeScript (Vite)
@@ -90,3 +91,4 @@ tests/
 - El token viaja en el fragmento de la URL, que el navegador nunca envía al servidor, y no se escribe en el registro.
 - Los proveedores locales solo aceptan direcciones de loopback, sin proxies ni redirecciones.
 - Los perfiles se validan con un esquema estricto y sus rutas no pueden salir de su carpeta.
+- Las fuentes de conocimiento solo se descargan de direcciones públicas, también tras redirecciones, respetando `robots.txt`; los ficheros subidos se guardan con un nombre saneado dentro de la carpeta del perfil.

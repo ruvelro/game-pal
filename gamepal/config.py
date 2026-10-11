@@ -145,6 +145,19 @@ class OutputConfig(_Model):
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
 
 
+class KnowledgeConfig(_Model):
+    # local: modelo multilingüe en ONNX (se descarga, 118 MB). provider: el servidor de modelos. none: solo palabras.
+    embeddings: Literal["local", "provider", "none"] = "local"
+    provider_model: str = ""
+    max_pages: int = Field(default=150, ge=1, le=2000)
+    rate_per_second: float = Field(default=1.0, ge=0.2, le=5)
+    top_k: int = Field(default=4, ge=1, le=12)
+    # Vuelve a comprobar las fuentes ya descargadas según la frecuencia del perfil.
+    auto_refresh: bool = True
+    # Antes de buscar, el modelo propone palabras clave (también traducidas al idioma de las fuentes).
+    rewrite_queries: bool = True
+
+
 class GuiConfig(_Model):
     port: int = Field(default=47821, ge=1024, le=65535)
     open_browser: bool = True
@@ -164,6 +177,7 @@ class AppConfig(_Model):
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     gui: GuiConfig = Field(default_factory=GuiConfig)
 
 

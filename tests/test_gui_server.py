@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from gamepal.config import AppConfig, OcrConfig, OutputConfig, OverlayConfig, save_config
+from gamepal.config import AppConfig, KnowledgeConfig, OcrConfig, OutputConfig, OverlayConfig, save_config
 from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
 from gamepal.paths import AppPaths
@@ -21,7 +21,11 @@ AUTH = {**HOST, "authorization": f"Bearer {TOKEN}"}
 def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
     # Sin voz ni overlay: los tests no descargan modelos ni abren ventanas.
     quiet = OutputConfig(answers=["text"], overlay=OverlayConfig(enabled=False))
-    save_config(AppConfig(ocr=OcrConfig(backend="none"), output=quiet), app_paths.config_file)
+    # Y sin embeddings: nada se descarga de internet durante los tests.
+    config = AppConfig(ocr=OcrConfig(backend="none"), output=quiet).model_copy(
+        update={"knowledge": KnowledgeConfig(embeddings="none")}
+    )
+    save_config(config, app_paths.config_file)
     daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles)
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
         yield test_client
@@ -131,3 +135,17 @@ def test_assistant_and_voice_endpoints(client: TestClient) -> None:
     assert client.post("/api/proactive", headers=AUTH, json={"muted": True}).json() == {"muted": True}
     assert client.post("/api/overlay/test", headers=AUTH).json() == {"ok": True}
     assert "es" in client.get("/api/voice/devices", headers=AUTH).json()["voices"]
+
+
+def test_knowledge_endpoints(client: TestClient) -> None:
+    info = client.get("/api/knowledge", headers=AUTH).json()
+    assert info["sources"] == []
+    assert client.post("/api/knowledge/sources", headers=AUTH, json={"url": "ftp://x.example/a"}).status_code == 422
+    guide = ("# Guía\n\n" + "Planta chirivías en primavera. " * 10).encode()
+    response = client.post(
+        "/api/knowledge/upload", headers=AUTH, files=[("files", ("guía.md", guide, "text/markdown"))]
+    )
+    assert response.status_code == 200
+    bad = client.post("/api/knowledge/upload", headers=AUTH, files=[("files", ("x.exe", b"MZ", "application/x"))])
+    assert bad.status_code == 422
+    assert client.post("/api/knowledge/refresh", headers=AUTH, json={}).json()["queued"] == 1

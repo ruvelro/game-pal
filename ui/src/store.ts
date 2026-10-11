@@ -6,6 +6,7 @@ import {
   type BusMessage,
   type Component,
   type FrameCaptured,
+  type KnowledgeProgress,
   type AnswerUpdate,
   type ScreenDetected,
   type ScreenRead,
@@ -25,6 +26,7 @@ export interface LiveState {
   voice: VoiceStateEvent | null;
   speaking: boolean;
   answers: AnswerUpdate[];
+  knowledge: Record<number, KnowledgeProgress>;
 }
 
 const initial: LiveState = {
@@ -37,6 +39,7 @@ const initial: LiveState = {
   voice: null,
   speaking: false,
   answers: [],
+  knowledge: {},
 };
 
 const MAX_ANSWERS = 6;
@@ -56,6 +59,10 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
     case "perception.screen": {
       const screen = message.data as ScreenDetected;
       return { ...state, screen: screen.screen_id ? screen : null };
+    }
+    case "knowledge.progress": {
+      const progress = message.data as KnowledgeProgress;
+      return { ...state, knowledge: { ...state.knowledge, [progress.source_id]: progress } };
     }
     case "voice.state":
       return { ...state, voice: message.data as VoiceStateEvent };

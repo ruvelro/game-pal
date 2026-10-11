@@ -337,6 +337,20 @@
           "title": "Depth",
           "type": "integer"
         },
+        "max_pages": {
+          "anyOf": [
+            {
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Pages"
+        },
         "include": {
           "items": {
             "type": "string"

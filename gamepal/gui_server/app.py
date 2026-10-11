@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from PIL import Image
 from pydantic import BaseModel, Field, ValidationError
@@ -25,6 +25,8 @@ from gamepal import __version__
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
+from gamepal.knowledge import KnowledgeError
+from gamepal.knowledge.service import MAX_FILE_BYTES as MAX_UPLOAD_BYTES
 from gamepal.perception.classifier import classify
 from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
@@ -66,6 +68,18 @@ class TextRequest(BaseModel):
 
 class PttRequest(BaseModel):
     down: bool
+
+
+class SourceRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    depth: int = Field(default=1, ge=0, le=5)
+    max_pages: int | None = Field(default=None, ge=1, le=2000)
+    include: list[str] = Field(default_factory=list, max_length=20)
+    exclude: list[str] = Field(default_factory=list, max_length=20)
+
+
+class RefreshRequest(BaseModel):
+    source_id: int | None = None
 
 
 class MuteRequest(BaseModel):
@@ -294,6 +308,78 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             "elapsed_ms": round(result.elapsed_ms),
             "usage": {"input": result.usage.input_tokens, "output": result.usage.output_tokens},
         }
+
+    # Conocimiento ---------------------------------------------------------------------------
+
+    def _knowledge_store() -> Any:
+        store = daemon.knowledge.store
+        if store is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "No hay ningún perfil activo")
+        return store
+
+    @app.get("/api/knowledge", dependencies=auth)
+    async def knowledge_info() -> dict[str, Any]:
+        store = _knowledge_store()
+        config = daemon.config.knowledge
+        return {
+            "sources": [
+                {
+                    "id": s.id, "kind": s.kind, "location": s.location, "origin": s.origin, "options": s.options,
+                    "status": s.status, "error": s.error, "updated_at": s.updated_at, "pages": s.pages,
+                    "chunks": s.chunks,
+                }
+                for s in await asyncio.to_thread(store.sources)
+            ],
+            "stats": await asyncio.to_thread(store.stats),
+            "embeddings": config.embeddings,
+            "embedder_error": daemon.knowledge.embedder_error,
+            "refresh": daemon.c.profile.profile.knowledge.refresh if daemon.c.profile else "manual",
+            "current": daemon.knowledge.current,
+        }  # fmt: skip
+
+    @app.post("/api/knowledge/sources", dependencies=auth)
+    async def knowledge_add(body: SourceRequest) -> dict[str, Any]:
+        try:
+            source = daemon.knowledge.add_url(body.url, body.depth, body.max_pages, body.include, body.exclude)
+        except KnowledgeError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {"id": source.id}
+
+    @app.post("/api/knowledge/upload", dependencies=auth)
+    async def knowledge_upload(files: list[UploadFile]) -> dict[str, Any]:
+        added = []
+        for upload in files[:20]:
+            data = await upload.read(MAX_UPLOAD_BYTES + 1)
+            try:
+                source = daemon.knowledge.add_file(upload.filename or "fichero", data)
+            except KnowledgeError as exc:
+                raise HTTPException(422, f"{upload.filename}: {exc}") from exc
+            added.append(source.id)
+        return {"ids": added}
+
+    @app.delete("/api/knowledge/sources/{source_id}", dependencies=auth)
+    async def knowledge_remove(source_id: int) -> dict[str, bool]:
+        try:
+            daemon.knowledge.remove(source_id)
+        except KnowledgeError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {"removed": True}
+
+    @app.post("/api/knowledge/refresh", dependencies=auth)
+    async def knowledge_refresh(body: RefreshRequest) -> dict[str, int]:
+        try:
+            count = daemon.knowledge.refresh(body.source_id)
+        except KnowledgeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"queued": count}
+
+    @app.get("/api/knowledge/search", dependencies=auth)
+    async def knowledge_search(q: str) -> list[dict[str, Any]]:
+        hits = await daemon.knowledge.search(q[:500])
+        return [
+            {"title": h.title, "heading": h.heading, "text": h.text[:600], "url": h.url, "score": round(h.score, 4)}
+            for h in hits
+        ]
 
     # Asistente y voz --------------------------------------------------------------------------
 

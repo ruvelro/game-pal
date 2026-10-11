@@ -400,6 +400,7 @@ input[type="range"] {
 
 input[type="checkbox"] {
   width: auto;
+  flex: none;
   accent-color: var(--mint);
 }
 
@@ -696,4 +697,55 @@ button.corner.active {
 
 button.corner.active::after {
   background: var(--mint);
+}
+
+/* Conocimiento ---------------------------------------------------------------------------- */
+
+.sources {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.sources a,
+.location a,
+.answers a {
+  color: var(--mint);
+  text-decoration: none;
+}
+
+.sources a:hover,
+.location a:hover,
+.answers a:hover {
+  text-decoration: underline;
+}
+
+.sources-table td.location {
+  max-width: 340px;
+  overflow-wrap: anywhere;
+}
+
+.sources-table td.actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.sources-table td.actions button {
+  margin-left: 6px;
+  padding: 6px 12px;
+}
+
+.ellipsis {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.answers .sources li {
+  border: none;
+  background: none;
+  padding: 1px 0;
+  border-radius: 0;
 }
