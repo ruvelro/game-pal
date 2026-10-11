@@ -3,8 +3,12 @@
     uv run python scripts/stardew_reference.py
 
 Lee las fichas de cada cultivo y de sus semillas con la API de MediaWiki (no el HTML), y los nombres en
-cada idioma de los enlaces entre wikis. Escribe profiles/stardew-valley/reference/crops.yaml, que el asistente
-usa como dato exacto: así no tiene que recordar cuánto tarda en crecer cada cultivo.
+cada idioma de los enlaces entre wikis. Escribe en profiles/stardew-valley/reference/:
+
+- crops.yaml: cuánto tarda en crecer cada cultivo, cuándo se planta y dónde se compra la semilla.
+- festivals.yaml: qué días son las fiestas de cada estación.
+
+El asistente los usa como dato exacto: así no tiene que recordar tiempos de cultivo ni fechas.
 """
 
 from __future__ import annotations
@@ -51,7 +55,11 @@ KEYWORDS = {
     "en": ["plant", "sow", "crop", "harvest", "seed", "grow", "ripen", "farm"],
 }  # fmt: skip
 FESTIVALS = {"egg_festival": "Egg Festival"}
-OUT = Path(__file__).resolve().parent.parent / "profiles" / "stardew-valley" / "reference" / "crops.yaml"
+OUT_DIR = Path(__file__).resolve().parent.parent / "profiles" / "stardew-valley" / "reference"
+HEADER = (
+    "# Generado con scripts/stardew_reference.py desde la wiki oficial. No lo edites a mano: vuelve a\n"
+    "# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos, fechas ni precios.\n"
+)
 
 
 def api(params: dict[str, str]) -> dict[str, Any]:
@@ -161,6 +169,44 @@ def members(category: str) -> set[str]:
     return {member["title"] for member in data["query"]["categorymembers"]}
 
 
+def festival_days(sentence: str, season: str) -> list[int]:
+    """«on the 13th of every Spring» → [13]; «during Spring 15-17» → [15, 16, 17]."""
+    span = re.search(rf"{season} (\d+)(?:-(\d+))?", sentence, re.IGNORECASE)
+    if span:
+        first = int(span.group(1))
+        return list(range(first, int(span.group(2) or first) + 1))
+    single = re.search(r"(\d+)(?:st|nd|rd|th)\b", sentence)
+    return [int(single.group(1))] if single else []
+
+
+def festivals() -> list[dict[str, Any]]:
+    """Las fiestas de la página Festivals: cada «===Nombre===» dentro de la sección de su estación."""
+    text = pages(["Festivals"])["Festivals"]["text"]
+    parts = re.split(r"^(==+)\s*(.*?)\s*==+\s*$", text, flags=re.MULTILINE)
+    found: list[tuple[str, str, list[int]]] = []
+    season = ""
+    for level, title, body in zip(parts[1::3], parts[2::3], parts[3::3], strict=True):
+        if level == "==":
+            season = re.sub(r"[\[\]]", "", title).strip().lower()
+            continue
+        sentence = re.search(r"(?:takes place|is held)[^.]*\.", body)
+        days = festival_days(sentence.group(0), season) if sentence and season in SEASONS else []
+        if level == "===" and days:
+            found.append((title.strip(), season, days))
+    names = pages([title for title, _, _ in found])
+    return [
+        {"names": {"en": title, **(names.get(title) or {}).get("names", {})}, "season": season, "days": days}
+        for title, season, days in found
+    ]
+
+
+def write(name: str, document: dict[str, Any]) -> Path:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / name
+    path.write_text(HEADER + yaml.safe_dump(document, sort_keys=False, allow_unicode=True, width=120), "utf-8")
+    return path
+
+
 def main() -> int:
     titles: set[str] = set(EXTRA)
     for category in CATEGORIES:
@@ -230,13 +276,16 @@ def main() -> int:
         "events": events,
         "entries": crops,
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    header = (
-        "# Generado con scripts/stardew_reference.py desde la wiki oficial. No lo edites a mano: vuelve a\n"
-        "# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos ni precios.\n"
-    )
-    OUT.write_text(header + yaml.safe_dump(document, sort_keys=False, allow_unicode=True, width=120), "utf-8")
-    print(f"{len(crops)} cultivos en {OUT}")
+    print(f"{len(crops)} cultivos en {write('crops.yaml', document)}")
+    found = festivals()
+    calendar = {
+        "id": "festivals",
+        "source": "Stardew Valley Wiki",
+        "source_url": "https://stardewvalleywiki.com/Festivals",
+        "generated": date.today().isoformat(),
+        "festivals": found,
+    }
+    print(f"{len(found)} fiestas en {write('festivals.yaml', calendar)}")
     return 0
 
 

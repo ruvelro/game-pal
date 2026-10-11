@@ -195,10 +195,12 @@ Los modelos pequeños, y más sin pensar antes de responder, se inventan cifras 
 # singular o plural) y se lo da al modelo, con las fechas ya calculadas.
 reference: [reference/crops.yaml]
 
-# Con el día del guardado, game-pal da hecho cuántos días quedan de estación.
+# Con el día del guardado, game-pal da hecho cuántos días quedan de estación, qué fiestas hay en ella y
+# cuánto falta para la próxima.
 calendar:
   seasons: [spring, summer, fall, winter]
   days_per_season: 28
+  events: reference/festivals.yaml   # festivals: [{names: {es: …, en: …}, season: spring, days: [24]}]
 
 knowledge:
   # Ficha de lo que se ve o se pregunta, buscada al momento por su nombre exacto (MediaWiki), primero en
@@ -210,7 +212,7 @@ knowledge:
       language: en
 ```
 
-Cada fila de una tabla lleva `names` (por idioma) y los datos. Las de cultivos admiten `seasons`, `growth_days`, `regrow_days`, `growth_days_irrigated`, `trellis`, `sell_price` y `seed` (con `names` y `prices` por tienda). Con `keywords`, una pregunta que hable del tema («¿qué planto?») trae las filas de la estación en curso aunque no se nombre ninguna; con `events`, las tiendas de un solo día (un festival) dicen si ya pasaron.
+Cada fila de una tabla lleva `names` (por idioma) y los datos. Las de cultivos admiten `seasons`, `growth_days`, `regrow_days`, `growth_days_irrigated`, `trellis`, `sell_price` y `seed` (con `names` y `prices` por tienda). Con `keywords`, una pregunta que hable del tema («¿qué planto?») trae las filas de la estación en curso aunque no se nombre ninguna; con `events`, las tiendas de un solo día (un festival) dicen si ya pasaron, y la semilla que solo se vendía allí se marca como que ahora no se vende. Si la pregunta no nombra ningún cultivo, solo van los que aún se pueden cosechar.
 
 Las tablas de Stardew Valley se generan desde la wiki oficial con `uv run python scripts/stardew_reference.py`: no se escriben a mano.
 

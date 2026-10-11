@@ -1,5 +1,5 @@
 # Generado con scripts/stardew_reference.py desde la wiki oficial. No lo edites a mano: vuelve a
-# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos ni precios.
+# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos, fechas ni precios.
 id: crops
 title:
   es: Cultivos

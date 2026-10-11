@@ -60,21 +60,54 @@ def test_crops_are_found_by_name_in_any_language_and_plural(reference: Reference
 def test_a_general_question_brings_the_crops_of_the_season(reference: Reference) -> None:
     found = reference.find("¿Qué me recomiendas plantar mañana?", SPRING_18)
     names = {e["names"]["en"] for _, entries in found for e in entries}
-    assert {"Parsnip", "Potato", "Cauliflower"} <= names
+    assert {"Parsnip", "Potato", "Kale"} <= names
+    # Sin nombrarlas, fuera las que no se pueden comprar (fresa: el festival ya pasó; zanahoria y fruta
+    # milenaria: no se venden en tiendas).
+    assert not names & {"Strawberry", "Carrot", "Ancient Fruit"}
     assert "Melon" not in names  # de verano
+    assert "Cauliflower" not in names  # 12 días: ya no llega, y no se nombró
+    named = reference.find("¿Me da tiempo a plantar coliflores?", SPRING_18)
+    assert "Cauliflower" in {e["names"]["en"] for _, entries in named for e in entries}
+
+
+def test_the_calendar_lists_festivals_and_the_next_one(reference: Reference) -> None:
+    text = reference.calendar(SPRING_18, "es")
+    assert "Festival del huevo (día 13, ya pasó)" in text
+    assert "Festival del Desierto (días 15 a 17, ya pasó)" in text
+    assert "Danza floral (día 24, dentro de 6 días)" in text
+    assert "La próxima fiesta es Danza floral: dentro de 6 días (día 24 de primavera)" in text
+    assert "(días 15 a 17, es hoy)" in reference.calendar(Today("spring", 16, 1), "es")
+    assert "Danza floral (día 24, mañana)" in reference.calendar(Today("spring", 23, 1), "es")
+    # Pasadas todas las de la estación, la primera de la siguiente.
+    late = reference.calendar(Today("spring", 26, 1), "es")
+    assert "La próxima fiesta es Luau: dentro de 13 días (día 11 de verano)" in late
+    winter = reference.calendar(Today("winter", 28, 1), "en")
+    assert "The next festival is Egg Festival: in 13 days (day 13 of spring)" in winter
+
+
+def test_seeds_sold_only_at_a_past_festival_are_flagged(reference: Reference) -> None:
+    lines = reference.render("fresa chirivía", SPRING_18, "es").splitlines()
+    strawberry = next(line for line in lines if line.startswith("- Fresa"))
+    parsnip = next(line for line in lines if line.startswith("- Chirivía"))
+    assert "ahora no se vende en ninguna tienda" in strawberry
+    assert "ahora no se vende" not in parsnip
+    assert "no se vende en tiendas" in reference.render("zanahoria", SPRING_18, "es")  # sale de semillas silvestres
+    early = reference.render("fresa", Today("spring", 5, 1), "es")
+    assert "solo el día 13 de primavera" in early
+    assert "ahora no se vende" not in early
 
 
 def test_rows_carry_the_dates_already_counted(reference: Reference) -> None:
     text = reference.render("chirivía coliflor judía verde maíz fresa", SPRING_18, "es")
     lines = {line.split(" · ")[0]: line for line in text.splitlines() if line.startswith("- ")}
     assert (
-        "plantada hoy (día 18): se cosecha el día 22; plantada mañana (día 19): se cosecha el día 23"
-        in lines["- Chirivía (Parsnip)"]
+        "plantada hoy (día 18): sí llega, se cosecha el día 22; "
+        "plantada mañana (día 19): sí llega, se cosecha el día 23" in lines["- Chirivía (Parsnip)"]
     )
-    assert "plantada hoy (día 18): ya no llega" in lines["- Coliflor (Cauliflower)"]
+    assert "plantada hoy (día 18): no llega" in lines["- Coliflor (Cauliflower)"]
     beans = lines["- Judía verde (Green Bean)"]
-    assert "plantada hoy (día 18): primera cosecha el día 28, 1 sola cosecha esta estación" in beans
-    assert "plantada mañana (día 19): ya no llega" in beans
+    assert "plantada hoy (día 18): sí llega, primera cosecha el día 28, 1 sola cosecha esta estación" in beans
+    assert "plantada mañana (día 19): no llega" in beans
     assert "Festival del Huevo 100 g (ya pasó este año: fue el día 13 de primavera)" in lines["- Fresa (Strawberry)"]
     assert "Pierre 20 g" in lines["- Chirivía (Parsnip)"]
     summer = reference.render("maíz", Today("summer", 20, 1), "es")

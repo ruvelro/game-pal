@@ -52,9 +52,9 @@ TEXT = {
         "irrigated": "{n} días si está junto al agua", "island": "en la isla Jengibre, todo el año",
         "sells": "se vende por {n} g", "seed": "semilla", "where": "dónde",
         "when_today": "plantada hoy (día {d})", "when_tomorrow": "plantada mañana (día {d})",
-        "ready": "se cosecha el día {h}", "first": "primera cosecha el día {h}",
+        "ready": "sí llega, se cosecha el día {h}", "first": "sí llega, primera cosecha el día {h}",
         "harvests": "{n} cosechas en total esta estación", "harvest_one": "1 sola cosecha esta estación",
-        "too_late": "ya no llega (maduraría después del día {last})",
+        "too_late": "no llega (maduraría después del día {last}, cuando acaba la estación)",
         "festival_past": "ya pasó este año: fue el día {day} de {season}",
         "festival_next": "solo el día {day} de {season}",
         "base": "Días base: el abono de velocidad y la profesión Agricultor los acortan.",
@@ -66,6 +66,12 @@ TEXT = {
         "calendar_last": "Hoy es el día {day} de {season}{year}, el último de la estación.",
         "next_season": "Después empieza {season}.",
         "year": ", año {n}",
+        "not_sold": "ahora no se vende en ninguna tienda", "never_sold": "no se vende en tiendas",
+        "festivals": "Fiestas de {season}: {list}.",
+        "no_festivals": "{season} no tiene fiestas.",
+        "festival_day": "día {d}", "festival_days": "días {first} a {last}",
+        "fest_past": "ya pasó", "fest_today": "es hoy", "fest_in": "dentro de {n} días", "fest_in_one": "mañana",
+        "fest_next": "La próxima fiesta es {name}: {when} ({days} de {season}).",
     },
     "en": {
         "days": "days", "day": "day", "regrow": "produces again every {n} {days}",
@@ -73,9 +79,9 @@ TEXT = {
         "irrigated": "{n} days when irrigated", "island": "all year on Ginger Island",
         "sells": "sells for {n}g", "seed": "seed", "where": "where",
         "when_today": "planted today (day {d})", "when_tomorrow": "planted tomorrow (day {d})",
-        "ready": "harvest on day {h}", "first": "first harvest on day {h}",
+        "ready": "makes it, harvest on day {h}", "first": "makes it, first harvest on day {h}",
         "harvests": "{n} harvests this season", "harvest_one": "a single harvest this season",
-        "too_late": "too late (it would ripen after day {last})",
+        "too_late": "too late (it would ripen after day {last}, when the season ends)",
         "festival_past": "already over this year: it was {season} {day}",
         "festival_next": "only on {season} {day}",
         "base": "Base days: speed fertilizer and the Agriculturist profession shorten them.",
@@ -84,8 +90,21 @@ TEXT = {
         "calendar_last": "Today is {season} {day}{year}, the last day of the season.",
         "next_season": "Then {season} starts.",
         "year": ", year {n}",
+        "not_sold": "no shop sells it right now", "never_sold": "not sold in shops",
+        "festivals": "{season} festivals: {list}.",
+        "no_festivals": "{season} has no festivals.",
+        "festival_day": "day {d}", "festival_days": "days {first} to {last}",
+        "fest_past": "already over", "fest_today": "today", "fest_in": "in {n} days", "fest_in_one": "tomorrow",
+        "fest_next": "The next festival is {name}: {when} ({days} of {season}).",
     },
 }  # fmt: skip
+
+
+@dataclass(frozen=True, slots=True)
+class Festival:
+    names: dict[str, str]
+    season: str
+    days: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,18 +183,43 @@ def load_tables(loaded: LoadedProfile) -> list[Table]:
     return tables
 
 
+def load_festivals(loaded: LoadedProfile) -> list[Festival]:
+    relative = loaded.profile.calendar.events
+    if not relative:
+        return []
+    path = loaded.path(relative, f"La tabla {relative}")
+    if not path.is_file() or path.stat().st_size > MAX_REFERENCE_BYTES:
+        raise ProfileError(f"No se puede leer la tabla {relative}")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    found: list[Festival] = []
+    for item in raw.get("festivals") or []:
+        if not isinstance(item, dict) or not isinstance(item.get("names"), dict):
+            continue
+        days = tuple(sorted(int(d) for d in item.get("days") or [] if isinstance(d, int)))
+        if days and item.get("season"):
+            found.append(Festival({str(k): str(v) for k, v in item["names"].items()}, str(item["season"]), days))
+    return found
+
+
 class Reference:
     """Las tablas del perfil y su calendario, listos para dar al modelo lo que venga a cuento."""
 
-    def __init__(self, tables: list[Table], seasons: list[str], days_per_season: int) -> None:
+    def __init__(
+        self,
+        tables: list[Table],
+        seasons: list[str],
+        days_per_season: int,
+        festivals: list[Festival] | None = None,
+    ) -> None:
         self.tables = tables
         self.seasons = seasons
         self.days_per_season = days_per_season
+        self.festivals = festivals or []
 
     @classmethod
     def from_profile(cls, loaded: LoadedProfile) -> Reference:
         calendar = loaded.profile.calendar
-        return cls(load_tables(loaded), list(calendar.seasons), calendar.days_per_season)
+        return cls(load_tables(loaded), list(calendar.seasons), calendar.days_per_season, load_festivals(loaded))
 
     def _next_season(self, season: str) -> str | None:
         if season not in self.seasons:
@@ -190,11 +234,93 @@ class Reference:
             indexes = sorted({index for key, index in table.names if _contains(said, key)})
             topic = any(_contains(said, words(keyword)) for keywords in table.keywords.values() for keyword in keywords)
             if topic and today is not None:
-                in_season = [i for i, e in enumerate(table.entries) if today.season in (e.get("seasons") or [])]
+                # Sin nombrar ninguno, solo los que se pueden comprar y aún cosechar: los demás no sirven para
+                # recomendar, y el modelo los recomienda igual aunque la fila diga que no.
+                in_season = [
+                    i
+                    for i, e in enumerate(table.entries)
+                    if self._still_grows(e, today) and self._on_sale(table, e, today) is not False
+                ]
                 indexes = sorted(set(indexes) | set(in_season[:MAX_TOPIC_ROWS]))
             if indexes:
                 found.append((table, [table.entries[i] for i in indexes]))
         return found
+
+    def _still_grows(self, entry: dict[str, Any], today: Today) -> bool:
+        """Si plantado hoy da algo antes de que acabe la estación, o sigue creciendo en la siguiente."""
+        if today.season not in (entry.get("seasons") or []):
+            return False
+        growth = entry.get("growth_days")
+        following = self._next_season(today.season)
+        if not growth or not self.days_per_season or (following and following in entry.get("seasons", [])):
+            return True
+        return bool(today.day + int(growth) <= self.days_per_season)
+
+    def _on_sale(self, table: Table, entry: dict[str, Any], today: Today | None) -> bool | None:
+        """Si su semilla se puede comprar ahora; None si la fila no habla de semillas."""
+        seed = entry.get("seed")
+        if not seed:
+            return None
+        places = list(seed.get("prices") or {})
+        return bool(places) and not all(self._event_past(table, k, today) for k in places)
+
+    def _festivals(self, today: Today, language: str) -> str:
+        """Las fiestas de la estación con lo que falta para cada una, y cuál es la próxima."""
+        if not self.festivals:
+            return ""
+        text = TEXT.get(language, TEXT["en"])
+        seasons = SEASON_NAMES.get(language, SEASON_NAMES["en"])
+        total = self.days_per_season
+
+        def name(festival: Festival) -> str:
+            return festival.names.get(language) or festival.names.get("en", "")
+
+        def days(festival: Festival) -> str:
+            first, last = festival.days[0], festival.days[-1]
+            if first == last:
+                return text["festival_day"].format(d=first)
+            return text["festival_days"].format(first=first, last=last)
+
+        def until(wait: int) -> str:
+            return text["fest_in_one"] if wait == 1 else text["fest_in"].format(n=wait)
+
+        here = [f for f in self.festivals if f.season == today.season]
+        season = seasons.get(today.season, today.season)
+        items: list[str] = []
+        upcoming: tuple[int, Festival] | None = None
+        for festival in here:
+            if festival.days[-1] < today.day:
+                state = text["fest_past"]
+            elif festival.days[0] <= today.day:
+                state = text["fest_today"]
+            else:
+                wait = festival.days[0] - today.day
+                state = until(wait)
+                upcoming = upcoming or (wait, festival)
+            items.append(f"{name(festival)} ({days(festival)}, {state})")
+        lines = [
+            text["festivals"].format(season=season, list="; ".join(items))
+            if items
+            else text["no_festivals"].format(season=season.capitalize())
+        ]
+        # Si ya no quedan en esta estación, la primera de las siguientes.
+        if upcoming is None and total and today.season in self.seasons:
+            start = self.seasons.index(today.season)
+            for step in range(1, len(self.seasons) + 1):
+                later = self.seasons[(start + step) % len(self.seasons)]
+                ahead = sorted((f for f in self.festivals if f.season == later), key=lambda f: f.days[0])
+                if ahead:
+                    upcoming = ((total - today.day) + (step - 1) * total + ahead[0].days[0], ahead[0])
+                    break
+        if upcoming is not None:
+            wait, festival = upcoming
+            lines.append(
+                text["fest_next"].format(
+                    name=name(festival), when=until(wait), days=days(festival),
+                    season=seasons.get(festival.season, festival.season),
+                )
+            )  # fmt: skip
+        return " ".join(lines)
 
     def calendar(self, today: Today | None, language: str) -> str:
         """El día de hoy y lo que queda de estación, ya contado."""
@@ -214,7 +340,8 @@ class Reference:
         following = self._next_season(today.season)
         if following:
             line += " " + text["next_season"].format(season=seasons.get(following, following))
-        return line
+        festivals = self._festivals(today, language)
+        return f"{line}\n{festivals}" if festivals else line
 
     def render(self, text: str, today: Today | None, language: str) -> str:
         """Bloques <datos_del_juego> con las filas que vienen a cuento, en el idioma de las respuestas."""
@@ -229,17 +356,25 @@ class Reference:
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
 
-    def _event_note(self, table: Table, place: str, today: Today | None, language: str) -> str:
-        """Si la tienda es un festival: cuándo es, o que ya pasó este año."""
+    def _event_past(self, table: Table, place: str, today: Today | None) -> bool | None:
+        """Si la tienda es un festival, si ya pasó este año; None si no es un festival o no se sabe."""
         event = table.events.get(place)
         if event is None or today is None or today.season not in self.seasons:
+            return None
+        season, day = str(event.get("season", "")), int(event.get("day", 0))
+        if season not in self.seasons:
+            return None
+        return (self.seasons.index(today.season), today.day) > (self.seasons.index(season), day)
+
+    def _event_note(self, table: Table, place: str, today: Today | None, language: str) -> str:
+        """Si la tienda es un festival: cuándo es, o que ya pasó este año."""
+        past = self._event_past(table, place, today)
+        if past is None:
             return ""
+        event = table.events[place]
         text = TEXT.get(language, TEXT["en"])
         seasons = SEASON_NAMES.get(language, SEASON_NAMES["en"])
         season, day = str(event.get("season", "")), int(event.get("day", 0))
-        if season not in self.seasons:
-            return ""
-        past = (self.seasons.index(today.season), today.day) > (self.seasons.index(season), day)
         key = "festival_past" if past else "festival_next"
         note = text[key].format(day=day, season=seasons.get(season, season))
         return f" ({note})"
@@ -275,6 +410,11 @@ class Reference:
                 for k, v in (seed.get("prices") or {}).items()
             )
             parts.append(f"{text['seed']} «{seed_name}»" + (f": {prices}" if prices else ""))
+            # Si solo se vende en fiestas que ya pasaron, decirlo claro: si no, el modelo la recomienda igual.
+            if not seed.get("prices"):
+                parts.append(text["never_sold"])
+            elif not self._on_sale(table, entry, today):
+                parts.append(text["not_sold"])
         timing = self._timing(entry, today, language)
         if timing:
             parts.append(timing)

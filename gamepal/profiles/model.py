@@ -147,6 +147,9 @@ class Calendar(_Model):
 
     seasons: list[str] = Field(default_factory=list, description="Estaciones en orden, con el id del guardado")
     days_per_season: int = Field(default=0, ge=0, le=400)
+    events: str | None = Field(
+        default=None, description="Tabla con las fiestas de cada estación (ruta relativa a la carpeta del perfil)"
+    )
 
 
 class GameProfile(_Model):

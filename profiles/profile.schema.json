@@ -18,6 +18,19 @@
           "minimum": 0,
           "title": "Days Per Season",
           "type": "integer"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tabla con las fiestas de cada estación (ruta relativa a la carpeta del perfil)",
+          "title": "Events"
         }
       },
       "title": "Calendar",

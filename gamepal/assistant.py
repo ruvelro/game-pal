@@ -96,7 +96,10 @@ RULES = (
     "\n\nExactitud: lo que va en <calendario>, <datos_del_juego> y <estado_partida> es exacto y ya está calculado; "
     "úsalo tal cual y no lo recalcules. No des días, fechas, precios ni cantidades que no estén en esos bloques, en "
     "una ficha o en <conocimiento>: si no los tienes, di que no lo sabes. Para hablar de un objeto que se ve en "
-    "pantalla, usa su nombre tal como aparece y su ficha. Usa solo los datos que vienen a cuento de la pregunta.\n"
+    "pantalla, usa su nombre tal como aparece y su ficha. Usa solo los datos que vienen a cuento de la pregunta: "
+    "no hables del tiempo, la suerte ni el dinero si no te preguntan por eso.\n"
+    "Brevedad: de dos a cuatro frases. Si te piden una recomendación, da una o dos opciones con su motivo, no "
+    "repases todas.\n"
     "Escribe texto plano, sin Markdown: nada de asteriscos, almohadillas ni viñetas."
 )
 CUT_NOTE = "(Respuesta cortada por largo: puedes subir el «Largo de las respuestas» en Modelos.)"
