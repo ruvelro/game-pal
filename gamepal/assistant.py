@@ -20,7 +20,7 @@ from typing import Any, Literal
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig, Output
 from gamepal.events import AnswerUpdate, QuestionAsked, ScreenDetected, ScreenRead, SpeechStopped
-from gamepal.explain import explain_error
+from gamepal.explain import EMPTY_ANSWER, explain_error
 from gamepal.knowledge.store import Hit
 from gamepal.profiles import LoadedProfile
 from gamepal.providers import Message, Provider, ProviderError
@@ -328,10 +328,13 @@ class Assistant:
             knowledge, sources = self._knowledge_block(hits)
             context = "\n\n".join(part for part in (self._context(screen, self._read()), knowledge) if part)
             messages.append(Message("user", f"{context}\n\n{question.text}" if context else question.text))
-            max_tokens = 500
+            max_tokens = config.generation.answer_tokens
+        # Las respuestas rápidas nunca piensan; las razonadas, si el jugador lo deja.
+        think = config.generation.think_budget() if route == "reasoned" else 0
         answer = await self._stream(
-            question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources, client
-        )
+            question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources, client,
+            think,
+        )  # fmt: skip
         if answer:
             self._history.append(Turn(question.text, answer))
 
@@ -345,9 +348,12 @@ class Assistant:
         knowledge, sources = self._knowledge_block(hits)
         context = "\n\n".join(part for part in (self._context(screen, self._read()), knowledge) if part)
         messages = [Message("system", self._system()), Message("user", f"{context}\n\n{instruction}")]
+        generation = self._config().generation
+        # Los avisos son más breves que una respuesta: tres quintos de su largo.
         await self._stream(
-            uuid.uuid4().hex[:12], "proactive", screen.name, outputs, messages, None, 300, "task", sources
-        )
+            uuid.uuid4().hex[:12], "proactive", screen.name, outputs, messages, None,
+            generation.answer_tokens * 3 // 5, "task", sources, None, generation.think_budget(),
+        )  # fmt: skip
 
     async def _stream(
         self,
@@ -361,6 +367,7 @@ class Assistant:
         route: Literal["quick", "reasoned", "task"],
         sources: list[dict[str, str]] | None = None,
         client: Provider | None = None,
+        think: int = 0,
     ) -> str:
         provider = client or self._provider()
         assert provider is not None
@@ -375,7 +382,7 @@ class Assistant:
 
         self._bus.publish(update())
         try:
-            async for delta in provider.chat_stream(messages, model=model, max_tokens=max_tokens):
+            async for delta in provider.chat_stream(messages, model=model, max_tokens=max_tokens, think=think):
                 text += delta
                 self._bus.publish(update(delta=delta, text=text))
         except asyncio.CancelledError:
@@ -384,6 +391,10 @@ class Assistant:
         except ProviderError as exc:
             log.warning("El modelo falló: %s", exc)
             self._bus.publish(update(text=text, done=True, error=explain_error(str(exc), self._config())))
+            return ""
+        if not text.strip():
+            # Nunca una respuesta en blanco sin explicación.
+            self._bus.publish(update(text="", done=True, error=explain_error(EMPTY_ANSWER, self._config())))
             return ""
         self._bus.publish(update(text=text, done=True))
         return text

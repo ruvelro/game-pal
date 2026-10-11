@@ -16,6 +16,8 @@ from gamepal.providers import LocalOpenAIProvider
 
 def _provider(answer: str, seen: list[dict]) -> LocalOpenAIProvider:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/v1/chat/completions":
+            return httpx.Response(404)  # no es Ollama: no dice si el modelo razona
         body = json.loads(request.content)
         seen.append(body)
         if body.get("response_format"):

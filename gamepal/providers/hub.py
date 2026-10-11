@@ -18,7 +18,7 @@ from gamepal.config import AppConfig, Role
 from gamepal.events import ActivityRecorded
 from gamepal.keystore import SecretStore
 from gamepal.providers.anthropic_provider import DEFAULT_FAST_MODEL, DEFAULT_MODEL, AnthropicProvider
-from gamepal.providers.base import Capabilities, ChatResult, Message, Provider, ProviderError, Usage
+from gamepal.providers.base import Capabilities, ChatResult, Message, ModelTraits, Provider, ProviderError, Usage
 from gamepal.providers.openai_compat import LocalOpenAIProvider, OpenAIProvider, OpenRouterProvider
 
 log = logging.getLogger(__name__)
@@ -156,6 +156,15 @@ class RoutedProvider:
         provider, _ = self._targets()[0]
         return await self._hub.client(provider).capabilities()
 
+    async def traits(self) -> tuple[str, ModelTraits | None]:
+        """Modelo principal de la tarea y si razona. None: el proveedor no lo sabe decir."""
+        provider, model = self._targets()[0]
+        client = self._hub.client(provider)
+        probe = getattr(client, "traits", None)
+        if probe is None or not model:
+            return model, None
+        return model, await probe(model)
+
     def _record(self, provider: str, model: str, ok: bool, started: float, usage: Usage, fallback: bool,
                 error: str = "") -> None:  # fmt: skip
         self._hub.record(
@@ -174,6 +183,7 @@ class RoutedProvider:
         max_tokens: int = 512,
         temperature: float = 0.2,
         json_schema: dict[str, Any] | None = None,
+        think: int = 0,
     ) -> ChatResult:
         last: ProviderError | None = None
         for index, (provider, chosen) in enumerate(self._targets(model)):
@@ -182,7 +192,7 @@ class RoutedProvider:
                 client = self._hub.client(provider)
                 result = await client.chat(
                     messages, model=chosen or None, max_tokens=max_tokens, temperature=temperature,
-                    json_schema=json_schema,
+                    json_schema=json_schema, think=think,
                 )  # fmt: skip
             except ProviderError as exc:
                 self._record(provider, chosen, False, started, Usage(), index > 0, str(exc))
@@ -200,6 +210,7 @@ class RoutedProvider:
         max_tokens: int = 512,
         temperature: float = 0.2,
         on_usage: Callable[[Usage], None] | None = None,
+        think: int = 0,
     ) -> AsyncIterator[str]:
         last: ProviderError | None = None
         for index, (provider, chosen) in enumerate(self._targets(model)):
@@ -216,8 +227,9 @@ class RoutedProvider:
             try:
                 client = self._hub.client(provider)
                 async for delta in client.chat_stream(
-                    messages, model=chosen or None, max_tokens=max_tokens, temperature=temperature, on_usage=capture
-                ):
+                    messages, model=chosen or None, max_tokens=max_tokens, temperature=temperature, on_usage=capture,
+                    think=think,
+                ):  # fmt: skip
                     emitted = True
                     yield delta
             except ProviderError as exc:

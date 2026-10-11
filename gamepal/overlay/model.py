@@ -58,6 +58,8 @@ class OverlayModel:
     linger: float = 12.0
     language: str = "es"
     game: Rect | None = None
+    # Zona útil de la pantalla principal (sin barra de menús ni Dock). El backend la dice al arrancar;
+    # 1920×1080 es solo el valor por si no sabe.
     screen: Rect = field(default_factory=lambda: Rect(0, 0, 1920, 1080))
     card: Card | None = None
     voice: str = "idle"
@@ -112,6 +114,11 @@ class OverlayModel:
         bottom = self.corner.startswith("bottom")
         x = area.left + area.width - width - MARGIN if right else area.left + MARGIN
         y = area.top + area.height - MARGIN if bottom else area.top + MARGIN
+        # La ventana del juego puede asomar fuera de la pantalla: la tarjeta, nunca.
+        screen = self.screen
+        width = min(width, max(200, screen.width - 2 * MARGIN))
+        x = max(screen.left + MARGIN, min(x, screen.left + screen.width - width - MARGIN))
+        y = max(screen.top + MARGIN, min(y, screen.top + screen.height - MARGIN))
         return View(
             title=(card.title if card else "")[:90],
             body=body.strip(),

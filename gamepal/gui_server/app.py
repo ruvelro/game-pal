@@ -361,6 +361,19 @@ def create_app(
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
         return {"models": list(caps.models), "local": caps.local}
 
+    @app.get("/api/provider/thinking", dependencies=auth)
+    async def provider_thinking() -> dict[str, Any]:
+        """Si el modelo que responde razona antes de hacerlo y si se le puede apagar."""
+        try:
+            model, traits = await daemon.hub.route("reasoning").traits()
+        except ProviderError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, explain_error(str(exc), daemon.config)) from exc
+        return {
+            "model": model,
+            "reasons": traits.reasons if traits else None,
+            "can_disable": traits.can_disable if traits else None,
+        }
+
     @app.post("/api/provider/ask", dependencies=auth)
     async def ask(body: AskRequest) -> dict[str, Any]:
         provider = daemon.c.provider

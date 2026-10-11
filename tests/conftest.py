@@ -9,6 +9,7 @@ import pytest
 from gamepal.capture.base import RGBImage, WindowInfo
 from gamepal.events import TextLine
 from gamepal.paths import AppPaths
+from gamepal.providers import openai_compat
 
 GAME = WindowInfo(id=7, title="Mi Juego", process="MiJuego.exe", pid=4242, width=800, height=600)
 
@@ -73,3 +74,9 @@ def line(text: str, x: float, y: float, w: float = 0.15, h: float = 0.04, confid
     from gamepal.events import Box
 
     return TextLine(text=text, confidence=confidence, box=Box(x=x, y=y, width=w, height=h))
+
+
+@pytest.fixture(autouse=True)
+def _forget_model_traits() -> None:
+    """Lo aprendido de cada modelo dura lo que el proceso: cada prueba empieza sin saber nada."""
+    openai_compat._TRAITS.clear()

@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 import httpx
 
-from gamepal.overlay.model import OverlayModel, View
+from gamepal.overlay.model import OverlayModel, Rect, View
 
 log = logging.getLogger(__name__)
 
@@ -18,12 +18,21 @@ TICK_S = 0.25
 
 
 class OverlayClient:
-    def __init__(self, http_url: str, ws_url: str, token: str, render: Callable[[View | None], None]) -> None:
+    def __init__(
+        self,
+        http_url: str,
+        ws_url: str,
+        token: str,
+        render: Callable[[View | None], None],
+        screen: Rect | None = None,
+    ) -> None:
         self._http = http_url.rstrip("/")
         self._ws = ws_url
         self._token = token
         self._render = render
         self.model = OverlayModel()
+        if screen is not None:
+            self.model.screen = screen
         self._last: View | None = None
         self._stop = threading.Event()
 

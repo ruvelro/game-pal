@@ -107,6 +107,26 @@ class RoutingConfig(_Model):
     vision: RoleRoute = Field(default_factory=RoleRoute)
 
 
+class GenerationConfig(_Model):
+    """Cuánto escribe y cuánto piensa el modelo al responder.
+
+    Los modelos que razonan (Qwen 3, DeepSeek R1, gpt-oss, Claude…) piensan antes de contestar, y lo que
+    piensan cuenta en el límite de la petición. game-pal suma el margen para pensar solo cuando el modelo
+    razona, y las tareas internas (enrutar, buscar, leer pantallas) nunca piensan.
+    """
+
+    # Largo máximo de una respuesta, sin contar lo que el modelo piense antes.
+    answer_tokens: int = Field(default=500, ge=150, le=4000)
+    # Dejar pensar al modelo antes de responder: acierta más, pero tarda más en empezar a hablar.
+    thinking: bool = True
+    # Margen para pensar, aparte de la respuesta.
+    thinking_tokens: int = Field(default=2048, ge=512, le=16384)
+
+    def think_budget(self) -> int:
+        """Tokens para pensar en una respuesta al jugador: 0 si no se le deja."""
+        return self.thinking_tokens if self.thinking else 0
+
+
 class WakeConfig(_Model):
     enabled: bool = True
     # Frases en cualquier idioma. Se reconocen transcribiendo fragmentos cortos de voz.
@@ -240,6 +260,7 @@ class AppConfig(_Model):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
+    generation: GenerationConfig = Field(default_factory=GenerationConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)

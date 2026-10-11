@@ -9,13 +9,17 @@ import threading
 from typing import Protocol
 
 from gamepal.overlay.client import OverlayClient
-from gamepal.overlay.model import View
+from gamepal.overlay.model import Rect, View
 
 log = logging.getLogger("gamepal.overlay")
 
 
 class Backend(Protocol):
     def render(self, view: View | None) -> None: ...
+
+    def screen(self) -> Rect | None:
+        """Zona útil de la pantalla principal, con origen arriba a la izquierda. None: no se sabe."""
+        ...
 
     def run(self) -> None: ...
 
@@ -49,7 +53,12 @@ def main() -> int:
     except Exception as exc:
         print(f"Overlay no disponible en este sistema: {exc}", file=sys.stderr)
         return 3
-    client = OverlayClient(http_url, ws_url, token, backend.render)
+    try:
+        screen = backend.screen()
+    except Exception:
+        log.warning("No se pudo leer el tamaño de la pantalla", exc_info=True)
+        screen = None
+    client = OverlayClient(http_url, ws_url, token, backend.render, screen)
     worker = threading.Thread(target=client.run, name="overlay-client", daemon=True)
     worker.start()
     try:
