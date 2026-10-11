@@ -67,6 +67,8 @@ class ScreenWatcher:
         self._stable = 0
         self._last_change = 0.0
         self._ocr_task: asyncio.Task[None] | None = None
+        self._force_read = False
+        self._read_frames: dict[int, Frame] = {}
         self._running = asyncio.Event()
         if not paused:
             self._running.set()
@@ -82,6 +84,13 @@ class ScreenWatcher:
     def pause(self) -> None:
         self._running.clear()
         self._bus.publish(StatusChanged(component="capture", state="paused", detail="Observación en pausa"))
+
+    def request_read(self) -> None:
+        """Pide leer otra vez la pantalla en cuanto esté estable, aunque no haya cambiado."""
+        self._force_read = True
+
+    def frame_for_read(self, frame_id: int) -> Frame | None:
+        return self._read_frames.get(frame_id)
 
     def _status(self, state: str, detail: str) -> None:
         self._bus.publish(StatusChanged(component="capture", state=state, detail=detail))  # type: ignore[arg-type]
@@ -166,8 +175,14 @@ class ScreenWatcher:
 
         new_screen = self._read_hash is None or distance(current, self._read_hash) >= self._config.change_threshold
         ocr_idle = self._ocr_task is None or self._ocr_task.done()
-        if new_screen and self._stable >= self._config.settle_frames and ocr_idle:
+        wants_read = new_screen or self._force_read
+        if wants_read and self._stable >= self._config.settle_frames and ocr_idle:
             self._read_hash = current
+            self._force_read = False
+            # Se guardan los frames leídos recientes para que la visión use exactamente esa imagen.
+            self._read_frames[frame.id] = frame
+            for old in sorted(self._read_frames)[:-3]:
+                del self._read_frames[old]
             self._ocr_task = asyncio.create_task(self._read(frame))
 
         self._bus.publish(

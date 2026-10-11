@@ -1,0 +1,1081 @@
+{
+  "$defs": {
+    "ColorDominant": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "min_fraction": {
+          "default": 0.3,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Min Fraction",
+          "type": "number"
+        },
+        "tolerance": {
+          "default": 40,
+          "maximum": 255,
+          "minimum": 1,
+          "title": "Tolerance",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom",
+                "left",
+                "center",
+                "right",
+                "any"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom",
+                  "left",
+                  "center",
+                  "right",
+                  "any"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "any",
+          "title": "Region"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "title": "ColorDominant",
+      "type": "object"
+    },
+    "CountAtLeast": {
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Lines",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom",
+                "left",
+                "center",
+                "right",
+                "any"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom",
+                  "left",
+                  "center",
+                  "right",
+                  "any"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "any",
+          "title": "Region"
+        }
+      },
+      "required": [
+        "lines"
+      ],
+      "title": "CountAtLeast",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "save_reader": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Referencia 'plugin:Clase' del lector",
+          "title": "Save Reader"
+        },
+        "save_paths": {
+          "$ref": "#/$defs/SavePaths"
+        }
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Extract": {
+      "additionalProperties": false,
+      "properties": {
+        "lists": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ListRule"
+          },
+          "title": "Lists",
+          "type": "object"
+        },
+        "values": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TextQuery"
+          },
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "title": "Extract",
+      "type": "object"
+    },
+    "FieldRule": {
+      "additionalProperties": false,
+      "description": "Cómo obtener un campo de cada elemento de una lista.\n\n- anchor: el texto de la propia línea ancla.\n- same_row: otra línea en la misma fila que el ancla.\n- below: las líneas bajo el ancla, hasta la siguiente ancla.",
+      "properties": {
+        "source": {
+          "default": "anchor",
+          "enum": [
+            "anchor",
+            "same_row",
+            "below"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "vocabulary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vocabulary"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "max_lines": {
+          "default": 3,
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Max Lines",
+          "type": "integer"
+        }
+      },
+      "title": "FieldRule",
+      "type": "object"
+    },
+    "GameInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "process": {
+          "description": "Nombres del ejecutable, sin ruta",
+          "items": {
+            "type": "string"
+          },
+          "title": "Process",
+          "type": "array"
+        },
+        "window_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subcadena del título de la ventana",
+          "title": "Window Title"
+        },
+        "languages_supported": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Languages Supported",
+          "type": "array"
+        },
+        "install_paths": {
+          "$ref": "#/$defs/PlatformPaths",
+          "description": "Carpetas típicas de instalación; admiten ~ y %VARIABLES%"
+        }
+      },
+      "title": "GameInfo",
+      "type": "object"
+    },
+    "GameTextSource": {
+      "additionalProperties": false,
+      "description": "Un fichero de texto del propio juego del que sacar nombres en todos sus idiomas.",
+      "properties": {
+        "set": {
+          "description": "Conjunto del vocabulario que alimenta",
+          "pattern": "^[a-z0-9_]{2,64}$",
+          "title": "Set",
+          "type": "string"
+        },
+        "path": {
+          "description": "Ruta relativa a la instalación; {lang} se sustituye por el idioma",
+          "title": "Path",
+          "type": "string"
+        },
+        "format": {
+          "const": "sjson",
+          "default": "sjson",
+          "title": "Format",
+          "type": "string"
+        },
+        "id_key": {
+          "default": "Id",
+          "title": "Id Key",
+          "type": "string"
+        },
+        "name_key": {
+          "default": "DisplayName",
+          "title": "Name Key",
+          "type": "string"
+        },
+        "id_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Solo se incluyen ids que casen con esta regex",
+          "title": "Id Pattern"
+        }
+      },
+      "required": [
+        "set",
+        "path"
+      ],
+      "title": "GameTextSource",
+      "type": "object"
+    },
+    "Knowledge": {
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "refresh": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "title": "Refresh",
+          "type": "string"
+        }
+      },
+      "title": "Knowledge",
+      "type": "object"
+    },
+    "KnowledgeSource": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "depth": {
+          "default": 1,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Depth",
+          "type": "integer"
+        },
+        "include": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "KnowledgeSource",
+      "type": "object"
+    },
+    "ListRule": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/TextQuery"
+        },
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldRule"
+          },
+          "title": "Fields",
+          "type": "object"
+        },
+        "min_items": {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Min Items",
+          "type": "integer"
+        },
+        "max_items": {
+          "default": 8,
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor"
+      ],
+      "title": "ListRule",
+      "type": "object"
+    },
+    "PlatformPaths": {
+      "additionalProperties": false,
+      "properties": {
+        "windows": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Windows",
+          "type": "array"
+        },
+        "macos": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Macos",
+          "type": "array"
+        },
+        "linux": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Linux",
+          "type": "array"
+        }
+      },
+      "title": "PlatformPaths",
+      "type": "object"
+    },
+    "ProactiveRule": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "cooldown_seconds": {
+          "default": 10,
+          "maximum": 3600,
+          "minimum": 0,
+          "title": "Cooldown Seconds",
+          "type": "number"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task"
+        },
+        "once_per_encounter": {
+          "default": false,
+          "title": "Once Per Encounter",
+          "type": "boolean"
+        }
+      },
+      "title": "ProactiveRule",
+      "type": "object"
+    },
+    "Relation": {
+      "additionalProperties": false,
+      "description": "Una línea `target` situada respecto a una línea `anchor`.",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/TextQuery"
+        },
+        "target": {
+          "$ref": "#/$defs/TextQuery"
+        },
+        "max_distance": {
+          "default": 0.25,
+          "description": "Distancia máxima en fracción de pantalla",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Max Distance",
+          "type": "number"
+        }
+      },
+      "required": [
+        "anchor",
+        "target"
+      ],
+      "title": "Relation",
+      "type": "object"
+    },
+    "RepeatedRows": {
+      "additionalProperties": false,
+      "description": "Varias filas distintas que contienen el texto buscado: listas de opciones, tiendas, inventarios.",
+      "properties": {
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expresión regular sobre el texto en minúsculas",
+          "title": "Pattern"
+        },
+        "vocabulary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nombre de un conjunto del vocabulario",
+          "title": "Vocabulary"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom",
+                "left",
+                "center",
+                "right",
+                "any"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom",
+                  "left",
+                  "center",
+                  "right",
+                  "any"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "any",
+          "description": "Bandas de pantalla; una lista es su intersección",
+          "title": "Region"
+        },
+        "fuzzy": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Errores de OCR tolerados; por defecto según longitud",
+          "title": "Fuzzy"
+        },
+        "min": {
+          "default": 2,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Min",
+          "type": "integer"
+        }
+      },
+      "title": "RepeatedRows",
+      "type": "object"
+    },
+    "SavePaths": {
+      "additionalProperties": false,
+      "properties": {
+        "windows": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Windows"
+        },
+        "macos": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Macos"
+        },
+        "linux": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linux"
+        }
+      },
+      "title": "SavePaths",
+      "type": "object"
+    },
+    "Screen": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "signals": {
+          "$ref": "#/$defs/SignalNode"
+        },
+        "extract": {
+          "$ref": "#/$defs/Extract"
+        },
+        "vision": {
+          "default": "on_uncertain",
+          "enum": [
+            "never",
+            "on_uncertain",
+            "always"
+          ],
+          "title": "Vision",
+          "type": "string"
+        },
+        "proactive": {
+          "$ref": "#/$defs/ProactiveRule"
+        },
+        "outputs": {
+          "items": {
+            "enum": [
+              "overlay",
+              "text",
+              "voice"
+            ],
+            "type": "string"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "signals"
+      ],
+      "title": "Screen",
+      "type": "object"
+    },
+    "SignalNode": {
+      "additionalProperties": false,
+      "properties": {
+        "all_of": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SignalNode"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "All Of"
+        },
+        "any_of": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SignalNode"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Any Of"
+        },
+        "none_of": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SignalNode"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "None Of"
+        },
+        "text_matches": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextMatches"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "repeated_rows": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepeatedRows"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text_below": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Relation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text_above": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Relation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "same_row": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Relation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "count_at_least": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountAtLeast"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "absent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextQuery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "color_dominant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColorDominant"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "SignalNode",
+      "type": "object"
+    },
+    "TextMatches": {
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expresión regular sobre el texto en minúsculas",
+          "title": "Pattern"
+        },
+        "vocabulary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nombre de un conjunto del vocabulario",
+          "title": "Vocabulary"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom",
+                "left",
+                "center",
+                "right",
+                "any"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom",
+                  "left",
+                  "center",
+                  "right",
+                  "any"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "any",
+          "description": "Bandas de pantalla; una lista es su intersección",
+          "title": "Region"
+        },
+        "fuzzy": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Errores de OCR tolerados; por defecto según longitud",
+          "title": "Fuzzy"
+        },
+        "min_count": {
+          "default": 1,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Min Count",
+          "type": "integer"
+        }
+      },
+      "title": "TextMatches",
+      "type": "object"
+    },
+    "TextQuery": {
+      "additionalProperties": false,
+      "description": "Qué texto buscar: una expresión regular, un conjunto del vocabulario, o ambos.",
+      "properties": {
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expresión regular sobre el texto en minúsculas",
+          "title": "Pattern"
+        },
+        "vocabulary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nombre de un conjunto del vocabulario",
+          "title": "Vocabulary"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "middle",
+                "bottom",
+                "left",
+                "center",
+                "right",
+                "any"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom",
+                  "left",
+                  "center",
+                  "right",
+                  "any"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "any",
+          "description": "Bandas de pantalla; una lista es su intersección",
+          "title": "Region"
+        },
+        "fuzzy": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Errores de OCR tolerados; por defecto según longitud",
+          "title": "Fuzzy"
+        }
+      },
+      "title": "TextQuery",
+      "type": "object"
+    },
+    "VocabularyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "description": "Ficheros YAML del perfil",
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "game_text": {
+          "items": {
+            "$ref": "#/$defs/GameTextSource"
+          },
+          "title": "Game Text",
+          "type": "array"
+        },
+        "language_codes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Código de idioma de game-pal → código que usa el juego en sus rutas",
+          "title": "Language Codes",
+          "type": "object"
+        }
+      },
+      "title": "VocabularyConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "game": {
+      "$ref": "#/$defs/GameInfo"
+    },
+    "screens": {
+      "items": {
+        "$ref": "#/$defs/Screen"
+      },
+      "title": "Screens",
+      "type": "array"
+    },
+    "vocabulary": {
+      "$ref": "#/$defs/VocabularyConfig"
+    },
+    "evidence": {
+      "$ref": "#/$defs/Evidence"
+    },
+    "knowledge": {
+      "$ref": "#/$defs/Knowledge"
+    },
+    "prompts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Rol → fichero Markdown relativo",
+      "title": "Prompts",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "name"
+  ],
+  "title": "GameProfile",
+  "type": "object"
+}

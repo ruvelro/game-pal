@@ -12,9 +12,12 @@ from pathlib import Path
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
 from gamepal.config import AppConfig, load_config, save_config
-from gamepal.events import ScreenRead, StatusChanged
+from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.perception.ocr import OcrEngine, create_engine
+from gamepal.perception.screens import ScreenInterpreter
+from gamepal.perception.vision import VisionReader
+from gamepal.perception.vocabulary import Vocabulary, build_vocabulary, find_install_dir
 from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
@@ -30,6 +33,10 @@ class Components:
     watcher_task: asyncio.Task[None] | None = None
     provider: Provider | None = None
     profile: LoadedProfile | None = None
+    vocabulary: Vocabulary = field(default_factory=Vocabulary)
+    install_dir: Path | None = None
+    interpreter: ScreenInterpreter | None = None
+    interpreter_task: asyncio.Task[None] | None = None
     errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -49,6 +56,7 @@ class Daemon:
         self.profiles = ProfileStore(bundled_dir or bundled_profiles_dir(), paths.user_profiles_dir)
         self.c = Components()
         self.last_read: ScreenRead | None = None
+        self.current_screen: ScreenDetected | None = None
         self._lock = asyncio.Lock()
         self._listener: asyncio.Task[None] | None = None
 
@@ -61,6 +69,7 @@ class Daemon:
         self.bus.publish(StatusChanged(component="daemon", state="running"))
 
     async def stop(self) -> None:
+        await self._stop_interpreter()
         await self._stop_watcher()
         if self.c.provider is not None:
             await self.c.provider.aclose()
@@ -74,6 +83,8 @@ class Daemon:
             async for event in sub:
                 if isinstance(event, ScreenRead):
                     self.last_read = event
+                elif isinstance(event, ScreenDetected):
+                    self.current_screen = event if event.screen_id else None
 
     # Configuración --------------------------------------------------------------------------
 
@@ -86,8 +97,15 @@ class Daemon:
                 save_config(config, self.paths.config_file)
             first = self.c.backend is None and "capture" not in self.c.errors
 
-            if first or config.profile != previous.profile or self.c.profile is None:
+            profile_changed = first or config.profile != previous.profile or self.c.profile is None
+            if profile_changed:
                 self._load_profile()
+            if (
+                profile_changed
+                or config.game_dirs.get(config.profile) != previous.game_dirs.get(config.profile)
+                or config.game_language != previous.game_language
+            ):
+                await self._load_vocabulary()
             if first or config.ocr != previous.ocr or config.game_language != previous.game_language:
                 await self._create_ocr()
             if first or config.provider != previous.provider:
@@ -95,6 +113,7 @@ class Daemon:
             if first:
                 self._create_backend()
             await self._restart_watcher()
+            await self._restart_interpreter()
 
     def _load_profile(self) -> None:
         try:
@@ -105,6 +124,26 @@ class Daemon:
             self.c.profile = None
             self.c.errors["profile"] = str(exc)
             self.bus.publish(StatusChanged(component="profile", state="error", detail=str(exc)))
+
+    async def _load_vocabulary(self) -> None:
+        self.c.vocabulary, self.c.install_dir = Vocabulary(), None
+        loaded = self.c.profile
+        if loaded is None:
+            return
+        profile = loaded.profile
+        install = find_install_dir(profile, self.config.game_dirs.get(profile.id))
+        languages = list(dict.fromkeys([self.config.game_language, "en", *profile.game.languages_supported]))
+        try:
+            self.c.vocabulary = await asyncio.to_thread(build_vocabulary, profile, loaded.root, install, languages)
+            self.c.install_dir = install
+            self.c.errors.pop("vocabulary", None)
+        except (OSError, ValueError) as exc:
+            log.warning("No se pudo cargar el vocabulario: %s", exc)
+            self.c.errors["vocabulary"] = str(exc)
+        sets = self.c.vocabulary.sets()
+        if sets:
+            summary = ", ".join(f"{name} ({count})" for name, count in sets.items())
+            log.info("Vocabulario de %s: %s", profile.name, summary)
 
     async def _create_ocr(self) -> None:
         self.bus.publish(StatusChanged(component="ocr", state="starting", detail="Cargando motor OCR…"))
@@ -155,6 +194,34 @@ class Daemon:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+
+    async def _stop_interpreter(self) -> None:
+        task = self.c.interpreter_task
+        self.c.interpreter_task = None
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    async def _restart_interpreter(self) -> None:
+        await self._stop_interpreter()
+        watcher, loaded = self.c.watcher, self.c.profile
+        if watcher is None or loaded is None or not loaded.profile.screens:
+            self.c.interpreter = None
+            return
+        vision = None
+        if self.c.provider is not None and self.config.provider.vision_model:
+            vision = VisionReader(self.c.provider, self.config.provider.vision_model, loaded.profile, self.c.vocabulary)
+        self.c.interpreter = ScreenInterpreter(
+            self.bus,
+            loaded.profile,
+            self.c.vocabulary,
+            self.config.output_language,
+            watcher.frame_for_read,
+            watcher.request_read,
+            vision,
+        )
+        self.c.interpreter_task = asyncio.create_task(self.c.interpreter.run(), name="interpreter")
 
     async def _restart_watcher(self) -> None:
         was_paused = self.c.watcher.paused if self.c.watcher else False

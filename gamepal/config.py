@@ -42,6 +42,8 @@ class ProviderConfig(_Model):
     kind: Literal["local-openai"] = "local-openai"
     base_url: str = "http://127.0.0.1:11434/v1"
     model: str = ""
+    # Modelo con visión para pantallas dudosas. Vacío: la visión queda desactivada.
+    vision_model: str = ""
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
 
 
@@ -55,6 +57,8 @@ class AppConfig(_Model):
     profile: str = "generic"
     # Ventana elegida a mano cuando el perfil no identifica el juego.
     window_title: str | None = None
+    # Carpeta de instalación elegida por el usuario, por id de perfil.
+    game_dirs: dict[str, str] = Field(default_factory=dict)
     game_language: str = "en"
     output_language: str = "es"
     capture: CaptureConfig = Field(default_factory=CaptureConfig)

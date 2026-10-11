@@ -131,11 +131,15 @@ def cmd_ocr(args: argparse.Namespace, paths: AppPaths) -> int:
 
 def cmd_profiles(args: argparse.Namespace, paths: AppPaths) -> int:
     from gamepal.profiles import ProfileStore
+    from gamepal.profiles.lint import lint
 
     profiles, errors = ProfileStore(bundled_profiles_dir(), paths.user_profiles_dir).discover()
     for loaded in profiles.values():
         origin = "incluido" if loaded.bundled else "usuario"
-        print(f"{loaded.profile.id:<20} {loaded.profile.name:<24} {origin}")
+        screens = len(loaded.profile.screens)
+        print(f"{loaded.profile.id:<20} {loaded.profile.name:<24} {origin:<9} {screens} pantallas")
+        for warning in lint(loaded):
+            print(f"    aviso: {warning}")
     for name, error in errors.items():
         print(f"\nERROR en {name}:\n{error}", file=sys.stderr)
     return 1 if errors else 0

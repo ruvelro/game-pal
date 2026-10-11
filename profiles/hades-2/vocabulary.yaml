@@ -1,0 +1,99 @@
+# Vocabulario base de Hades II.
+#
+# Los nombres en inglés son los del juego. Las traducciones marcadas con «sin verificar» son
+# deducciones razonables pendientes de contrastar con el juego en ese idioma: si fallan, la
+# pantalla se sigue reconociendo por los nombres de bendiciones leídos del propio juego.
+sets:
+  rarity:
+    - id: common
+      names: { en: Common, es: Común, fr: Commun, de: Gewöhnlich }  # sin verificar fuera de en
+    - id: rare
+      names: { en: Rare, es: Raro, fr: Rare, de: Selten }
+    - id: epic
+      names: { en: Epic, es: Épico, fr: Épique, de: Episch }
+    - id: heroic
+      names: { en: Heroic, es: Heroico, fr: Héroïque, de: Heroisch }
+    - id: legendary
+      names: { en: Legendary, es: Legendario, fr: Légendaire, de: Legendär }
+    - id: duo
+      names: { en: Duo, es: Dúo, fr: Duo, de: Duo }
+
+  boon_menu_titles:
+    - id: boons_of
+      names: { en: Boons of, es: Bendiciones de }  # sin verificar fuera de en
+    - id: choose_a_boon
+      names: { en: Choose a Boon, es: Elige una bendición }
+
+  pom_titles:
+    - id: pom_of_power
+      names: { en: Pom of Power, es: Granada del Poder }  # sin verificar fuera de en
+
+  hammer_titles:
+    - id: daedalus_hammer
+      names: { en: Daedalus Hammer, es: Martillo de Dédalo }  # sin verificar fuera de en
+
+  keepsake_titles:
+    - id: keepsakes
+      names: { en: Keepsakes, es: Recuerdos }  # sin verificar fuera de en
+    - id: choose_a_keepsake
+      names: { en: Choose a Keepsake }
+
+  reading_menus:
+    - id: paused
+      names: { en: Paused, es: Pausa }
+    - id: inventory
+      names: { en: Inventory, es: Inventario }
+    - id: boon_list
+      names: { en: Boon List }
+    - id: run_history
+      names: { en: Run History }
+    - id: book_of_shadows
+      names: { en: Book of Shadows }
+
+  victory_titles:
+    - id: victory
+      names: { en: Victory, es: Victoria, fr: Victoire, de: Sieg }
+
+  results_labels:
+    - id: results
+      names: { en: Results, es: Resultados, fr: Résultats, de: Ergebnisse }
+    - id: clear_time
+      names: { en: Clear Time }
+
+  gods:
+    - { id: zeus, names: { en: Zeus, es: Zeus } }
+    - { id: poseidon, names: { en: Poseidon, es: Poseidón } }
+    - { id: apollo, names: { en: Apollo, es: Apolo } }
+    - { id: hera, names: { en: Hera, es: Hera } }
+    - { id: aphrodite, names: { en: Aphrodite, es: Afrodita } }
+    - { id: demeter, names: { en: Demeter, es: Deméter } }
+    - { id: hephaestus, names: { en: Hephaestus, es: Hefesto } }
+    - { id: hestia, names: { en: Hestia, es: Hestia } }
+    - { id: ares, names: { en: Ares, es: Ares } }
+    - { id: hermes, names: { en: Hermes, es: Hermes } }
+    - { id: artemis, names: { en: Artemis, es: Artemisa } }
+    - { id: athena, names: { en: Athena, es: Atenea } }
+    - { id: dionysus, names: { en: Dionysus, es: Dioniso } }
+    - { id: selene, names: { en: Selene, es: Selene } }
+    - { id: chaos, names: { en: Chaos, es: Caos } }
+
+  bosses:
+    - { id: hecate, names: { en: Hecate, es: Hécate } }
+    - { id: scylla, names: { en: Scylla, es: Escila } }
+    - { id: cerberus, names: { en: Cerberus, es: Cerbero } }
+    - { id: chronos, names: { en: Chronos, es: Cronos } }
+    - { id: polyphemus, names: { en: Polyphemus, es: Polifemo } }
+    - { id: eris, names: { en: Eris, es: Eris } }
+    - { id: prometheus, names: { en: Prometheus, es: Prometeo } }
+    - { id: typhon, names: { en: Typhon, es: Tifón } }
+
+  # Títulos que acompañan al nombre del jefe en su presentación (inglés).
+  boss_titles:
+    - { id: hecate, names: { en: Witch of the Crossroads } }
+    - { id: scylla, names: { en: Scourge of the Seas } }
+    - { id: cerberus, names: { en: Notorious Watchdog }, aliases: { en: [Hound of Hell] } }
+    - { id: chronos, names: { en: Titan of Time }, aliases: { en: [Time Itself, Father Time] } }
+    - { id: polyphemus, names: { en: Infamous Cyclops } }
+    - { id: eris, names: { en: Strife Incarnate } }
+    - { id: prometheus, names: { en: Titan of Foresight } }
+    - { id: typhon, names: { en: Father of All Monsters } }

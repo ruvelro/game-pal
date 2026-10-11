@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type AskResult, type Component, type Status } from "../api";
+import { ScreenData } from "../components/ScreenData";
 import { Card, Dot, PageHeader } from "../components/ui";
 import { t } from "../i18n";
 import type { LiveState } from "../store";
@@ -130,6 +131,23 @@ export function Home({ live, status, onToggle }: { live: LiveState; status: Stat
           );
         })}
       </div>
+      <Card title={t("screen.title")}>
+        {live.screen ? (
+          <>
+            <div className="row screen-head">
+              <strong className="screen-name">{live.screen.name}</strong>
+              <span className="chip-static">
+                {live.screen.source === "vision" ? t("screen.vision") : t("screen.signals")} ·{" "}
+                {Math.round(live.screen.confidence * 100)} %
+              </span>
+              {!live.screen.certain && <span className="chip-static warn">{t("screen.uncertain")}</span>}
+            </div>
+            <ScreenData data={live.screen.data} />
+          </>
+        ) : (
+          <p className="muted">{t("screen.none")}</p>
+        )}
+      </Card>
       <div className="two-col">
         <Card title={t("home.preview")}>
           <Preview live={live} paused={paused} />

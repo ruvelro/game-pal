@@ -6,6 +6,7 @@ import {
   type BusMessage,
   type Component,
   type FrameCaptured,
+  type ScreenDetected,
   type ScreenRead,
   type Status,
   type StatusEvent,
@@ -18,9 +19,10 @@ export interface LiveState {
   window: WindowSeen | null;
   frame: FrameCaptured | null;
   read: ScreenRead | null;
+  screen: ScreenDetected | null;
 }
 
-const initial: LiveState = { connected: false, statuses: {}, window: null, frame: null, read: null };
+const initial: LiveState = { connected: false, statuses: {}, window: null, frame: null, read: null, screen: null };
 
 function reduce(state: LiveState, message: BusMessage): LiveState {
   switch (message.topic) {
@@ -34,6 +36,10 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
       return { ...state, frame: message.data as FrameCaptured };
     case "perception.text":
       return { ...state, read: message.data as ScreenRead };
+    case "perception.screen": {
+      const screen = message.data as ScreenDetected;
+      return { ...state, screen: screen.screen_id ? screen : null };
+    }
     default:
       return state;
   }
