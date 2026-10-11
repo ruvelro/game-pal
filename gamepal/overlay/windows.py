@@ -16,9 +16,10 @@ from gamepal.overlay.model import View
 if sys.platform != "win32":  # pragma: no cover
     raise ImportError("Este módulo solo funciona en Windows")
 
-user32: Any = ctypes.windll.user32
-gdi32: Any = ctypes.windll.gdi32
-kernel32: Any = ctypes.windll.kernel32
+# Instancias propias de las DLL: así declarar tipos aquí no afecta a otros módulos que usan ctypes.windll.
+user32: Any = ctypes.WinDLL("user32", use_last_error=True)
+gdi32: Any = ctypes.WinDLL("gdi32", use_last_error=True)
+kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
 
 WS_POPUP = 0x80000000
 WS_EX_LAYERED = 0x00080000
@@ -78,8 +79,57 @@ def _rgb(r: int, g: int, b: int) -> int:
     return r | (g << 8) | (b << 16)
 
 
-user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-user32.DefWindowProcW.restype = ctypes.c_ssize_t
+def _declare() -> None:
+    """Tipos de todas las funciones Win32 que se usan.
+
+    Sin ellos ctypes pasa los enteros como int de 32 bits: en Windows de 64 bits un handle o
+    HWND_TOPMOST (-1) llega truncado y las llamadas fallan en silencio.
+    """
+    w = wintypes
+    lp_rect = ctypes.POINTER(w.RECT)
+    signatures: list[tuple[Any, str, list[Any], Any]] = [
+        (user32, "DefWindowProcW", [w.HWND, w.UINT, w.WPARAM, w.LPARAM], ctypes.c_ssize_t),
+        (user32, "RegisterClassExW", [ctypes.POINTER(WNDCLASSEXW)], w.ATOM),
+        (user32, "CreateWindowExW", [w.DWORD, w.LPCWSTR, w.LPCWSTR, w.DWORD, ctypes.c_int, ctypes.c_int,
+                                     ctypes.c_int, ctypes.c_int, w.HWND, w.HMENU, w.HINSTANCE, w.LPVOID], w.HWND),
+        (user32, "SetWindowDisplayAffinity", [w.HWND, w.DWORD], w.BOOL),
+        (user32, "GetWindowDisplayAffinity", [w.HWND, ctypes.POINTER(w.DWORD)], w.BOOL),
+        (user32, "PostMessageW", [w.HWND, w.UINT, w.WPARAM, w.LPARAM], w.BOOL),
+        (user32, "GetDC", [w.HWND], w.HDC),
+        (user32, "ReleaseDC", [w.HWND, w.HDC], ctypes.c_int),
+        (user32, "DrawTextW", [w.HDC, w.LPCWSTR, ctypes.c_int, lp_rect, w.UINT], ctypes.c_int),
+        (user32, "ShowWindow", [w.HWND, ctypes.c_int], w.BOOL),
+        (user32, "SetWindowRgn", [w.HWND, w.HRGN, w.BOOL], ctypes.c_int),
+        (user32, "SetLayeredWindowAttributes", [w.HWND, w.COLORREF, w.BYTE, w.DWORD], w.BOOL),
+        (user32, "SetWindowPos", [w.HWND, w.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                  w.UINT], w.BOOL),
+        (user32, "InvalidateRect", [w.HWND, lp_rect, w.BOOL], w.BOOL),
+        (user32, "BeginPaint", [w.HWND, ctypes.POINTER(PAINTSTRUCT)], w.HDC),
+        (user32, "EndPaint", [w.HWND, ctypes.POINTER(PAINTSTRUCT)], w.BOOL),
+        (user32, "GetClientRect", [w.HWND, lp_rect], w.BOOL),
+        (user32, "GetWindowRect", [w.HWND, lp_rect], w.BOOL),
+        (user32, "GetWindowLongW", [w.HWND, ctypes.c_int], w.LONG),
+        (user32, "IsWindow", [w.HWND], w.BOOL),
+        (user32, "FillRect", [w.HDC, lp_rect, w.HBRUSH], ctypes.c_int),
+        (user32, "GetMessageW", [ctypes.POINTER(w.MSG), w.HWND, w.UINT, w.UINT], w.BOOL),
+        (user32, "TranslateMessage", [ctypes.POINTER(w.MSG)], w.BOOL),
+        (user32, "DispatchMessageW", [ctypes.POINTER(w.MSG)], ctypes.c_ssize_t),
+        (user32, "PostQuitMessage", [ctypes.c_int], None),
+        (kernel32, "GetModuleHandleW", [w.LPCWSTR], w.HMODULE),
+        (gdi32, "CreateFontW", [ctypes.c_int] * 5 + [w.DWORD] * 8 + [w.LPCWSTR], w.HFONT),
+        (gdi32, "CreateSolidBrush", [w.COLORREF], w.HBRUSH),
+        (gdi32, "CreateRoundRectRgn", [ctypes.c_int] * 6, w.HRGN),
+        (gdi32, "SelectObject", [w.HDC, w.HGDIOBJ], w.HGDIOBJ),
+        (gdi32, "SetBkMode", [w.HDC, ctypes.c_int], ctypes.c_int),
+        (gdi32, "SetTextColor", [w.HDC, w.COLORREF], w.COLORREF),
+    ]  # fmt: skip
+    for dll, name, args, result in signatures:
+        function = getattr(dll, name)
+        function.argtypes = args
+        function.restype = result
+
+
+_declare()
 
 
 class WindowsOverlay:
