@@ -6,10 +6,13 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from gamepal.config import OcrConfig
+from gamepal.config import OcrConfig, rapidocr_available
 from gamepal.perception.ocr import create_engine
 
-pytestmark = pytest.mark.ocr
+pytestmark = [
+    pytest.mark.ocr,
+    pytest.mark.skipif(not rapidocr_available(), reason="RapidOCR no está instalado (Windows ARM64)"),
+]
 
 FONT_CANDIDATES = [
     "/System/Library/Fonts/Supplemental/Arial.ttf",

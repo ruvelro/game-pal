@@ -16,16 +16,14 @@ jobs:
   python:
     name: Python · ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    # Windows ARM64 es nuevo en los runners y algunas ruedas aún pueden faltar: no bloquea mientras tanto.
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, label: Linux x64, experimental: false }
-          - { os: macos-latest, label: macOS ARM, experimental: false }
-          - { os: windows-latest, label: Windows x64, experimental: false }
-          - { os: windows-11-arm, label: Windows ARM64, experimental: true }
+          - { os: ubuntu-latest, label: Linux x64 }
+          - { os: macos-latest, label: macOS ARM }
+          - { os: windows-latest, label: Windows x64 }
+          - { os: windows-11-arm, label: Windows ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:

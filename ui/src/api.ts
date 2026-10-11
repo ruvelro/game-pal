@@ -157,7 +157,7 @@ export interface AppConfig {
     max_width: number;
     require_foreground: boolean;
   };
-  ocr: { backend: "rapidocr" | "apple-vision" | "none"; min_confidence: number };
+  ocr: { backend: "rapidocr" | "apple-vision" | "windows-ocr" | "none"; min_confidence: number };
   provider: {
     kind: "local-openai";
     base_url: string;
