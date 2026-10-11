@@ -34,11 +34,19 @@ La especificación completa está en [docs/spec.md](docs/spec.md).
 
 ## Probarlo
 
+Necesitas [uv](https://docs.astral.sh/uv/) y, para compilar la GUI la primera vez, [Node.js 22](https://nodejs.org) o superior. Después:
+
 ```bash
-uv sync
-npm --prefix ui install && npm --prefix ui run build
 uv run game-pal
 ```
+
+Instala lo que falte, compila la GUI y la abre en el navegador. Si algo no está listo, lo dice al arrancar. Para revisarlo todo con calma:
+
+```bash
+uv run game-pal doctor
+```
+
+Para dar consejos necesita un modelo de IA: lo más sencillo es instalar [Ollama](https://ollama.com) y descargar uno con `ollama pull qwen3:4b`. También vale una clave de OpenAI, Claude u OpenRouter.
 
 Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md).
 

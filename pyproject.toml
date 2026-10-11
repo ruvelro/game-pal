@@ -85,6 +85,10 @@ packages = ["gamepal"]
 [tool.hatch.build.targets.wheel.force-include]
 "profiles" = "gamepal/_bundled_profiles"
 
+# Compila la GUI y la mete en el wheel (no en las instalaciones editables).
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "scripts/hatch_build.py"
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"

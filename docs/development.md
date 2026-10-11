@@ -3,19 +3,24 @@
 ## Requisitos
 
 - [uv](https://docs.astral.sh/uv/) (instala Python 3.12 por ti).
-- Node.js 22 o superior, solo para compilar la GUI.
+- Node.js 22 o superior, para compilar la GUI.
 - Un servidor de modelos local compatible con OpenAI si quieres hacer preguntas: Ollama, LM Studio, llama.cpp, vLLM o MLX.
 
 ## Arrancar
 
 ```bash
-uv sync
-npm --prefix ui install
-npm --prefix ui run build
 uv run game-pal
 ```
 
-game-pal abre la GUI en el navegador con un token de sesión en la dirección. Si cierras la pestaña, la dirección completa aparece en la terminal.
+uv instala Python y las dependencias. Si la GUI no está compilada o sus fuentes han cambiado, game-pal la compila antes de arrancar (instala sus dependencias con `npm ci` cuando hace falta). Luego abre la GUI en el navegador con un token de sesión en la dirección; si cierras la pestaña, la dirección completa sigue en la terminal.
+
+Al arrancar avisa en la terminal de lo que impide dar consejos (por ejemplo, que no hay modelo). Para ver todas las comprobaciones con su solución:
+
+```bash
+uv run game-pal doctor          # --json para usarlo desde scripts
+```
+
+La GUI obtiene las mismas comprobaciones de `GET /api/setup`.
 
 En macOS, la primera vez el sistema pedirá permisos para la app desde la que lances game-pal (Terminal, iTerm, VS Code…). Concédelos y vuelve a arrancar:
 
@@ -32,6 +37,7 @@ En Windows ARM64 no se instala RapidOCR (OpenCV no publica ruedas para esa arqui
 ## Comandos útiles
 
 ```bash
+uv run game-pal doctor                        # qué funciona, qué falta y cómo arreglarlo
 uv run game-pal windows                       # ventanas que se pueden capturar
 uv run game-pal capture --title "Stardew"      # guarda una captura de esa ventana
 uv run game-pal ocr captura.png --lang es      # lee el texto de una imagen
@@ -58,11 +64,14 @@ uv run pytest -m voice
 ## GUI en modo desarrollo
 
 ```bash
-uv run game-pal --no-open      # en una terminal
-npm --prefix ui run dev        # en otra
+uv run game-pal --dev
 ```
 
-Vite redirige `/api` al daemon. Abre la dirección de Vite añadiendo el `#token=…` que imprime el daemon.
+Arranca el daemon y Vite juntos y abre la GUI de Vite con el token ya puesto, con recarga en caliente. Vite redirige `/api` (también el WebSocket) al daemon, sea cual sea su puerto. Al cerrar game-pal se cierra Vite.
+
+## Empaquetado
+
+`uv build` compila la GUI y la mete en el wheel (`scripts/hatch_build.py`), así quien lo instala no necesita Node.js. Las instalaciones editables de `uv sync` no la compilan: lo hace game-pal al arrancar.
 
 ## Estructura
 
@@ -85,6 +94,8 @@ gamepal/
   assistant.py           preguntas, enrutado rápido/razonado, conocimiento con citas y avisos proactivos
   gui_server/            API REST + WebSocket en loopback con token
   daemon.py, cli.py      orquestación y línea de comandos
+  checks.py              comprobaciones de puesta en marcha (game-pal doctor y /api/setup)
+  ui_build.py            compilación de la GUI al arrancar desde el repositorio
 ui/                      GUI en React + TypeScript (Vite)
 profiles/                perfiles incluidos
 tests/

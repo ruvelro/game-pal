@@ -13,7 +13,6 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
@@ -23,6 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from gamepal import __version__
+from gamepal.checks import blocking, daemon_checks
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
@@ -34,12 +34,12 @@ from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+from gamepal.ui_build import STATIC_DIR
 from gamepal.voice.audio import list_devices
 from gamepal.voice.models import PIPER_DEFAULT_VOICES
 
 log = logging.getLogger(__name__)
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
 WS_AUTH_TIMEOUT_S = 5.0
 
 
@@ -138,6 +138,12 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             "errors": c.errors,
             "events": [e.to_message() for e in daemon.bus.last_events()],
         }
+
+    @app.get("/api/setup", dependencies=auth)
+    async def setup() -> dict[str, Any]:
+        """Qué funciona, qué falta y cómo arreglarlo. `ready` es falso si algo impide aconsejar."""
+        checks = await daemon_checks(daemon)
+        return {"ready": not blocking(checks), "checks": [c.model_dump() for c in checks]}
 
     @app.get("/api/config", dependencies=auth)
     async def get_config() -> dict[str, Any]:
@@ -647,6 +653,9 @@ async def _drain(socket: WebSocket) -> None:
 
 
 _MISSING_UI = """<!doctype html><meta charset="utf-8"><title>game-pal</title>
-<body style="font-family:system-ui;background:#0b1d21;color:#e6f2ee;padding:40px">
-<h1>game-pal</h1><p>La interfaz no está compilada. Ejecuta <code>npm --prefix ui install</code> y
-<code>npm --prefix ui run build</code>, y recarga.</p></body>"""
+<body style="font-family:system-ui;background:#0b1d21;color:#e6f2ee;padding:40px;max-width:640px;line-height:1.5">
+<h1>Falta compilar la interfaz</h1>
+<p>game-pal la compila solo al arrancar, pero necesita <a style="color:#7fd1b9" href="https://nodejs.org">Node.js 22
+o superior</a>. Instálalo, cierra game-pal y vuelve a arrancarlo con <code>uv run game-pal</code>.</p>
+<p>Si ya tienes Node.js, mira en la terminal el motivo del fallo, o ejecuta <code>uv run game-pal doctor</code>.</p>
+</body>"""

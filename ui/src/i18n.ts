@@ -290,7 +290,7 @@ const es = {
   "common.save": "Guardar",
   "common.saved": "Guardado",
   "common.error": "Error",
-  "error.notoken": "Falta el token de sesión. Abre game-pal con la dirección que muestra al arrancar.",
+  "error.notoken": "Esta pestaña no tiene el token de sesión. Usa la dirección completa (con #token=…) que game-pal muestra en la terminal al arrancar, o vuelve a arrancarlo para que abra la GUI.",
 } as const;
 
 export type Key = keyof typeof es;
@@ -585,7 +585,7 @@ const en: Record<Key, string> = {
   "common.save": "Save",
   "common.saved": "Saved",
   "common.error": "Error",
-  "error.notoken": "Missing session token. Open game-pal with the address it prints on start.",
+  "error.notoken": "This tab has no session token. Use the full address (with #token=…) game-pal prints in the terminal on start, or restart it so it opens the GUI.",
 };
 
 const dictionaries = { es, en } as const;
