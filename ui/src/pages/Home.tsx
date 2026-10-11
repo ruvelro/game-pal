@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type Component, type Status } from "../api";
+import { GameState } from "../components/GameState";
 import { ScreenData } from "../components/ScreenData";
 import { Card, Dot, PageHeader } from "../components/ui";
 import { t } from "../i18n";
@@ -196,6 +197,7 @@ export function Home({ live, status, onToggle }: { live: LiveState; status: Stat
           );
         })}
       </div>
+      <GameState evidence={live.evidence} />
       <Card title={t("screen.title")}>
         {live.screen ? (
           <>

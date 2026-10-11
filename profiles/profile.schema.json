@@ -128,7 +128,8 @@
           "title": "Save Reader"
         },
         "save_paths": {
-          "$ref": "#/$defs/SavePaths"
+          "$ref": "#/$defs/PlatformPaths",
+          "description": "Carpetas de guardados por sistema; admiten ~ y %VARIABLES%"
         }
       },
       "title": "Evidence",
@@ -598,49 +599,6 @@
       "title": "RepeatedRows",
       "type": "object"
     },
-    "SavePaths": {
-      "additionalProperties": false,
-      "properties": {
-        "windows": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Windows"
-        },
-        "macos": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Macos"
-        },
-        "linux": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Linux"
-        }
-      },
-      "title": "SavePaths",
-      "type": "object"
-    },
     "Screen": {
       "additionalProperties": false,
       "properties": {
@@ -683,6 +641,16 @@
           },
           "title": "Outputs",
           "type": "array"
+        },
+        "evidence": {
+          "default": "none",
+          "enum": [
+            "none",
+            "offered",
+            "owned"
+          ],
+          "title": "Evidence",
+          "type": "string"
         }
       },
       "required": [

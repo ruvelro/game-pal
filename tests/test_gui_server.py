@@ -149,3 +149,19 @@ def test_knowledge_endpoints(client: TestClient) -> None:
     bad = client.post("/api/knowledge/upload", headers=AUTH, files=[("files", ("x.exe", b"MZ", "application/x"))])
     assert bad.status_code == 422
     assert client.post("/api/knowledge/refresh", headers=AUTH, json={}).json()["queued"] == 1
+
+
+def test_evidence_and_memory_endpoints(client: TestClient) -> None:
+    evidence = client.get("/api/evidence", headers=AUTH).json()
+    assert evidence["facts"] == []
+    assert evidence["save"]["declared"] is False  # el perfil genérico no lee guardados
+    assert client.post("/api/evidence/reload", headers=AUTH).status_code == 409
+    assert client.post("/api/profile/trust", headers=AUTH).status_code == 409
+    memory = client.get("/api/memory", headers=AUTH).json()
+    assert memory["enabled"] is False
+    lesson = client.post("/api/memory/lessons", headers=AUTH, json={"text": "Prefiero el hacha"}).json()
+    assert client.get("/api/memory", headers=AUTH).json()["lessons"][0]["text"] == "Prefiero el hacha"
+    assert client.delete(f"/api/memory/lessons/{lesson['id']}", headers=AUTH).json() == {"deleted": True}
+    export = client.get("/api/memory/export", headers=AUTH)
+    assert export.headers["content-disposition"].startswith("attachment")
+    assert export.json()["profile"] == "generic"

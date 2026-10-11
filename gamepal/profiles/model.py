@@ -74,6 +74,8 @@ class Screen(_Model):
     vision: Literal["never", "on_uncertain", "always"] = "on_uncertain"
     proactive: ProactiveRule = Field(default_factory=ProactiveRule)
     outputs: list[Output] = Field(default_factory=_default_outputs)
+    # Qué dicen sus listas sobre la partida: «offered» son ofertas (no se tienen todavía); «owned», lo que se tiene.
+    evidence: Literal["none", "offered", "owned"] = "none"
 
     @field_validator("id")
     @classmethod
@@ -109,15 +111,11 @@ class VocabularyConfig(_Model):
     )
 
 
-class SavePaths(_Model):
-    windows: str | None = None
-    macos: str | None = None
-    linux: str | None = None
-
-
 class Evidence(_Model):
     save_reader: str | None = Field(default=None, description="Referencia 'plugin:Clase' del lector")
-    save_paths: SavePaths = Field(default_factory=SavePaths)
+    save_paths: PlatformPaths = Field(
+        default_factory=PlatformPaths, description="Carpetas de guardados por sistema; admiten ~ y %VARIABLES%"
+    )
 
 
 class KnowledgeSource(_Model):

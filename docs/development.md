@@ -76,6 +76,9 @@ gamepal/
   providers/             interfaz de modelos y proveedor local OpenAI-compatible
   voice/                 micrófono, detector de voz, Whisper, Piper, frases clave, atajos y mando
   overlay/               proceso del overlay: lógica común y ventana nativa por sistema
+  evidence/              decodificadores LZ4 y LuaBins, registro de hechos por rangos y vigilancia del guardado
+  plugins.py             carga de plugins de perfil y confianza por hash
+  memory.py              memoria opcional entre sesiones
   knowledge/             descarga segura, extracción, troceado, embeddings, índice SQLite y búsqueda híbrida
   assistant.py           preguntas, enrutado rápido/razonado, conocimiento con citas y avisos proactivos
   gui_server/            API REST + WebSocket en loopback con token
@@ -91,4 +94,5 @@ tests/
 - El token viaja en el fragmento de la URL, que el navegador nunca envía al servidor, y no se escribe en el registro.
 - Los proveedores locales solo aceptan direcciones de loopback, sin proxies ni redirecciones.
 - Los perfiles se validan con un esquema estricto y sus rutas no pueden salir de su carpeta.
+- Los guardados se leen sin escribirlos nunca, con límites de tamaño y profundidad; los plugins de perfiles de terceros solo se cargan tras confiar en ellos por su hash.
 - Las fuentes de conocimiento solo se descargan de direcciones públicas, también tras redirecciones, respetando `robots.txt`; los ficheros subidos se guardan con un nombre saneado dentro de la carpeta del perfil.

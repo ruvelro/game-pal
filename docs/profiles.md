@@ -134,6 +134,58 @@ vocabulary:
 
 Si el juego no está en esas rutas, el usuario elige la carpeta en la GUI. Las rutas nunca pueden salir de la carpeta del juego.
 
+## Estado de la partida
+
+Las pantallas pueden decir qué significan sus listas para el estado de la partida:
+
+```yaml
+    evidence: offered   # ofertas: el jugador aún no las tiene
+    # evidence: owned   # inventarios o listas de lo que ya se tiene
+```
+
+Con `offered`, si el jugador dice «he cogido X» y X es una de las opciones, game-pal lo apunta como elección suya.
+
+### Leer el guardado
+
+Si el guardado del juego se puede leer, un plugin da la fuente más fiable de todas. Declara el lector y dónde buscar los guardados:
+
+```yaml
+evidence:
+  save_reader: plugin:MiLector
+  save_paths:
+    windows: ["%USERPROFILE%/Saved Games/Mi Juego"]
+    macos: ["~/Library/Application Support/Mi Juego"]
+    linux: ["~/.local/share/Mi Juego"]
+```
+
+Y en `plugin.py`, una clase con dos métodos:
+
+```python
+from pathlib import Path
+from gamepal.plugins import SaveFact, SaveSnapshot
+
+
+class MiLector:
+    def find(self, folder: Path) -> Path | None:
+        """El guardado en uso dentro de la carpeta."""
+        ...
+
+    def read(self, path: Path) -> SaveSnapshot:
+        """Solo lectura: nunca escribas en el guardado ni ejecutes nada del juego."""
+        return SaveSnapshot(
+            path=str(path),
+            saved_at=...,
+            run_id="perfil:partida",
+            in_run=True,
+            facts=[SaveFact("weapon", "weapon", "EspadaLarga")],
+            summary={},
+        )
+```
+
+`gamepal.evidence.formats` trae decodificadores seguros de LZ4 y LuaBins. El plugin de Hades II es un ejemplo completo.
+
+Los plugins son código que se ejecuta en el equipo del jugador. Si instalas un perfil de otra persona, game-pal no cargará su plugin hasta que confíes en él desde la página **Juego**, y volverá a preguntar si el fichero cambia.
+
 ## Probar un perfil
 
 1. `uv run game-pal profiles` valida todos los perfiles y avisa de vocabularios que se usan sin declarar.

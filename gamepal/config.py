@@ -158,6 +158,13 @@ class KnowledgeConfig(_Model):
     rewrite_queries: bool = True
 
 
+class MemoryConfig(_Model):
+    # Desactivada por defecto: no se guarda nada entre sesiones salvo que el jugador lo pida.
+    enabled: bool = False
+    # Resúmenes de sesiones anteriores que se dan al modelo como contexto.
+    sessions_in_context: int = Field(default=3, ge=0, le=10)
+
+
 class GuiConfig(_Model):
     port: int = Field(default=47821, ge=1024, le=65535)
     open_browser: bool = True
@@ -170,6 +177,10 @@ class AppConfig(_Model):
     window_title: str | None = None
     # Carpeta de instalación elegida por el usuario, por id de perfil.
     game_dirs: dict[str, str] = Field(default_factory=dict)
+    # Carpeta de guardados elegida por el usuario, por id de perfil.
+    save_dirs: dict[str, str] = Field(default_factory=dict)
+    # Plugins de perfiles del usuario en los que se confía: id de perfil → sha256 del plugin.py.
+    trusted_plugins: dict[str, str] = Field(default_factory=dict)
     game_language: str = "en"
     output_language: str = "es"
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
@@ -178,6 +189,7 @@ class AppConfig(_Model):
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     gui: GuiConfig = Field(default_factory=GuiConfig)
 
 

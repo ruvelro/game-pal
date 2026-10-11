@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type ProfileInfo, type ProfileSummary, type ProfileTest, type WindowSummary } from "../api";
+import { api, type EvidenceSnapshot, type ProfileInfo, type ProfileSummary, type ProfileTest, type WindowSummary } from "../api";
 import { ScreenData } from "../components/ScreenData";
 import { Card, Field, PageHeader, SaveBar } from "../components/ui";
 import { LANGUAGES, t } from "../i18n";
@@ -68,6 +68,7 @@ export function Game() {
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [windows, setWindows] = useState<WindowSummary[]>([]);
   const [info, setInfo] = useState<ProfileInfo | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceSnapshot | null>(null);
 
   const loadWindows = useCallback(() => {
     api
@@ -81,6 +82,10 @@ export function Game() {
       .get<ProfileInfo>("/api/profile")
       .then(setInfo)
       .catch(() => setInfo(null));
+    api
+      .get<EvidenceSnapshot>("/api/evidence")
+      .then(setEvidence)
+      .catch(() => setEvidence(null));
   }, []);
 
   useEffect(() => {
@@ -95,6 +100,11 @@ export function Game() {
   if (!config) return null;
   const selected = profiles.find((p) => p.id === config.profile);
   const gameDir = config.game_dirs[config.profile] ?? "";
+  const saveDir = config.save_dirs[config.profile] ?? "";
+  const trust = async () => {
+    await api.post("/api/profile/trust");
+    loadInfo();
+  };
 
   const onSave = async () => {
     if (await save(config)) loadInfo();
@@ -144,6 +154,36 @@ export function Game() {
             />
             <span className={info.install_dir ? "ok-text small" : "muted small"}>
               {info.install_dir ? `${t("game.dir.found")}: ${info.install_dir}` : t("game.dir.missing")}
+            </span>
+          </Field>
+        )}
+        {evidence?.save.untrusted && (
+          <div className="notice">
+            <strong>{t("game.trust.title")}</strong>
+            <p className="small">{t("game.trust.text")}</p>
+            <code className="small">{evidence.save.untrusted.digest.slice(0, 16)}…</code>
+            <button onClick={() => void trust()}>{t("game.trust.button")}</button>
+          </div>
+        )}
+        {evidence?.save.declared && info?.id === config.profile && (
+          <Field label={t("game.saves")} hint={t("game.saves.hint")}>
+            <div className="row">
+              <input
+                value={saveDir}
+                placeholder={evidence.save.folder ?? ""}
+                spellCheck={false}
+                onChange={(e) =>
+                  setConfig({ ...config, save_dirs: { ...config.save_dirs, [config.profile]: e.target.value } })
+                }
+              />
+              <button onClick={() => void api.post("/api/evidence/reload").then(loadInfo)} disabled={!evidence.save.reader}>
+                {t("game.saves.reload")}
+              </button>
+            </div>
+            <span className={evidence.save.folder ? "ok-text small" : "muted small"}>
+              {evidence.save.folder
+                ? `${t("game.dir.found")}: ${evidence.save.folder}`
+                : evidence.save.error || t("game.saves.none")}
             </span>
           </Field>
         )}
