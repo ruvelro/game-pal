@@ -40,7 +40,7 @@ Necesitas [uv](https://docs.astral.sh/uv/) y, para compilar la GUI la primera ve
 uv run game-pal
 ```
 
-Instala lo que falte, compila la GUI y la abre en el navegador. Si algo no está listo, lo dice al arrancar. Para revisarlo todo con calma:
+Instala lo que falte, compila la GUI y la abre en el navegador. La primera vez, un asistente de cuatro pasos te guía: el juego, el modelo de IA, una comprobación de que todo funciona y la voz. Si algo no está listo, lo dice también al arrancar. Para revisarlo todo con calma:
 
 ```bash
 uv run game-pal doctor

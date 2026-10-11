@@ -92,6 +92,18 @@ def test_setup_explains_what_is_missing(client: TestClient, monkeypatch: pytest.
     assert found["voice"]["state"] == "off"
 
 
+def test_settings_panes_are_a_fixed_list(client: TestClient) -> None:
+    assert client.post("/api/setup/settings/rm%20-rf", headers=AUTH).status_code == 404
+    assert client.post("/api/setup/settings/nope", headers=AUTH).status_code == 404
+
+
+def test_setup_is_pending_until_completed(client: TestClient) -> None:
+    config = client.get("/api/config", headers=AUTH).json()
+    assert config["setup_completed"] is False
+    config["setup_completed"] = True
+    assert client.put("/api/config", headers=AUTH, json=config).json()["setup_completed"] is True
+
+
 def test_pause_and_resume(client: TestClient) -> None:
     assert client.post("/api/watcher/pause", headers=AUTH).json() == {"paused": True}
     assert client.get("/api/status", headers=AUTH).json()["paused"] is True

@@ -35,7 +35,7 @@ from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
-from gamepal.system import total_memory_gb
+from gamepal.system import can_open_settings, open_settings, total_memory_gb
 from gamepal.ui_build import STATIC_DIR
 from gamepal.voice.audio import list_devices
 from gamepal.voice.models import PIPER_DEFAULT_VOICES
@@ -146,6 +146,13 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
         """Qué funciona, qué falta y cómo arreglarlo. `ready` es falso si algo impide aconsejar."""
         checks = await daemon_checks(daemon)
         return {"ready": not blocking(checks), "checks": [c.model_dump() for c in checks], "notes": daemon.notes}
+
+    @app.post("/api/setup/settings/{pane}", dependencies=auth)
+    async def setup_open_settings(pane: str) -> dict[str, bool]:
+        """Abre el panel del sistema donde se concede un permiso (Grabación de pantalla, Micrófono…)."""
+        if not can_open_settings(pane):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Este sistema no tiene ese panel")
+        return {"opened": await asyncio.to_thread(open_settings, pane)}
 
     @app.post("/api/setup/autodetect", dependencies=auth)
     async def setup_autodetect() -> dict[str, list[str]]:

@@ -22,6 +22,10 @@ uv run game-pal doctor          # --json para usarlo desde scripts
 
 La GUI obtiene las mismas comprobaciones de `GET /api/setup`.
 
+### Asistente de primer uso
+
+Mientras `setup_completed` sea falso, la GUI abre un asistente en cuatro pasos: juego (con detección y selector de ventana), modelo (servidores locales detectados o una clave de la nube, con un botón para probarlo), comprobación (`/api/setup` con la solución de cada problema y botón para abrir el panel de permisos del sistema) y voz. Terminarlo o saltarlo lo marca como hecho; se puede volver a abrir desde Ajustes. `POST /api/setup/settings/{pane}` abre solo paneles de una lista fija (`system.SETTINGS_PANES`).
+
 ### Detección automática
 
 game-pal rellena lo que falte sin tocar lo que el jugador eligió a mano:

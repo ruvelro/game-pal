@@ -247,6 +247,7 @@ export interface BusMessage {
 
 export interface AppConfig {
   version: number;
+  setup_completed: boolean;
   profile: string;
   auto_detect_game: boolean;
   window_title: string | null;
@@ -368,6 +369,30 @@ export interface ProfileSummary {
   bundled: boolean;
   screens: number;
   sources: number;
+}
+
+export interface SetupCheck {
+  id: string;
+  title: string;
+  state: "ok" | "warn" | "error" | "off";
+  detail: string;
+  fix: string;
+  command: string;
+  settings: string;
+  required: boolean;
+}
+
+export interface SetupInfo {
+  ready: boolean;
+  checks: SetupCheck[];
+  notes: string[];
+}
+
+export interface LocalServer {
+  name: string;
+  url: string;
+  models: string[];
+  recommended: string | null;
 }
 
 export interface WindowSummary {

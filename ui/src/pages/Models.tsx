@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AppConfig } from "../api";
+import { api, type AppConfig, type LocalServer } from "../api";
 import { Card, Field, PageHeader, SaveBar } from "../components/ui";
 import { t, type Key } from "../i18n";
 import { useConfig } from "../store";
@@ -24,13 +24,6 @@ const ROLES: Array<[Role, Key, Key]> = [
   ["fast", "models.role.fast", "models.role.fast.hint"],
   ["vision", "models.role.vision", "models.role.vision.hint"],
 ];
-interface LocalServer {
-  name: string;
-  url: string;
-  models: string[];
-  recommended: string | null;
-}
-
 function ModelPicker({
   value,
   models,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import subprocess
 import sys
 
 # Idiomas que game-pal sabe usar para responder (los mismos que ofrece la GUI).
@@ -78,3 +79,30 @@ def total_memory_gb() -> float | None:
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1024**3
     except (ValueError, OSError, AttributeError):
         return None
+
+
+_MAC_PRIVACY = "x-apple.systempreferences:com.apple.preference.security?Privacy_"
+SETTINGS_PANES: dict[str, dict[str, str]] = {
+    "darwin": {
+        "screen-recording": _MAC_PRIVACY + "ScreenCapture",
+        "accessibility": _MAC_PRIVACY + "Accessibility",
+        "microphone": _MAC_PRIVACY + "Microphone",
+    },
+    "win32": {"microphone": "ms-settings:privacy-microphone"},
+}
+
+
+def can_open_settings(pane: str) -> bool:
+    return pane in SETTINGS_PANES.get(sys.platform, {})
+
+
+def open_settings(pane: str) -> bool:
+    """Abre el panel de privacidad del sistema donde se concede un permiso. Solo direcciones fijas."""
+    url = SETTINGS_PANES.get(sys.platform, {}).get(pane)
+    if url is None:
+        return False
+    if sys.platform == "darwin":
+        subprocess.run(["/usr/bin/open", url], check=False, timeout=10)  # noqa: S603 - dirección fija
+    else:
+        os.startfile(url)  # type: ignore[attr-defined]  # noqa: S606 - dirección fija
+    return True
