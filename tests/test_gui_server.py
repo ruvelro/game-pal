@@ -11,6 +11,7 @@ from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
 from gamepal.keystore import MemorySecretStore
 from gamepal.paths import AppPaths
+from gamepal.providers import ProviderError
 from tests.conftest import FakeBackend
 
 PORT = 47999
@@ -70,6 +71,23 @@ def test_config_update_validates_and_persists(client: TestClient, app_paths: App
     response = client.put("/api/config", headers=AUTH, json=config)
     assert response.status_code == 200
     assert "Mi Juego" in app_paths.config_file.read_text(encoding="utf-8")
+
+
+def test_setup_explains_what_is_missing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def no_server(url: str) -> tuple[str, ...]:
+        raise ProviderError(f"No se pudo contactar con {url}")
+
+    monkeypatch.setattr("gamepal.checks.probe_local", no_server)
+    # Los permisos de macOS dependen de la máquina que ejecuta los tests.
+    monkeypatch.setattr("gamepal.checks.screen_capture_allowed", lambda: None)
+    assert client.get("/api/setup", headers=HOST).status_code == 401
+    body = client.get("/api/setup", headers=AUTH).json()
+    found = {check["id"]: check for check in body["checks"]}
+    assert body["ready"] is False
+    assert found["model"]["state"] == "error"
+    assert found["model"]["command"].startswith("ollama pull")
+    assert found["capture"]["state"] == "ok"
+    assert found["voice"]["state"] == "off"
 
 
 def test_pause_and_resume(client: TestClient) -> None:
