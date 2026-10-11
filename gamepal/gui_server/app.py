@@ -1,0 +1,270 @@
+"""Servidor de la GUI: API REST + WebSocket de eventos, solo en loopback y con token.
+
+El token se entrega a la GUI en el fragmento de la URL (#token=…), que el navegador nunca
+envía al servidor, y la GUI lo usa en la cabecera Authorization y al abrir el WebSocket.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import io
+import json
+import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from PIL import Image
+from pydantic import BaseModel, Field, ValidationError
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from gamepal import __version__
+from gamepal.config import AppConfig
+from gamepal.daemon import Daemon
+from gamepal.providers import Message, ProviderError
+from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+
+log = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+WS_AUTH_TIMEOUT_S = 5.0
+
+
+class SecurityHeaders(BaseHTTPMiddleware):
+    def __init__(self, app: Any, port: int) -> None:
+        super().__init__(app)
+        self.port = port
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if not allowed_host_header(request.headers.get("host"), self.port):
+            return JSONResponse({"detail": "Host no permitido"}, status_code=status.HTTP_421_MISDIRECTED_REQUEST)
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; "
+            f"connect-src 'self' ws://127.0.0.1:{self.port} ws://localhost:{self.port}; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+class AskRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    include_screen: bool = False
+
+
+def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # El daemon vive en el mismo bucle de eventos que el servidor.
+        await daemon.start()
+        try:
+            yield
+        finally:
+            await daemon.stop()
+
+    app = FastAPI(
+        title="game-pal", version=__version__, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
+    )
+    app.add_middleware(SecurityHeaders, port=port)
+
+    def require_token(request: Request) -> None:
+        header = request.headers.get("authorization", "")
+        given = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else None
+        if not tokens_match(token, given):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token no válido")
+
+    auth = [Depends(require_token)]
+
+    @app.get("/api/status", dependencies=auth)
+    async def get_status() -> dict[str, Any]:
+        c = daemon.c
+        profile = c.profile.profile if c.profile else None
+        return {
+            "version": __version__,
+            "paused": c.watcher.paused if c.watcher else True,
+            "profile": {"id": profile.id, "name": profile.name} if profile else None,
+            "capture_backend": c.backend.name if c.backend else None,
+            "ocr_backend": c.ocr.name if c.ocr else None,
+            "errors": c.errors,
+            "events": [e.to_message() for e in daemon.bus.last_events()],
+        }
+
+    @app.get("/api/config", dependencies=auth)
+    async def get_config() -> dict[str, Any]:
+        return daemon.config.model_dump(mode="json")
+
+    @app.put("/api/config", dependencies=auth)
+    async def put_config(request: Request) -> dict[str, Any]:
+        try:
+            config = AppConfig.model_validate(await request.json())
+            # Valida la URL del proveedor antes de guardar nada.
+            from gamepal.providers import create_provider
+
+            probe = create_provider(config.provider)
+            await probe.aclose()
+        except (ValidationError, UnsafeUrlError, ProviderError, json.JSONDecodeError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        await daemon.apply(config)
+        return daemon.config.model_dump(mode="json")
+
+    @app.get("/api/profiles", dependencies=auth)
+    async def list_profiles() -> dict[str, Any]:
+        profiles, errors = await asyncio.to_thread(daemon.profiles.discover)
+        return {
+            "profiles": [
+                {
+                    "id": p.profile.id,
+                    "name": p.profile.name,
+                    "description": p.profile.description,
+                    "bundled": p.bundled,
+                    "screens": len(p.profile.screens),
+                    "sources": len(p.profile.knowledge.sources),
+                }
+                for p in profiles.values()
+            ],
+            "errors": errors,
+        }
+
+    @app.get("/api/windows", dependencies=auth)
+    async def list_windows() -> list[dict[str, Any]]:
+        backend = daemon.c.backend
+        if backend is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, daemon.c.errors.get("capture", "Sin captura"))
+        windows = await asyncio.to_thread(backend.list_windows)
+        return [
+            {"title": w.title, "process": w.process, "width": w.width, "height": w.height}
+            for w in windows
+            if w.width >= 200 and w.height >= 150 and w.title
+        ]
+
+    @app.post("/api/watcher/pause", dependencies=auth)
+    async def pause() -> dict[str, bool]:
+        daemon.pause()
+        return {"paused": True}
+
+    @app.post("/api/watcher/resume", dependencies=auth)
+    async def resume() -> dict[str, bool]:
+        daemon.resume()
+        return {"paused": False}
+
+    @app.get("/api/frame.jpg", dependencies=auth)
+    async def frame() -> Response:
+        watcher = daemon.c.watcher
+        current = watcher.latest_frame if watcher else None
+        if current is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aún no hay captura")
+
+        def encode() -> bytes:
+            picture = Image.fromarray(current.image, "RGB")
+            picture.thumbnail((960, 960))
+            buffer = io.BytesIO()
+            picture.save(buffer, "JPEG", quality=80)
+            return buffer.getvalue()
+
+        return Response(await asyncio.to_thread(encode), media_type="image/jpeg")
+
+    @app.get("/api/text", dependencies=auth)
+    async def last_text() -> dict[str, Any]:
+        read = daemon.last_read
+        return read.model_dump(mode="json") if read else {"lines": []}
+
+    @app.get("/api/provider/models", dependencies=auth)
+    async def provider_models() -> dict[str, Any]:
+        provider = daemon.c.provider
+        if provider is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, daemon.c.errors.get("provider", "Sin proveedor"))
+        try:
+            caps = await provider.capabilities()
+        except ProviderError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        return {"models": list(caps.models), "local": caps.local}
+
+    @app.post("/api/provider/ask", dependencies=auth)
+    async def ask(body: AskRequest) -> dict[str, Any]:
+        provider = daemon.c.provider
+        if provider is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, daemon.c.errors.get("provider", "Sin proveedor"))
+        system = (
+            daemon.c.profile.read_prompt("advisor") if daemon.c.profile else None
+        ) or "Eres un compañero de juego útil y conciso."
+        system = system.replace("{output_language}", daemon.config.output_language)
+        context = ""
+        if body.include_screen and daemon.last_read is not None:
+            text = "\n".join(line.text for line in daemon.last_read.lines)
+            context = f"\n\n<texto_en_pantalla>\n{text}\n</texto_en_pantalla>"
+        messages = [Message("system", system), Message("user", body.prompt + context)]
+        try:
+            result = await provider.chat(messages, max_tokens=600)
+        except ProviderError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        return {
+            "text": result.text,
+            "model": result.model,
+            "elapsed_ms": round(result.elapsed_ms),
+            "usage": {"input": result.usage.input_tokens, "output": result.usage.output_tokens},
+        }
+
+    @app.websocket("/api/events")
+    async def events(socket: WebSocket) -> None:
+        if not allowed_host_header(socket.headers.get("host"), port):
+            await socket.close(code=1008)
+            return
+        origin = socket.headers.get("origin")
+        if origin is not None and origin not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
+            await socket.close(code=1008)
+            return
+        await socket.accept()
+        try:
+            hello = await asyncio.wait_for(socket.receive_json(), WS_AUTH_TIMEOUT_S)
+        except (TimeoutError, WebSocketDisconnect, ValueError):
+            await socket.close(code=1008)
+            return
+        if not isinstance(hello, dict) or not tokens_match(token, hello.get("token")):
+            await socket.close(code=1008)
+            return
+        async with daemon.bus.subscribe(maxsize=128) as sub:
+            for event in daemon.bus.last_events():
+                await socket.send_json(event.to_message())
+            receiver = asyncio.create_task(_drain(socket))
+            try:
+                while not receiver.done():
+                    getter = asyncio.create_task(sub.get())
+                    done, _ = await asyncio.wait({getter, receiver}, return_when=asyncio.FIRST_COMPLETED)
+                    if getter in done:
+                        await socket.send_json(getter.result().to_message())
+                    else:
+                        getter.cancel()
+            except WebSocketDisconnect:
+                pass
+            finally:
+                receiver.cancel()
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def static(path: str) -> Response:
+        if not STATIC_DIR.is_dir():
+            return HTMLResponse(_MISSING_UI, status_code=200)
+        target = (STATIC_DIR / path).resolve()
+        if path and target.is_file() and target.is_relative_to(STATIC_DIR):
+            return FileResponse(target)
+        return FileResponse(STATIC_DIR / "index.html")
+
+    return app
+
+
+async def _drain(socket: WebSocket) -> None:
+    """Consume mensajes entrantes para detectar el cierre del cliente."""
+    while True:
+        await socket.receive_text()
+
+
+_MISSING_UI = """<!doctype html><meta charset="utf-8"><title>game-pal</title>
+<body style="font-family:system-ui;background:#0b1d21;color:#e6f2ee;padding:40px">
+<h1>game-pal</h1><p>La interfaz no está compilada. Ejecuta <code>npm --prefix ui install</code> y
+<code>npm --prefix ui run build</code>, y recarga.</p></body>"""

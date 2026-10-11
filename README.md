@@ -28,7 +28,19 @@ Cada juego es un **perfil**: una carpeta con unas reglas en YAML y las webs de d
 
 ## Estado
 
-En desarrollo. La especificación completa está en [docs/spec.md](docs/spec.md). Todavía no hay versión instalable.
+En desarrollo. Ya funciona el primer hito: captura de la ventana del juego, detección de cambios, lectura del texto en pantalla, perfiles de juego, conexión con un modelo local y una GUI para controlarlo. Todavía no hay versión instalable.
+
+La especificación completa está en [docs/spec.md](docs/spec.md).
+
+## Probarlo
+
+```bash
+uv sync
+npm --prefix ui install && npm --prefix ui run build
+uv run game-pal
+```
+
+Más detalles en [docs/development.md](docs/development.md).
 
 ## Contribuir
 

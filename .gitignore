@@ -32,3 +32,10 @@ assets/icon.iconset/
 .DS_Store
 Thumbs.db
 .env
+
+# GUI compilada
+gamepal/gui_server/static/
+ui/node_modules/
+
+# Ajustes locales del editor
+.claude/

@@ -6,6 +6,7 @@ librería estándar. En otros sistemas basta con tener rsvg-convert o inkscape
 para el primer paso; el .ico se construye a mano porque el formato ICO admite
 PNG incrustado.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -36,7 +37,9 @@ def render_master(out: Path, size: int = 1024) -> None:
 
 def resize(src: Path, dst: Path, size: int) -> None:
     if shutil.which("sips"):
-        subprocess.run(["sips", "-z", str(size), str(size), str(src), "--out", str(dst)], check=True, capture_output=True)
+        subprocess.run(
+            ["sips", "-z", str(size), str(size), str(src), "--out", str(dst)], check=True, capture_output=True
+        )
     elif shutil.which("rsvg-convert"):
         subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), str(SVG), "-o", str(dst)], check=True)
     else:

@@ -1,0 +1,17 @@
+# Perfil genérico: funciona con cualquier juego.
+# No reconoce pantallas concretas; lee el texto visible y deja que el modelo razone.
+# Úsalo como punto de partida para crear el perfil de un juego nuevo.
+id: generic
+name: Genérico
+version: 1
+description: Cualquier juego. Elige la ventana en la GUI y añade fuentes de conocimiento por URL.
+game:
+  process: []
+  window_title: null
+  languages_supported: [en, es, fr, de, it, pt, ja, ko, zh]
+screens: []
+knowledge:
+  sources: []
+  refresh: manual
+prompts:
+  advisor: prompts/advisor.md
