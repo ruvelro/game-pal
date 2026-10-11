@@ -154,6 +154,7 @@ export type Component =
   | "voice"
   | "overlay"
   | "hotkeys"
+  | "knowledge"
   | "save"
   | "memory";
 export type State = "idle" | "starting" | "running" | "paused" | "waiting" | "error" | "ready";
@@ -162,6 +163,8 @@ export interface StatusEvent {
   component: Component;
   state: State;
   detail: string;
+  /** De 0 a 1 mientras se descarga algo. */
+  progress?: number | null;
 }
 
 export interface TextLine {

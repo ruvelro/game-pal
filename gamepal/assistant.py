@@ -20,6 +20,7 @@ from typing import Any, Literal
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig, Output
 from gamepal.events import AnswerUpdate, QuestionAsked, ScreenDetected, ScreenRead, SpeechStopped
+from gamepal.explain import explain_error
 from gamepal.knowledge.store import Hit
 from gamepal.profiles import LoadedProfile
 from gamepal.providers import Message, Provider, ProviderError
@@ -306,7 +307,8 @@ class Assistant:
         if question.source == "text":
             outputs = [o for o in outputs if o != "voice"] or ["text"]
         if provider is None:
-            self._emit_error(question.id, "question", question.text, outputs, "No hay modelo configurado")
+            error = explain_error("No hay modelo seleccionado para local", self._config())
+            self._emit_error(question.id, "question", question.text, outputs, error)
             return
         route = await self._route(question.text)
         client: Provider = provider
@@ -380,7 +382,8 @@ class Assistant:
             self._bus.publish(update(text=text, done=True, error="cancelada"))
             raise
         except ProviderError as exc:
-            self._bus.publish(update(text=text, done=True, error=str(exc)))
+            log.warning("El modelo falló: %s", exc)
+            self._bus.publish(update(text=text, done=True, error=explain_error(str(exc), self._config())))
             return ""
         self._bus.publish(update(text=text, done=True))
         return text

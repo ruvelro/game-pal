@@ -27,6 +27,7 @@ from gamepal.checks import blocking, daemon_checks, discover_servers
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
+from gamepal.explain import explain_error
 from gamepal.keystore import CLOUDS, SecretStoreError
 from gamepal.knowledge import KnowledgeError
 from gamepal.knowledge.service import MAX_FILE_BYTES as MAX_UPLOAD_BYTES
@@ -331,7 +332,7 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
         try:
             result = await provider.chat(messages, max_tokens=600)
         except ProviderError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, explain_error(str(exc), daemon.config)) from exc
         return {
             "text": result.text,
             "model": result.model,

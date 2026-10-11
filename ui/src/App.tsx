@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, token, type AppConfig } from "./api";
+import { Downloads } from "./components/Downloads";
 import { t, type Key } from "./i18n";
 import { Activity } from "./pages/Activity";
 import { Game } from "./pages/Game";
@@ -95,6 +96,7 @@ function Shell() {
         </div>
       </aside>
       <main className="content">
+        <Downloads live={live} />
         {page === "home" && <Home live={live} status={status} onToggle={() => void toggle()} onNavigate={setPage} />}
         {page === "game" && <Game />}
         {page === "knowledge" && <Knowledge live={live} />}

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("gamepal")
 
 DEV_PORT = 5173
+HELP_URL = "https://github.com/ruvelro/game-pal/blob/main/docs/problemas.md"
 
 
 def _setup_logging(paths: AppPaths, verbose: bool) -> None:
@@ -189,6 +190,7 @@ def cmd_doctor(args: argparse.Namespace, paths: AppPaths) -> int:
     if problems:
         count = "1 cosa impide" if len(problems) == 1 else f"{len(problems)} cosas impiden"
         print(f"{count} que game-pal te aconseje. Arréglalo y vuelve a comprobarlo con «game-pal doctor».")
+        print(f"Más ayuda: {HELP_URL}")
         return 1
     print("Todo listo: arranca game-pal y abre la GUI.")
     return 0

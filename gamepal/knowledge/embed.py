@@ -11,11 +11,14 @@ from typing import Any, Protocol
 import numpy as np
 import numpy.typing as npt
 
+from gamepal.downloads import FolderProgress, Report
+
 log = logging.getLogger(__name__)
 
 Vectors = npt.NDArray[np.float32]
 
 E5_REPO = "Xenova/multilingual-e5-small"
+E5_SIZE_MB = 118
 # Revisión fija: el modelo no cambia sin que lo decidamos nosotros.
 E5_REVISION = "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
 BATCH = 16
@@ -41,8 +44,10 @@ class E5Embedder:
     # Medido: en este modelo lo no relacionado ronda 0,78-0,81 y lo relevante supera 0,88.
     min_score = 0.84
 
-    def __init__(self, cache_dir: Path) -> None:
+    def __init__(self, cache_dir: Path, progress: Report | None = None) -> None:
         self._cache = cache_dir
+        # Avisa de la descarga del modelo la primera vez (bytes, fracción); fracción 1 al terminar.
+        self._progress = progress
         self._session: Any = None
         self._tokenizer: Any = None
         self._inputs: set[str] = set()
@@ -55,8 +60,12 @@ class E5Embedder:
         from huggingface_hub import hf_hub_download
         from tokenizers import Tokenizer
 
-        model = hf_hub_download(E5_REPO, "onnx/model_quantized.onnx", revision=E5_REVISION, cache_dir=self._cache)
-        vocab = hf_hub_download(E5_REPO, "tokenizer.json", revision=E5_REVISION, cache_dir=self._cache)
+        report = self._progress or (lambda _received, _fraction: None)
+        with FolderProgress(self._cache, report, E5_SIZE_MB) as watch:
+            model = hf_hub_download(E5_REPO, "onnx/model_quantized.onnx", revision=E5_REVISION, cache_dir=self._cache)
+            vocab = hf_hub_download(E5_REPO, "tokenizer.json", revision=E5_REVISION, cache_dir=self._cache)
+        if watch.downloaded:
+            report(watch.downloaded, 1.0)
         tokenizer = Tokenizer.from_file(vocab)
         tokenizer.enable_truncation(512)
         tokenizer.enable_padding(pad_id=1, pad_token="<pad>")  # noqa: S106 - token de relleno, no una contraseña

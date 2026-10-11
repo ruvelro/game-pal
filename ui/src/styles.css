@@ -1228,3 +1228,55 @@ button.danger:hover:not(:disabled) {
 .missing {
   border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
 }
+
+/* Descargas en curso */
+
+.downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.download {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--mint);
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+
+.bar.indeterminate span {
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar.indeterminate span {
+    animation: none;
+  }
+}
