@@ -12,12 +12,17 @@ from gamepal.gui_server import create_app
 from gamepal.hardware import Gpu, HardwareInfo
 from gamepal.keystore import MemorySecretStore
 from gamepal.paths import AppPaths
+from gamepal.providers import ProviderError
 from tests.conftest import FakeBackend
 
 PORT = 47999
 TOKEN = "secreto-de-prueba"
 HOST = {"host": f"127.0.0.1:{PORT}"}
 AUTH = {**HOST, "authorization": f"Bearer {TOKEN}"}
+
+
+async def no_server(url: str) -> tuple[str, ...]:
+    raise ProviderError(f"No se pudo contactar con {url}")
 
 
 @pytest.fixture
@@ -35,8 +40,10 @@ def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
         bundled_dir=repo_profiles,
         secrets=MemorySecretStore(),
         hardware=lambda: HardwareInfo("linux", "x64", "cpu", 8, 16.0, [Gpu("RTX", "nvidia", 12.0)], vulkan=True),
+        probe=no_server,
     )
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
+        test_client.daemon = daemon  # type: ignore[attr-defined]
         yield test_client
 
 
@@ -77,6 +84,45 @@ def test_config_update_validates_and_persists(client: TestClient, app_paths: App
     response = client.put("/api/config", headers=AUTH, json=config)
     assert response.status_code == 200
     assert "Mi Juego" in app_paths.config_file.read_text(encoding="utf-8")
+
+
+def test_setup_explains_what_is_missing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Los permisos de macOS dependen de la máquina que ejecuta los tests.
+    monkeypatch.setattr("gamepal.checks.screen_capture_allowed", lambda: None)
+    assert client.get("/api/setup", headers=HOST).status_code == 401
+    body = client.get("/api/setup", headers=AUTH).json()
+    found = {check["id"]: check for check in body["checks"]}
+    assert body["ready"] is False
+    assert found["model"]["state"] == "error"
+    assert found["model"]["command"].startswith("ollama pull")
+    assert found["capture"]["state"] == "ok"
+    assert found["voice"]["state"] == "off"
+
+
+def test_settings_panes_are_a_fixed_list(client: TestClient) -> None:
+    assert client.post("/api/setup/settings/rm%20-rf", headers=AUTH).status_code == 404
+    assert client.post("/api/setup/settings/nope", headers=AUTH).status_code == 404
+
+
+def test_setup_is_pending_until_completed(client: TestClient) -> None:
+    config = client.get("/api/config", headers=AUTH).json()
+    assert config["setup_completed"] is False
+    config["setup_completed"] = True
+    assert client.put("/api/config", headers=AUTH, json=config).json()["setup_completed"] is True
+
+
+def test_saving_unrelated_settings_keeps_capture_running(client: TestClient) -> None:
+    daemon: Daemon = client.daemon  # type: ignore[attr-defined]
+    watcher = daemon.c.watcher_task
+    config = client.get("/api/config", headers=AUTH).json()
+    config["output"]["overlay"]["opacity"] = 0.8
+    config["memory"]["sessions_in_context"] = 5
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+    assert daemon.c.watcher_task is watcher
+
+    config["capture"]["idle_fps"] = 3.0
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+    assert daemon.c.watcher_task is not watcher
 
 
 def test_pause_and_resume(client: TestClient) -> None:
@@ -224,7 +270,7 @@ def test_setup_applies_tier_and_validates_models(client: TestClient) -> None:
     assert client.put("/api/config", headers=AUTH, json=config).status_code == 422
 
     assert client.post("/api/setup/done", headers=AUTH, json={"done": True}).status_code == 200
-    assert client.get("/api/config", headers=AUTH).json()["setup_done"] is True
+    assert client.get("/api/config", headers=AUTH).json()["setup_completed"] is True
 
 
 def test_engine_rejects_unknown_models(client: TestClient) -> None:

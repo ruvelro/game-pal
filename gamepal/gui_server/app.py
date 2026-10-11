@@ -13,7 +13,6 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
@@ -23,9 +22,12 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from gamepal import __version__
+from gamepal.autodetect import pick_model
+from gamepal.checks import blocking, daemon_checks, discover_servers
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
+from gamepal.explain import explain_error
 from gamepal.keystore import CLOUDS, SecretStoreError
 from gamepal.knowledge import KnowledgeError
 from gamepal.knowledge.service import MAX_FILE_BYTES as MAX_UPLOAD_BYTES
@@ -36,12 +38,13 @@ from gamepal.providers import Message, ProviderError
 from gamepal.runtime.llama import EngineError
 from gamepal.runtime.setup import apply_tier
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+from gamepal.system import can_open_settings, open_settings, total_memory_gb
+from gamepal.ui_build import STATIC_DIR
 from gamepal.voice.audio import list_devices, measure_input, play_test_tone
 from gamepal.voice.models import PIPER_DEFAULT_VOICES
 
 log = logging.getLogger(__name__)
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
 WS_AUTH_TIMEOUT_S = 5.0
 
 
@@ -178,6 +181,24 @@ def create_app(
             "errors": c.errors,
             "events": [e.to_message() for e in daemon.bus.last_events()],
         }
+
+    @app.get("/api/setup", dependencies=auth)
+    async def setup() -> dict[str, Any]:
+        """Qué funciona, qué falta y cómo arreglarlo. `ready` es falso si algo impide aconsejar."""
+        checks = await daemon_checks(daemon)
+        return {"ready": not blocking(checks), "checks": [c.model_dump() for c in checks], "notes": daemon.notes}
+
+    @app.post("/api/setup/settings/{pane}", dependencies=auth)
+    async def setup_open_settings(pane: str) -> dict[str, bool]:
+        """Abre el panel del sistema donde se concede un permiso (Grabación de pantalla, Micrófono…)."""
+        if not can_open_settings(pane):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Este sistema no tiene ese panel")
+        return {"opened": await asyncio.to_thread(open_settings, pane)}
+
+    @app.post("/api/setup/autodetect", dependencies=auth)
+    async def setup_autodetect() -> dict[str, list[str]]:
+        """Busca ya el juego abierto y, si falta, un modelo local. Devuelve lo que ha cambiado."""
+        return {"changes": await daemon.autodetect()}
 
     @app.get("/api/config", dependencies=auth)
     async def get_config() -> dict[str, Any]:
@@ -363,7 +384,7 @@ def create_app(
         try:
             result = await provider.chat(messages, max_tokens=600)
         except ProviderError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, explain_error(str(exc), daemon.config)) from exc
         return {
             "text": result.text,
             "model": result.model,
@@ -473,6 +494,17 @@ def create_app(
         await asyncio.to_thread(daemon.secrets.delete, name)  # type: ignore[arg-type]
         await daemon.refresh_providers()
         return {"configured": False}
+
+    @app.get("/api/providers/local/discover", dependencies=auth)
+    async def provider_discover() -> dict[str, Any]:
+        """Servidores de modelos en marcha en este equipo, con el modelo que game-pal recomienda en cada uno."""
+        found = await discover_servers(daemon.probe, include=daemon.config.provider.base_url)
+        memory = total_memory_gb()
+        servers = [
+            {"name": name, "url": url, "models": list(models), "recommended": pick_model(models, memory)}
+            for name, url, models in found
+        ]
+        return {"servers": servers}
 
     @app.get("/api/providers/{name}/models", dependencies=auth)
     async def provider_list_models(name: str) -> dict[str, Any]:
@@ -679,7 +711,7 @@ def create_app(
 
     @app.post("/api/setup/done", dependencies=auth)
     async def setup_done(body: SetupDoneRequest) -> dict[str, bool]:
-        await daemon.apply(daemon.config.model_copy(update={"setup_done": body.done}))
+        await daemon.apply(daemon.config.model_copy(update={"setup_completed": body.done}))
         return {"ok": True}
 
     @app.post("/api/voice/mic-test", dependencies=auth)
@@ -773,6 +805,9 @@ async def _drain(socket: WebSocket) -> None:
 
 
 _MISSING_UI = """<!doctype html><meta charset="utf-8"><title>game-pal</title>
-<body style="font-family:system-ui;background:#0b1d21;color:#e6f2ee;padding:40px">
-<h1>game-pal</h1><p>La interfaz no está compilada. Ejecuta <code>npm --prefix ui install</code> y
-<code>npm --prefix ui run build</code>, y recarga.</p></body>"""
+<body style="font-family:system-ui;background:#0b1d21;color:#e6f2ee;padding:40px;max-width:640px;line-height:1.5">
+<h1>Falta compilar la interfaz</h1>
+<p>game-pal la compila solo al arrancar, pero necesita <a style="color:#7fd1b9" href="https://nodejs.org">Node.js 22
+o superior</a>. Instálalo, cierra game-pal y vuelve a arrancarlo con <code>uv run game-pal</code>.</p>
+<p>Si ya tienes Node.js, mira en la terminal el motivo del fallo, o ejecuta <code>uv run game-pal doctor</code>.</p>
+</body>"""

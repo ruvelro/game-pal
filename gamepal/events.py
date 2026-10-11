@@ -94,10 +94,23 @@ class ScreenDetected(Event):
 class StatusChanged(Event):
     topic: ClassVar[str] = "status"
     component: Literal[
-        "capture", "ocr", "provider", "profile", "daemon", "voice", "overlay", "hotkeys", "save", "memory", "runtime"
+        "capture",
+        "ocr",
+        "provider",
+        "profile",
+        "daemon",
+        "voice",
+        "overlay",
+        "hotkeys",
+        "save",
+        "memory",
+        "knowledge",
+        "runtime",
     ]
     state: Literal["idle", "starting", "running", "paused", "waiting", "error", "ready"]
     detail: str = ""
+    # De 0 a 1 mientras se descarga algo; la GUI lo muestra como una barra.
+    progress: float | None = None
 
 
 class VoiceState(Event):

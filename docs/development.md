@@ -3,21 +3,55 @@
 ## Requisitos
 
 - [uv](https://docs.astral.sh/uv/) (instala Python 3.12 por ti).
-- Node.js 22 o superior, solo para compilar la GUI.
-- Nada más para los modelos: el asistente de primer uso descarga el motor llama.cpp y los modelos del catálogo. Si lo prefieres, puedes usar tu propio servidor compatible con OpenAI (Ollama, LM Studio, vLLM o MLX).
+- Node.js 22 o superior, para compilar la GUI.
+- Nada más para los modelos: el asistente de primer uso descarga el motor llama.cpp y los modelos del catálogo. Si lo prefieres, puedes usar tu propio servidor compatible con OpenAI (Ollama, LM Studio, llama.cpp, vLLM o MLX).
 
 ## Arrancar
 
 ```bash
-uv sync
-npm --prefix ui install
-npm --prefix ui run build
 uv run game-pal
 ```
 
-game-pal abre la GUI en el navegador con un token de sesión en la dirección. Si cierras la pestaña, la dirección completa aparece en la terminal; si vuelves a lanzar game-pal mientras está en marcha, no arranca otro: le pide al que ya está que abra su GUI.
+uv instala Python y las dependencias. Si la GUI no está compilada o sus fuentes han cambiado, game-pal la compila antes de arrancar (instala sus dependencias con `npm ci` cuando hace falta). Luego abre la GUI en el navegador con un token de sesión en la dirección; si cierras la pestaña, la dirección completa sigue en la terminal. Si vuelves a lanzar game-pal mientras está en marcha, no arranca otro: le pide al que ya está que abra su GUI.
 
-La primera vez se abre el asistente: detecta el equipo, propone un nivel, descarga el motor y los modelos verificados, prueba el micrófono y el sonido, y te deja elegir el juego. Los modelos ocupan entre 2 y 21 GB según el nivel y quedan en la carpeta de datos de game-pal, en `engine/`.
+Al arrancar avisa en la terminal de lo que impide dar consejos (por ejemplo, que no hay modelo). Para ver todas las comprobaciones con su solución:
+
+```bash
+uv run game-pal doctor          # --json para usarlo desde scripts
+```
+
+La GUI obtiene las mismas comprobaciones de `GET /api/setup`.
+
+### Asistente de primer uso
+
+Mientras `setup_completed` sea falso, la GUI abre un asistente en cuatro pasos:
+
+1. **Juego**: detección automática, perfil, ventana e idiomas.
+2. **Modelo de IA**, con tres opciones y un botón para probarlo:
+   - *Instálalo con game-pal*: detecta el equipo, propone un nivel (0-3) y descarga el motor llama.cpp y los modelos verificados del catálogo (`POST /api/setup/tier` y `/api/engine/install`). Ocupan entre 2 y 21 GB según el nivel y quedan en la carpeta de datos, en `engine/`.
+   - *Ya tengo uno*: los servidores de Ollama, LM Studio, llama.cpp o MLX que encuentra en este equipo.
+   - *En la nube*: clave y modelo de OpenAI, Claude u OpenRouter.
+3. **Comprobación**: `/api/setup` con la solución de cada problema y un botón que abre el panel de permisos del sistema.
+4. **Voz**: hablarle, que conteste en voz alta, y pruebas de micrófono y sonido.
+
+Terminarlo o saltarlo lo marca como hecho; se puede volver a abrir desde Avanzado. `POST /api/setup/settings/{pane}` abre solo paneles de una lista fija (`system.SETTINGS_PANES`). La configuración antigua con `setup_done` se migra sola a `setup_completed`.
+
+### La GUI
+
+- El menú tiene arriba lo que casi todo el mundo usa (Inicio, Juego, Modelos, Voz y respuestas) y en «Más» lo demás (Conocimiento, Memoria, Actividad, Avanzado).
+- Los cambios se guardan solos: `useConfig().setConfig` guarda 700 ms después del último cambio y, al salir de la página, guarda lo pendiente. `save` guarda al momento, para los botones que prueban algo. El daemon solo reinicia la captura si cambia algo que la afecta.
+- Lo que casi nadie necesita va dentro de «Opciones avanzadas» (`<Advanced>`).
+- Inicio muestra «Lo que falta», con las comprobaciones de `/api/setup` y un botón para ir a arreglarlo.
+
+### Detección automática
+
+game-pal rellena lo que falte sin tocar lo que el jugador eligió a mano:
+
+- **Modelo local** (solo con un servidor propio, no con el motor de game-pal): si no hay ninguno elegido, prueba el servidor configurado y los puertos de Ollama (11434), LM Studio (1234), llama.cpp (8080) y MLX (8081), y elige el modelo de conversación más capaz que cabe en la mitad de la RAM, sin pasar de 14B. Lo intenta al arrancar y, mientras falte, cada 30 segundos.
+- **Juego**: cada 5 segundos, si el juego del perfil activo no está abierto y sí el de otro perfil, cambia a ese perfil. Se desactiva al elegir un perfil o una ventana a mano (`auto_detect_game`).
+- **Idiomas**: sin configuración guardada, el del juego y el de las respuestas son el del sistema.
+
+`POST /api/setup/autodetect` lo lanza al momento y `GET /api/providers/local/discover` lista los servidores en marcha con su modelo recomendado.
 
 En macOS, la primera vez el sistema pedirá permisos para la app desde la que lances game-pal (Terminal, iTerm, VS Code…). Concédelos y vuelve a arrancar:
 
@@ -34,6 +68,7 @@ En Windows ARM64 no se instala RapidOCR (OpenCV no publica ruedas para esa arqui
 ## Comandos útiles
 
 ```bash
+uv run game-pal doctor                        # qué funciona, qué falta y cómo arreglarlo
 uv run game-pal windows                       # ventanas que se pueden capturar
 uv run game-pal capture --title "Stardew"      # guarda una captura de esa ventana
 uv run game-pal ocr captura.png --lang es      # lee el texto de una imagen
@@ -61,11 +96,14 @@ uv run pytest -m voice
 ## GUI en modo desarrollo
 
 ```bash
-uv run game-pal --no-open      # en una terminal
-npm --prefix ui run dev        # en otra
+uv run game-pal --dev
 ```
 
-Vite redirige `/api` al daemon. Abre la dirección de Vite añadiendo el `#token=…` que imprime el daemon.
+Arranca el daemon y Vite juntos y abre la GUI de Vite con el token ya puesto, con recarga en caliente. Vite redirige `/api` (también el WebSocket) al daemon, sea cual sea su puerto. Al cerrar game-pal se cierra Vite.
+
+## Empaquetado
+
+`uv build` compila la GUI y la mete en el wheel (`scripts/hatch_build.py`), así quien lo instala no necesita Node.js. Las instalaciones editables de `uv sync` no la compilan: lo hace game-pal al arrancar.
 
 ## Empaquetar la app
 
@@ -103,6 +141,10 @@ gamepal/
   assistant.py           preguntas, enrutado rápido/razonado, conocimiento con citas y avisos proactivos
   gui_server/            API REST + WebSocket en loopback con token
   daemon.py, cli.py      orquestación y línea de comandos
+  checks.py              comprobaciones de puesta en marcha (game-pal doctor y /api/setup)
+  autodetect.py          elección automática de servidor y modelo local y del perfil del juego abierto
+  system.py              idioma del sistema y memoria del equipo
+  ui_build.py            compilación de la GUI al arrancar desde el repositorio
 ui/                      GUI en React + TypeScript (Vite)
 models/                  catálogo de modelos y del motor, con revisiones y hashes fijados
 packaging/, scripts/     empaquetado con PyInstaller, instaladores y prueba de humo

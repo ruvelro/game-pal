@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type AppConfig, type KnowledgeInfo, type KnowledgeSource, type SearchHit } from "../api";
-import { Card, Field, PageHeader, SaveBar } from "../components/ui";
+import { Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { t, type Key } from "../i18n";
 import { useConfig, type LiveState } from "../store";
 
@@ -100,7 +100,7 @@ export function Knowledge({ live }: { live: LiveState }) {
   const [depth, setDepth] = useState(1);
   const [maxPages, setMaxPages] = useState(100);
   const files = useRef<HTMLInputElement>(null);
-  const { config, setConfig, save, error: saveError, saved } = useConfig();
+  const { config, setConfig, error: saveError, saved, saving } = useConfig();
 
   const load = useCallback(() => {
     api
@@ -262,7 +262,7 @@ export function Knowledge({ live }: { live: LiveState }) {
               />
               {t("kn.autorefresh")} ({info?.refresh})
             </label>
-            <SaveBar onSave={() => config && void save(config)} saved={saved} error={saveError} />
+            <SaveStatus saving={saving} saved={saved} error={saveError} />
           </Card>
         )}
       </div>

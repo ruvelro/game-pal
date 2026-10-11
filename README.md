@@ -36,7 +36,7 @@ Descarga el instalador de tu sistema desde [Releases](https://github.com/ruvelro
 | macOS (Apple Silicon) | `game-pal-…-macos-arm64.dmg` |
 | Linux x64 | `game-pal-…-linux-x64.AppImage` (o el tar.gz) |
 
-Al abrirlo por primera vez, un asistente detecta tu equipo, propone un nivel, descarga el motor local y los modelos verificados, prueba el micrófono y el sonido, y te deja elegir el juego. game-pal vive después en la bandeja del sistema (en la barra de menús en macOS).
+Al abrirlo por primera vez, un asistente de cuatro pasos te guía: el juego (lo reconoce solo si tiene perfil), el modelo de IA (puede descargar el motor local y modelos verificados según tu equipo, usar el servidor que ya tengas o la nube), una comprobación de que todo funciona y la voz. game-pal vive después en la bandeja del sistema (en la barra de menús en macOS).
 
 Los instaladores aún no llevan firma de código de Apple ni de Microsoft:
 
@@ -63,13 +63,23 @@ La especificación completa está en [docs/spec.md](docs/spec.md) y los cambios 
 
 ## Desde el código
 
+Necesitas [uv](https://docs.astral.sh/uv/) y, para compilar la GUI la primera vez, [Node.js 22](https://nodejs.org) o superior. Después:
+
 ```bash
-uv sync
-npm --prefix ui install && npm --prefix ui run build
 uv run game-pal
 ```
 
-Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md) o empieza con `uv run game-pal new-profile mi-juego`.
+Instala lo que falte, compila la GUI y la abre en el navegador. La primera vez, un asistente de cuatro pasos te guía: el juego, el modelo de IA, una comprobación de que todo funciona y la voz. Si algo no está listo, lo dice también al arrancar. Para revisarlo todo con calma:
+
+```bash
+uv run game-pal doctor
+```
+
+Para el modelo de IA no hace falta nada más: el asistente puede descargar el motor llama.cpp y un modelo verificado adecuado a tu equipo. Si ya tienes Ollama, LM Studio, llama.cpp o MLX, game-pal los encuentra solo y elige un modelo que quepa. También vale una clave de OpenAI, Claude u OpenRouter.
+
+Tampoco hace falta elegir el juego: si tiene perfil, game-pal lo reconoce al abrirlo. Los idiomas se toman del sistema la primera vez.
+
+Si algo falla, mira [docs/problemas.md](docs/problemas.md). Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md) o empieza con `uv run game-pal new-profile mi-juego`.
 
 ## Contribuir
 

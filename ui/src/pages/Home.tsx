@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, type Component, type Status } from "../api";
+import { useState, type FormEvent } from "react";
+import { api, type Component, type SetupCheck, type Status } from "../api";
+import type { Page } from "../App";
+import { CheckRow, useSetupInfo } from "../components/Checks";
 import { GameState } from "../components/GameState";
+import { Preview } from "../components/Preview";
 import { ScreenData } from "../components/ScreenData";
 import { Card, Dot, PageHeader } from "../components/ui";
 import { t } from "../i18n";
@@ -15,43 +18,6 @@ const CARDS: Array<[Component, Parameters<typeof t>[0]]> = [
   ["voice", "card.voice"],
   ["overlay", "card.overlay"],
 ];
-
-export function Preview({ live, paused }: { live: LiveState; paused: boolean }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const loading = useRef(false);
-  const frameId = live.frame?.frame_id;
-
-  useEffect(() => {
-    if (frameId === undefined || paused || loading.current) return;
-    loading.current = true;
-    api
-      .get<Blob>("/api/frame.jpg")
-      .then((blob) =>
-        setSrc((previous) => {
-          if (previous) URL.revokeObjectURL(previous);
-          return URL.createObjectURL(blob);
-        }),
-      )
-      .catch(() => undefined)
-      .finally(() => {
-        loading.current = false;
-      });
-  }, [frameId, paused]);
-
-  return (
-    <div className="preview">
-      {src ? <img src={src} alt={t("home.preview")} /> : <p className="muted">{t("home.preview.empty")}</p>}
-      {live.window && (
-        <div className="preview-meta">
-          <span>{live.window.title || live.window.process}</span>
-          <span>
-            {live.window.width}×{live.window.height}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function Conversation({ live }: { live: LiveState }) {
   const [prompt, setPrompt] = useState("");
@@ -171,12 +137,59 @@ function Conversation({ live }: { live: LiveState }) {
   );
 }
 
-export function Home({ live, status, onToggle }: { live: LiveState; status: Status | null; onToggle: () => void }) {
+// Dónde se arregla cada comprobación. La captura se arregla en los permisos del sistema.
+const FIX_PAGE: Partial<Record<string, Page>> = {
+  game: "game",
+  model: "models",
+  ocr: "settings",
+  voice: "talk",
+  hotkeys: "talk",
+};
+
+function Missing({ checks, onNavigate }: { checks: SetupCheck[]; onNavigate: (page: Page) => void }) {
+  return (
+    <Card title={t("home.missing")} className="missing">
+      <ul className="check-list">
+        {checks.map((check) => {
+          // Si se arregla con un permiso del sistema, el botón de Ajustes basta.
+          const page = check.settings ? undefined : FIX_PAGE[check.id];
+          return (
+            <CheckRow
+              key={check.id}
+              check={check}
+              action={
+                page && (
+                  <button className="chip" onClick={() => onNavigate(page)}>
+                    {t("home.fix")} →
+                  </button>
+                )
+              }
+            />
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+export function Home({
+  live,
+  status,
+  onToggle,
+  onNavigate,
+}: {
+  live: LiveState;
+  status: Status | null;
+  onToggle: () => void;
+  onNavigate: (page: Page) => void;
+}) {
   const paused = status?.paused ?? true;
+  const { info } = useSetupInfo(10000);
+  const missing = info?.checks.filter((c) => c.state === "error" || c.state === "warn") ?? [];
   return (
     <>
       <PageHeader
-        title={t("home.title")}
+        title={info && !info.ready ? t("home.title.pending") : t("home.title")}
         subtitle={t("home.subtitle")}
         actions={
           <button className={paused ? "primary big" : "big"} onClick={onToggle}>
@@ -184,6 +197,7 @@ export function Home({ live, status, onToggle }: { live: LiveState; status: Stat
           </button>
         }
       />
+      {missing.length > 0 && <Missing checks={missing} onNavigate={onNavigate} />}
       <div className="status-grid">
         {CARDS.map(([component, label]) => {
           const event = live.statuses[component];

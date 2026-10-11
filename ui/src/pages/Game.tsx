@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type EvidenceSnapshot, type ProfileInfo, type ProfileSummary, type ProfileTest, type WindowSummary } from "../api";
 import { ScreenData } from "../components/ScreenData";
-import { Card, Field, PageHeader, SaveBar } from "../components/ui";
+import { Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { LANGUAGES, t } from "../i18n";
 import { useConfig } from "../store";
 
@@ -64,7 +64,7 @@ function ProfileTester() {
 }
 
 export function Game() {
-  const { config, setConfig, save, error, saved } = useConfig();
+  const { config, setConfig, error, saved, saving } = useConfig();
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [windows, setWindows] = useState<WindowSummary[]>([]);
   const [info, setInfo] = useState<ProfileInfo | null>(null);
@@ -97,6 +97,11 @@ export function Game() {
     loadInfo();
   }, [loadWindows, loadInfo]);
 
+  // Tras cada guardado se vuelve a mirar qué ha encontrado (carpetas del juego, guardados…).
+  useEffect(() => {
+    if (saved) loadInfo();
+  }, [saved, loadInfo]);
+
   if (!config) return null;
   const selected = profiles.find((p) => p.id === config.profile);
   const gameDir = config.game_dirs[config.profile] ?? "";
@@ -106,16 +111,16 @@ export function Game() {
     loadInfo();
   };
 
-  const onSave = async () => {
-    if (await save(config)) loadInfo();
-  };
 
   return (
     <>
       <PageHeader title={t("game.title")} subtitle={t("game.subtitle")} />
       <Card>
         <Field label={t("game.profile")} hint={selected?.description}>
-          <select value={config.profile} onChange={(e) => setConfig({ ...config, profile: e.target.value })}>
+          <select
+            value={config.profile}
+            onChange={(e) => setConfig({ ...config, profile: e.target.value, auto_detect_game: false })}
+          >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -123,6 +128,17 @@ export function Game() {
             ))}
           </select>
         </Field>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={config.auto_detect_game}
+            onChange={(e) => setConfig({ ...config, auto_detect_game: e.target.checked })}
+          />
+          <span>
+            {t("game.auto")}
+            <span className="field-hint block">{t("game.auto.hint")}</span>
+          </span>
+        </label>
         <Field label={t("game.window")} hint={t("game.window.hint")}>
           <div className="row">
             <select
@@ -213,7 +229,7 @@ export function Game() {
             </select>
           </Field>
         </div>
-        <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
+        <SaveStatus saving={saving} saved={saved} error={error} />
       </Card>
 
       {info && info.id === config.profile && Object.keys(info.vocabulary).length > 0 && (

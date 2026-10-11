@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type AppConfig } from "../api";
-import { Card, Field, PageHeader, SaveBar } from "../components/ui";
+import { Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { t } from "../i18n";
 import { useConfig } from "../store";
 
@@ -10,7 +10,7 @@ function Lifecycle({ onSetup }: { onSetup: () => void }) {
   return (
     <Card title={t("settings.app")}>
       <div className="row wrap">
-        <button onClick={() => void api.post("/api/setup/done", { done: false }).then(onSetup)}>{t("settings.wizard")}</button>
+        <button onClick={() => void api.post("/api/setup/done", { done: false }).then(onSetup)}>{t("setup.reopen")}</button>
         <button
           className="danger"
           onClick={() => {
@@ -25,7 +25,7 @@ function Lifecycle({ onSetup }: { onSetup: () => void }) {
 }
 
 export function Settings({ onSetup }: { onSetup: () => void }) {
-  const { config, setConfig, save, error, saved } = useConfig();
+  const { config, setConfig, error, saved, saving } = useConfig();
   if (!config) return null;
   const capture = (patch: Partial<AppConfig["capture"]>) =>
     setConfig({ ...config, capture: { ...config.capture, ...patch } });
@@ -104,7 +104,7 @@ export function Settings({ onSetup }: { onSetup: () => void }) {
           />
           {t("settings.browser")}
         </label>
-        <SaveBar onSave={() => void save(config)} saved={saved} error={error} />
+        <SaveStatus saving={saving} saved={saved} error={error} />
       </Card>
       <Lifecycle onSetup={onSetup} />
     </>

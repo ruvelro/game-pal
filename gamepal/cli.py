@@ -8,18 +8,28 @@ import contextlib
 import json
 import logging
 import logging.handlers
+import shutil
 import socket
+import subprocess
 import sys
+import textwrap
 import threading
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TextIO
 
-from gamepal import __version__
+from gamepal import __version__, ui_build
 from gamepal.paths import AppPaths, bundled_profiles_dir, default_paths
 
+if TYPE_CHECKING:
+    from gamepal.checks import Check
+    from gamepal.daemon import Daemon
+
 log = logging.getLogger("gamepal")
+
+DEV_PORT = 5173
+HELP_URL = "https://github.com/ruvelro/game-pal/blob/main/docs/problemas.md"
 
 
 def _setup_logging(paths: AppPaths, verbose: bool) -> None:
@@ -88,7 +98,70 @@ class Controller:
                 loop.call_soon_threadsafe(action)
 
 
-async def _serve(paths: AppPaths, open_browser: bool | None, controller: Controller | None = None) -> None:
+def _say(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _marks() -> dict[str, str]:
+    marks = {"ok": "✓", "warn": "!", "error": "✗", "off": "·"}
+    try:
+        "".join(marks.values()).encode(sys.stdout.encoding or "ascii")
+    except UnicodeEncodeError:
+        marks = {"ok": "+", "warn": "!", "error": "x", "off": "-"}
+    return marks
+
+
+def _print_checks(checks: list[Check], *, stream: TextIO) -> None:
+    marks = _marks()
+    indent = " " * 25
+    width = max(60, min(shutil.get_terminal_size().columns, 110))
+    for check in checks:
+        print(f"  {marks[check.state]} {check.title:<20} {check.detail}", file=stream)
+        if check.fix and check.state != "ok":
+            fix = textwrap.fill(check.fix, width, initial_indent=f"{indent}→ ", subsequent_indent=f"{indent}  ")
+            print(fix, file=stream)
+        if check.command and check.state != "ok":
+            print(f"{indent}    {check.command}", file=stream)
+
+
+async def _port_open(port: int) -> None:
+    """Espera a que algo escuche en el puerto. uvicorn solo abre el suyo cuando el daemon ya ha arrancado."""
+    while True:
+        try:
+            _, writer = await asyncio.open_connection("127.0.0.1", port)
+        except OSError:
+            await asyncio.sleep(0.2)
+            continue
+        writer.close()
+        return
+
+
+async def _when_ready(daemon: Daemon, port: int, url: str, should_open: bool, dev_port: int | None) -> None:
+    """Cuando el servidor (y Vite, en desarrollo) responde: abre la GUI y avisa de lo que falta."""
+    from gamepal.checks import blocking, daemon_checks
+
+    await _port_open(port)
+    if dev_port is not None:
+        try:
+            async with asyncio.timeout(60):
+                await _port_open(dev_port)
+        except TimeoutError:
+            _say("Vite no arrancó a tiempo: revisa los mensajes de arriba.")
+            return
+    # A stderr y nunca al fichero de registro: el token no debe quedar guardado en disco.
+    _say(f"Abre la GUI con esta dirección (incluye tu token de sesión):\n  {url}")
+    if should_open:
+        webbrowser.open(url)
+    problems = blocking(await daemon_checks(daemon))
+    if problems:
+        _say("\nAntes de pedir consejo, falta esto:")
+        _print_checks(problems, stream=sys.stderr)
+        _say("Vuelve a comprobarlo con «game-pal doctor».")
+
+
+async def _serve(
+    paths: AppPaths, open_browser: bool | None, dev: Path | None, controller: Controller | None = None
+) -> None:
     import uvicorn
 
     from gamepal.daemon import Daemon
@@ -98,7 +171,12 @@ async def _serve(paths: AppPaths, open_browser: bool | None, controller: Control
     daemon = Daemon(paths)
     port = _free_port(daemon.config.gui.port)
     token = new_token()
-    url = f"http://127.0.0.1:{port}/#token={token}"
+    vite: subprocess.Popen[bytes] | None = None
+    dev_port: int | None = None
+    if dev is not None:
+        dev_port = _free_port(DEV_PORT)
+        vite = ui_build.start_dev_server(dev, daemon_port=port, port=dev_port)
+    url = f"http://127.0.0.1:{dev_port or port}/#token={token}"
     app = create_app(
         daemon, token, port,
         shutdown=lambda: setattr(server, "should_exit", True),
@@ -114,20 +192,22 @@ async def _serve(paths: AppPaths, open_browser: bool | None, controller: Control
             daemon,
             url,
         )
-    # A stderr y nunca al fichero de registro: el token no debe quedar guardado en disco.
-    print(f"game-pal {__version__} escuchando en http://127.0.0.1:{port}", file=sys.stderr, flush=True)
-    print(f"Abre la GUI con esta dirección (incluye tu token de sesión):\n  {url}", file=sys.stderr, flush=True)
+    _say(f"game-pal {__version__}: arrancando en http://127.0.0.1:{port}…")
+    if dev_port is not None:
+        _say(f"Modo desarrollo: Vite en http://127.0.0.1:{dev_port}, con recarga en caliente.")
     instance = paths.data_dir / INSTANCE_FILE
     # Solo el puerto: el token nunca se escribe en disco.
     instance.write_text(json.dumps({"port": port}), encoding="utf-8")
     should_open = daemon.config.gui.open_browser if open_browser is None else open_browser
-    if should_open:
-        webbrowser.open(url)
+    ready = asyncio.create_task(_when_ready(daemon, port, url, should_open, dev_port))
     try:
         await server.serve()
     finally:
+        ready.cancel()
         with contextlib.suppress(OSError):
             instance.unlink()
+        if vite is not None:
+            ui_build.stop_dev_server(vite)
 
 
 def _run_with_tray(paths: AppPaths, open_browser: bool | None) -> int:
@@ -138,7 +218,7 @@ def _run_with_tray(paths: AppPaths, open_browser: bool | None) -> int:
 
     def serve() -> None:
         try:
-            asyncio.run(_serve(paths, open_browser, controller))
+            asyncio.run(_serve(paths, open_browser, None, controller))
         except BaseException as exc:
             failure.append(exc)
         finally:
@@ -184,19 +264,62 @@ def _run_with_tray(paths: AppPaths, open_browser: bool | None) -> int:
 
 
 def cmd_run(args: argparse.Namespace, paths: AppPaths) -> int:
+    from gamepal.config import load_config
+
+    try:
+        load_config(paths.config_file)
+    except Exception as exc:
+        print(f"La configuración de {paths.config_file} no es válida:\n{exc}", file=sys.stderr)
+        print("Corrígela o bórrala: game-pal creará una nueva con los valores por defecto.", file=sys.stderr)
+        return 1
     port = _running_instance(paths)
     if port is not None:
         # Ya hay un game-pal abierto: se le pide que abra su GUI en lugar de arrancar otro.
         print(f"game-pal ya está en marcha en el puerto {port}; se abre su ventana.", file=sys.stderr)
         return 0 if _show_running(port) else 1
+    dev: Path | None = None
+    if args.dev:
+        dev = ui_build.source_dir()
+        if dev is None:
+            print("--dev solo funciona desde el repositorio de game-pal.", file=sys.stderr)
+            return 1
+        try:
+            ui_build.install(dev, _say)
+        except ui_build.UiBuildError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+    else:
+        warning = ui_build.ensure_ui(_say)
+        if warning:
+            _say(f"Aviso: {warning}")
     tray = args.tray if args.tray is not None else bool(getattr(sys, "frozen", False))
-    if tray:
+    if tray and dev is None:
         try:
             return _run_with_tray(paths, args.open)
         except ImportError:
             log.warning("No hay bandeja del sistema disponible; se sigue sin ella")
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_serve(paths, args.open))
+        asyncio.run(_serve(paths, args.open, dev))
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace, paths: AppPaths) -> int:
+    from gamepal.checks import blocking, doctor_checks
+
+    checks = asyncio.run(doctor_checks(paths))
+    problems = blocking(checks)
+    if args.json:
+        print(json.dumps([c.model_dump() for c in checks], ensure_ascii=False, indent=2))
+        return 1 if problems else 0
+    print(f"game-pal {__version__} · comprobando este equipo\n")
+    _print_checks(checks, stream=sys.stdout)
+    print()
+    if problems:
+        count = "1 cosa impide" if len(problems) == 1 else f"{len(problems)} cosas impiden"
+        print(f"{count} que game-pal te aconseje. Arréglalo y vuelve a comprobarlo con «game-pal doctor».")
+        print(f"Más ayuda: {HELP_URL}")
+        return 1
+    print("Todo listo: arranca game-pal y abre la GUI.")
     return 0
 
 
@@ -307,7 +430,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--no-open", dest="open", action="store_false", help="no abrir el navegador")
     run.add_argument("--tray", dest="tray", action="store_true", default=None, help="icono en la bandeja del sistema")
     run.add_argument("--no-tray", dest="tray", action="store_false", help="sin icono en la bandeja")
+    run.add_argument("--dev", action="store_true", help="GUI desde Vite con recarga en caliente (desarrollo)")
     run.set_defaults(func=cmd_run)
+
+    doctor = sub.add_parser("doctor", help="comprueba que todo está listo y explica cómo arreglar lo que falte")
+    doctor.add_argument("--json", action="store_true")
+    doctor.set_defaults(func=cmd_doctor)
 
     sub.add_parser("windows", help="lista las ventanas que se pueden capturar").set_defaults(func=cmd_windows)
 
@@ -339,11 +467,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def with_default_command(argv: list[str], commands: set[str]) -> list[str]:
+    """Sin orden, se arranca: `game-pal --no-open` equivale a `game-pal run --no-open`."""
+    if any(arg in commands for arg in argv) or {"-h", "--help", "--version"} & set(argv):
+        return argv
+    start = 0
+    while start < len(argv) and argv[start] in ("-v", "--verbose"):
+        start += 1
+    return [*argv[:start], "run", *argv[start:]]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
-    if args.command is None:
-        args = parser.parse_args(["run", *(argv or sys.argv[1:])])
+    subparsers = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+    args = parser.parse_args(
+        with_default_command(list(sys.argv[1:] if argv is None else argv), set(subparsers.choices))
+    )
     paths = default_paths()
     paths.ensure()
     _setup_logging(paths, args.verbose)

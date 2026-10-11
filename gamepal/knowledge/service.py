@@ -15,8 +15,9 @@ from typing import Any
 
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig
-from gamepal.events import KnowledgeProgress
-from gamepal.knowledge.embed import E5Embedder, Embedder, ProviderEmbedder
+from gamepal.downloads import describe
+from gamepal.events import KnowledgeProgress, StatusChanged
+from gamepal.knowledge.embed import E5_SIZE_MB, E5Embedder, Embedder, ProviderEmbedder
 from gamepal.knowledge.extract import (
     Document,
     chunk_markdown,
@@ -205,8 +206,17 @@ class KnowledgeService:
                 return None
             return ProviderEmbedder(provider.embed, settings.provider_model)
         if self._e5 is None:
-            self._e5 = E5Embedder(self._cache)
+            self._e5 = E5Embedder(self._cache, self._download_progress)
         return self._e5
+
+    def _download_progress(self, received: int, fraction: float | None) -> None:
+        """La primera búsqueda descarga el modelo de embeddings: se avisa para que no parezca colgado."""
+        if fraction is not None and fraction >= 1:
+            event = StatusChanged(component="knowledge", state="ready", detail="Modelo de búsqueda listo")
+        else:
+            detail = describe("el modelo de búsqueda", received, E5_SIZE_MB)
+            event = StatusChanged(component="knowledge", state="starting", detail=detail, progress=fraction)
+        self._bus.publish(event)
 
     async def _vectors(self, texts: list[str]) -> tuple[Any, str | None]:
         embedder = self.embedder()

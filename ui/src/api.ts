@@ -154,6 +154,7 @@ export type Component =
   | "voice"
   | "overlay"
   | "hotkeys"
+  | "knowledge"
   | "save"
   | "memory"
   | "runtime";
@@ -163,6 +164,8 @@ export interface StatusEvent {
   component: Component;
   state: State;
   detail: string;
+  /** De 0 a 1 mientras se descarga algo. */
+  progress?: number | null;
 }
 
 export interface TextLine {
@@ -248,10 +251,11 @@ export interface BusMessage {
 
 export interface AppConfig {
   version: number;
-  setup_done: boolean;
+  setup_completed: boolean;
   hardware_tier: number | null;
   runtime: { variant: string; context: number; models_max: number };
   profile: string;
+  auto_detect_game: boolean;
   window_title: string | null;
   game_dirs: Record<string, string>;
   save_dirs: Record<string, string>;
@@ -371,6 +375,30 @@ export interface ProfileSummary {
   bundled: boolean;
   screens: number;
   sources: number;
+}
+
+export interface SetupCheck {
+  id: string;
+  title: string;
+  state: "ok" | "warn" | "error" | "off";
+  detail: string;
+  fix: string;
+  command: string;
+  settings: string;
+  required: boolean;
+}
+
+export interface SetupInfo {
+  ready: boolean;
+  checks: SetupCheck[];
+  notes: string[];
+}
+
+export interface LocalServer {
+  name: string;
+  url: string;
+  models: string[];
+  recommended: string | null;
 }
 
 export interface WindowSummary {

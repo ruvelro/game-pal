@@ -217,11 +217,13 @@ class GuiConfig(_Model):
 
 class AppConfig(_Model):
     version: int = 1
-    # El asistente de primer uso ya se completó (o se saltó).
-    setup_done: bool = False
+    # El asistente de primer uso se muestra hasta que el jugador lo termina o lo salta.
+    setup_completed: bool = False
     # Nivel de hardware elegido en el asistente (0-3). Vacío: sin elegir.
     hardware_tier: int | None = Field(default=None, ge=0, le=3)
     profile: str = "generic"
+    # Cambia solo al perfil del juego que esté abierto. Elegir un perfil a mano lo desactiva.
+    auto_detect_game: bool = True
     # Ventana elegida a mano cuando el perfil no identifica el juego.
     window_title: str | None = None
     # Carpeta de instalación elegida por el usuario, por id de perfil.
@@ -245,12 +247,26 @@ class AppConfig(_Model):
     gui: GuiConfig = Field(default_factory=GuiConfig)
 
 
+def first_run_config() -> AppConfig:
+    """Sin configuración guardada: el juego y las respuestas, en el idioma del sistema."""
+    from gamepal.system import system_language
+
+    language = system_language()
+    if language is None:
+        return AppConfig()
+    return AppConfig(game_language=language, output_language=language)
+
+
 def load_config(path: Path) -> AppConfig:
     if not path.exists():
-        return AppConfig()
+        return first_run_config()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"{path} no contiene un objeto YAML")
+    # Las primeras versiones del asistente lo llamaban setup_done.
+    if "setup_done" in raw:
+        legacy = raw.pop("setup_done")
+        raw.setdefault("setup_completed", legacy)
     return AppConfig.model_validate(raw)
 
 
