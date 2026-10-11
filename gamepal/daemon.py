@@ -267,11 +267,12 @@ class Daemon:
             if profile_changed:
                 self._load_profile()
                 await self.knowledge.open(self.c.profile)
-            if (
+            vocabulary_changed = (
                 profile_changed
                 or config.game_dirs.get(config.profile) != previous.game_dirs.get(config.profile)
                 or config.game_language != previous.game_language
-            ):
+            )
+            if vocabulary_changed:
                 await self._load_vocabulary()
             if (
                 profile_changed
@@ -281,19 +282,35 @@ class Daemon:
                 await self.evidence.open(self.c.profile)
             if profile_changed or config.memory.enabled != previous.memory.enabled:
                 await self.memory.open(self.c.profile.profile.id if self.c.profile else None)
-            if first or config.ocr != previous.ocr or config.game_language != previous.game_language:
+            ocr_changed = first or config.ocr != previous.ocr or config.game_language != previous.game_language
+            if ocr_changed:
                 await self._create_ocr()
-            if (
+            provider_changed = (
                 first
                 or config.provider != previous.provider
                 or config.cloud != previous.cloud
                 or config.routing != previous.routing
-            ):
+            )
+            if provider_changed:
                 await self._create_provider()
             if first:
                 self._create_backend()
-            await self._restart_watcher()
-            await self._restart_interpreter()
+            # La GUI guarda sola con cada cambio: la captura solo se reinicia si cambia algo que la afecta.
+            watcher_changed = (
+                ocr_changed
+                or profile_changed
+                or config.capture != previous.capture
+                or config.window_title != previous.window_title
+            )
+            if watcher_changed:
+                await self._restart_watcher()
+            if (
+                watcher_changed
+                or vocabulary_changed
+                or provider_changed
+                or config.output_language != previous.output_language
+            ):
+                await self._restart_interpreter()
             voice_changed = (
                 config.voice != previous.voice
                 or config.output.answers != previous.output.answers

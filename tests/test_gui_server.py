@@ -37,6 +37,7 @@ def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
         app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore(), probe=no_server
     )
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
+        test_client.daemon = daemon  # type: ignore[attr-defined]
         yield test_client
 
 
@@ -102,6 +103,20 @@ def test_setup_is_pending_until_completed(client: TestClient) -> None:
     assert config["setup_completed"] is False
     config["setup_completed"] = True
     assert client.put("/api/config", headers=AUTH, json=config).json()["setup_completed"] is True
+
+
+def test_saving_unrelated_settings_keeps_capture_running(client: TestClient) -> None:
+    daemon: Daemon = client.daemon  # type: ignore[attr-defined]
+    watcher = daemon.c.watcher_task
+    config = client.get("/api/config", headers=AUTH).json()
+    config["output"]["overlay"]["opacity"] = 0.8
+    config["memory"]["sessions_in_context"] = 5
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+    assert daemon.c.watcher_task is watcher
+
+    config["capture"]["idle_fps"] = 3.0
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+    assert daemon.c.watcher_task is not watcher
 
 
 def test_pause_and_resume(client: TestClient) -> None:

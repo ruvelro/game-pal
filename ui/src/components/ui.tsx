@@ -47,19 +47,26 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
-export function SaveBar({ onSave, saved, error }: { onSave: () => void; saved: boolean; error: string | null }) {
+/** Estado del guardado automático, en una esquina de la pantalla. */
+export function SaveStatus({ saving, saved, error }: { saving: boolean; saved: boolean; error: string | null }) {
+  if (error) {
+    return (
+      <div className="save-toast bad" role="alert">
+        {t("common.error")}: {error}
+      </div>
+    );
+  }
+  if (!saving && !saved) return null;
+  return <div className="save-toast">{saving ? t("common.saving") : t("common.saved")}</div>;
+}
+
+/** Ajustes que casi nadie necesita tocar, plegados por defecto. */
+export function Advanced({ children }: { children: ReactNode }) {
   return (
-    <div className="save-bar">
-      {error && (
-        <span className="error-text" role="alert">
-          {t("common.error")}: {error}
-        </span>
-      )}
-      {saved && <span className="ok-text">{t("common.saved")}</span>}
-      <button className="primary" onClick={onSave}>
-        {t("common.save")}
-      </button>
-    </div>
+    <details className="advanced">
+      <summary>{t("common.advanced")}</summary>
+      <div className="advanced-body">{children}</div>
+    </details>
   );
 }
 

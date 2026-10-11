@@ -6,10 +6,9 @@ import {
   type Devices,
   type LocalServer,
   type ProfileSummary,
-  type SetupCheck,
-  type SetupInfo,
   type WindowSummary,
 } from "../api";
+import { CheckRow, CommandBox, useSetupInfo } from "../components/Checks";
 import { Preview } from "../components/Preview";
 import { Field, formatKey } from "../components/ui";
 import { LANGUAGES, t, type Key } from "../i18n";
@@ -24,66 +23,6 @@ const CLOUDS: Array<[Cloud, string, string]> = [
   ["openai", "OpenAI", "https://platform.openai.com/api-keys"],
   ["openrouter", "OpenRouter", "https://openrouter.ai/keys"],
 ];
-const STATE_DOT: Record<SetupCheck["state"], string> = { ok: "ok", warn: "warn", error: "bad", off: "neutral" };
-
-/** Las comprobaciones de /api/setup, refrescadas cada `intervalMs` si se indica. */
-function useSetupInfo(intervalMs?: number) {
-  const [info, setInfo] = useState<SetupInfo | null>(null);
-  const refresh = useCallback(
-    () =>
-      api
-        .get<SetupInfo>("/api/setup")
-        .then(setInfo)
-        .catch(() => undefined),
-    [],
-  );
-  useEffect(() => {
-    void refresh();
-    if (!intervalMs) return;
-    const id = window.setInterval(() => void refresh(), intervalMs);
-    return () => window.clearInterval(id);
-  }, [refresh, intervalMs]);
-  return { info, refresh };
-}
-
-function CommandBox({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    await navigator.clipboard.writeText(command).catch(() => undefined);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  };
-  return (
-    <div className="command">
-      <code>{command}</code>
-      <button className="chip" onClick={() => void copy()}>
-        {copied ? t("setup.check.copied") : t("setup.check.copy")}
-      </button>
-    </div>
-  );
-}
-
-export function CheckRow({ check }: { check: SetupCheck }) {
-  const fixable = check.state !== "ok";
-  return (
-    <li>
-      <span className={`dot ${STATE_DOT[check.state]}`} aria-hidden="true" />
-      <div className="check-body">
-        <span>
-          <strong>{check.title}</strong> <span className="muted">· {check.detail}</span>
-        </span>
-        {fixable && check.fix && <span className="small">{check.fix}</span>}
-        {fixable && check.command && <CommandBox command={check.command} />}
-        {check.settings && (
-          <button className="chip" onClick={() => void api.post(`/api/setup/settings/${check.settings}`)}>
-            {t("setup.check.settings")}
-          </button>
-        )}
-      </div>
-    </li>
-  );
-}
-
 function GameStep({
   config,
   setConfig,

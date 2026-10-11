@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { api, type Component, type Status } from "../api";
+import { api, type Component, type SetupCheck, type Status } from "../api";
+import type { Page } from "../App";
+import { CheckRow, useSetupInfo } from "../components/Checks";
 import { GameState } from "../components/GameState";
 import { Preview } from "../components/Preview";
 import { ScreenData } from "../components/ScreenData";
@@ -134,12 +136,59 @@ function Conversation({ live }: { live: LiveState }) {
   );
 }
 
-export function Home({ live, status, onToggle }: { live: LiveState; status: Status | null; onToggle: () => void }) {
+// Dónde se arregla cada comprobación. La captura se arregla en los permisos del sistema.
+const FIX_PAGE: Partial<Record<string, Page>> = {
+  game: "game",
+  model: "models",
+  ocr: "settings",
+  voice: "talk",
+  hotkeys: "talk",
+};
+
+function Missing({ checks, onNavigate }: { checks: SetupCheck[]; onNavigate: (page: Page) => void }) {
+  return (
+    <Card title={t("home.missing")} className="missing">
+      <ul className="check-list">
+        {checks.map((check) => {
+          // Si se arregla con un permiso del sistema, el botón de Ajustes basta.
+          const page = check.settings ? undefined : FIX_PAGE[check.id];
+          return (
+            <CheckRow
+              key={check.id}
+              check={check}
+              action={
+                page && (
+                  <button className="chip" onClick={() => onNavigate(page)}>
+                    {t("home.fix")} →
+                  </button>
+                )
+              }
+            />
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+export function Home({
+  live,
+  status,
+  onToggle,
+  onNavigate,
+}: {
+  live: LiveState;
+  status: Status | null;
+  onToggle: () => void;
+  onNavigate: (page: Page) => void;
+}) {
   const paused = status?.paused ?? true;
+  const { info } = useSetupInfo(10000);
+  const missing = info?.checks.filter((c) => c.state === "error" || c.state === "warn") ?? [];
   return (
     <>
       <PageHeader
-        title={t("home.title")}
+        title={info && !info.ready ? t("home.title.pending") : t("home.title")}
         subtitle={t("home.subtitle")}
         actions={
           <button className={paused ? "primary big" : "big"} onClick={onToggle}>
@@ -147,6 +196,7 @@ export function Home({ live, status, onToggle }: { live: LiveState; status: Stat
           </button>
         }
       />
+      {missing.length > 0 && <Missing checks={missing} onNavigate={onNavigate} />}
       <div className="status-grid">
         {CARDS.map(([component, label]) => {
           const event = live.statuses[component];
