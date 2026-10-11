@@ -9,7 +9,7 @@ from __future__ import annotations
 import queue
 from typing import Any
 
-from gamepal.overlay.model import View
+from gamepal.overlay.model import Rect, View
 
 PADDING = 14
 
@@ -66,6 +66,9 @@ class TkOverlay:
         self._root.geometry(f"{view.width}x{height}+{view.x}+{top}")
         self._root.deiconify()
         self._root.lift()
+
+    def screen(self) -> Rect | None:
+        return Rect(0, 0, int(self._root.winfo_screenwidth()), int(self._root.winfo_screenheight()))
 
     def run(self) -> None:
         self._root.mainloop()

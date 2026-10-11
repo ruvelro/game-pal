@@ -32,6 +32,8 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **Las respuestas tardan mucho o se cortan.** El modelo es demasiado grande para tu equipo. Elige uno más pequeño en Modelos; el recomendado está marcado.
 
+**«Se ha quedado pensando» o tarda en empezar a hablar.** Los modelos que razonan (Qwen 3, DeepSeek R1, gpt-oss…) piensan antes de contestar. En Modelos › Cómo responde puedes desactivar «Dejar que piense antes de responder», que es lo más rápido, o darle más margen para pensar en las opciones avanzadas. La página dice si tu modelo razona y si se le puede apagar. El largo de las respuestas se elige en la misma tarjeta.
+
 **«No acepta la clave de API» / «límite de uso».** La clave de la nube no es válida, ha caducado o se ha agotado el saldo. Cámbiala en Modelos o revisa tu cuenta del proveedor.
 
 ## Ver el juego

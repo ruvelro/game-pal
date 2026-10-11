@@ -284,6 +284,7 @@ export interface AppConfig {
     "reasoning" | "fast" | "vision",
     { provider: "local" | "openai" | "anthropic" | "openrouter"; fallback: "none" | "local" | "openai" | "anthropic" | "openrouter" }
   >;
+  generation: { answer_tokens: number; thinking: boolean; thinking_tokens: number };
   voice: VoiceConfig;
   output: OutputConfig;
   knowledge: {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from gamepal.overlay.model import View
+from gamepal.overlay.model import Rect, View
 
 PADDING = 16
 TITLE_SIZE = 11
@@ -106,6 +106,17 @@ class MacOverlay:
         panel.setAlphaValue_(view.opacity)
         panel.setFrame_display_(((view.x, screen_height - top - height), (view.width, height)), True)
         panel.orderFrontRegardless()
+
+    def screen(self) -> Rect | None:
+        ak = self._ak
+        screens = ak.NSScreen.screens()
+        if not screens:
+            return None
+        # Cocoa cuenta desde abajo y desde la pantalla principal; la vista, desde arriba.
+        height = screens[0].frame().size.height
+        area = (ak.NSScreen.mainScreen() or screens[0]).visibleFrame()
+        top = height - (area.origin.y + area.size.height)
+        return Rect(int(area.origin.x), int(top), int(area.size.width), int(area.size.height))
 
     def run(self) -> None:
         self._helper.runEventLoop(installInterrupt=True)

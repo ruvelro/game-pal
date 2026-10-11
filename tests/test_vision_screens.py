@@ -26,6 +26,8 @@ def hades(repo_profiles: Path) -> LoadedProfile:
 
 def _reader(hades: LoadedProfile, tmp_path: Path, answer: dict[str, Any]) -> VisionReader:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/v1/chat/completions":
+            return httpx.Response(404)  # como un servidor que no es Ollama: no dice si el modelo razona
         body = json.loads(request.content)
         assert body["response_format"]["json_schema"]["strict"] is True
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(answer)}}]})
