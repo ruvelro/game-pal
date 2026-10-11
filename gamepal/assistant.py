@@ -32,6 +32,11 @@ log = logging.getLogger(__name__)
 
 MAX_OCR_CHARS = 2500
 HISTORY_TURNS = 4
+# Cómo empieza una pregunta que sigue a la anterior («¿y cuánto cuesta?») y palabras que se refieren a lo ya dicho.
+FOLLOW_UP_STARTS = {"y", "e", "and", "pero", "but", "entonces", "then", "también", "tambien", "also"}
+FOLLOW_UP_WORDS = {"eso", "esa", "ese", "esos", "esas", "ello", "otra", "otro", "otras", "otros", "it", "that",
+                   "those", "them", "other"}  # fmt: skip
+MAX_FOLLOW_UP_WORDS = 8
 
 LANGUAGE_NAMES = {
     "es": "español", "en": "inglés", "fr": "francés", "de": "alemán", "it": "italiano", "pt": "portugués",
@@ -95,9 +100,11 @@ STOPWORDS = frozenset((
 RULES = (
     "\n\nExactitud: lo que va en <calendario>, <datos_del_juego> y <estado_partida> es exacto y ya está calculado; "
     "úsalo tal cual y no lo recalcules. No des días, fechas, precios ni cantidades que no estén en esos bloques, en "
-    "una ficha o en <conocimiento>: si no los tienes, di que no lo sabes. Para hablar de un objeto que se ve en "
-    "pantalla, usa su nombre tal como aparece y su ficha. Usa solo los datos que vienen a cuento de la pregunta: "
-    "no hables del tiempo, la suerte ni el dinero si no te preguntan por eso.\n"
+    "una ficha o en <conocimiento>: si no los tienes, di que no lo sabes. Tampoco añadas detalles del juego que no "
+    "estén en ellos (horarios, lugares, cómo se consigue algo): ante la duda, quítalos. Tus respuestas anteriores "
+    "pueden estar desfasadas o mal: manda lo que dicen los datos de la última pregunta. Para hablar de un objeto que "
+    "se ve en pantalla, usa su nombre tal como aparece y su ficha. Usa solo los datos que vienen a cuento de la "
+    "pregunta: no hables del tiempo, la suerte ni el dinero si no te preguntan por eso.\n"
     "Brevedad: de dos a cuatro frases. Si te piden una recomendación, da una o dos opciones con su motivo, no "
     "repases todas.\n"
     "Escribe texto plano, sin Markdown: nada de asteriscos, almohadillas ni viñetas."
@@ -128,6 +135,20 @@ def question_terms(text: str) -> list[str]:
                 continue
             terms.append(" ".join(window))
     return terms
+
+
+def is_follow_up(text: str) -> bool:
+    """Si la pregunta se apoya en la anterior («¿y eso?», «¿y cuánto cuesta?»).
+
+    Solo entonces se le pasa al modelo la conversación: si no, copia frases de sus respuestas anteriores, errores
+    incluidos, aunque los datos de la pregunta nueva digan otra cosa.
+    """
+    found = [w.lower() for w in re.findall(r"[^\W\d_]+", text)]
+    if not found:
+        return False
+    if found[0] in FOLLOW_UP_STARTS or found[:2] in (["what", "about"], ["how", "about"]):
+        return True
+    return len(found) <= MAX_FOLLOW_UP_WORDS and any(word in FOLLOW_UP_WORDS for word in found)
 
 
 @dataclass
@@ -350,6 +371,8 @@ class Assistant:
                 log.info("La búsqueda de fichas tardó demasiado")
             except Exception:
                 log.exception("La búsqueda de fichas falló")
+        if pages:
+            log.info("Fichas de la wiki para la respuesta: %s", ", ".join(page.title for page in pages))
         return "\n\n".join(blocks), pages
 
     @staticmethod
@@ -406,8 +429,13 @@ class Assistant:
         route = await self._route(question.text)
         client: Provider = provider
         messages = [Message("system", self._system())]
-        for turn in self._history:
+        # Las respuestas con datos solo llevan la conversación si la pregunta sigue a la anterior, y entonces
+        # solo el último turno; su pregunta también sirve para buscar los datos («¿y dónde se compra?»).
+        follow_up = is_follow_up(question.text)
+        history = list(self._history) if route == "quick" else list(self._history)[-1:] if follow_up else []
+        for turn in history:
             messages += [Message("user", turn.question), Message("assistant", turn.answer)]
+        search = f"{question.text}\n{history[-1].question}" if follow_up and history else question.text
         if route == "quick":
             client = self._fast() or provider
             model = self._fast_model()
@@ -418,7 +446,7 @@ class Assistant:
             model = None
             screen, read = self._screen(), self._read()
             (facts, pages), hits = await asyncio.gather(
-                self._grounding(question.text, screen, read), self._knowledge(provider, question.text, screen)
+                self._grounding(search, screen, read), self._knowledge(provider, search, screen)
             )
             knowledge, sources = self._knowledge_block(hits, pages)
             context = "\n\n".join(part for part in (self._context(screen, read), facts, knowledge) if part)

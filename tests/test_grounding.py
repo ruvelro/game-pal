@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from gamepal.assistant import Assistant, plain_text, question_terms
+from gamepal.assistant import Assistant, is_follow_up, plain_text, question_terms
 from gamepal.bus import EventBus
 from gamepal.checks import identify
 from gamepal.config import AppConfig, load_config
@@ -200,9 +200,11 @@ class Recorder:
     def __init__(self, reply: str, cut: bool = False) -> None:
         self.reply, self.cut = reply, cut
         self.messages: list[Message] = []
+        self.calls: list[list[Message]] = []
 
     async def chat_stream(self, messages: list[Message], **_: Any):  # type: ignore[no-untyped-def]
         self.messages = messages
+        self.calls.append(messages)
         for word in self.reply.split(" "):
             yield word + " "
         if self.cut:
@@ -212,7 +214,8 @@ class Recorder:
         raise ProviderError("sin palabras clave en este test")
 
 
-async def _answer(provider: Recorder, stardew: LoadedProfile, reference: Reference, text: str) -> AnswerUpdate:
+async def _answer(provider: Recorder, stardew: LoadedProfile, reference: Reference, *texts: str) -> AnswerUpdate:
+    """Hace las preguntas una tras otra y devuelve la última respuesta."""
     bus = EventBus()
 
     async def lookup(names: list[str], language: str) -> list[WikiPage]:
@@ -226,12 +229,14 @@ async def _answer(provider: Recorder, stardew: LoadedProfile, reference: Referen
     await asyncio.sleep(0)
     try:
         async with bus.subscribe({"assistant.answer"}) as sub:
-            bus.publish(QuestionAsked(id="q", text=text, source="text"))
-            while True:
-                event = await asyncio.wait_for(sub.get(), 5)
-                assert isinstance(event, AnswerUpdate)
-                if event.done:
-                    return event
+            for n, text in enumerate(texts):
+                bus.publish(QuestionAsked(id=f"q{n}", text=text, source="text"))
+                while True:
+                    event = await asyncio.wait_for(sub.get(), 5)
+                    assert isinstance(event, AnswerUpdate)
+                    if event.done:
+                        break
+            return event
     finally:
         runner.cancel()
 
@@ -255,6 +260,28 @@ async def test_a_cut_answer_says_so(stardew: LoadedProfile, reference: Reference
     assert event.text.startswith("Planta chirivías porque…")
     assert "Respuesta cortada" in event.text
     assert not event.error
+
+
+def test_follow_ups_are_told_apart() -> None:
+    assert is_follow_up("¿Y cuánto cuesta?")
+    assert is_follow_up("¿y eso dónde se compra?")
+    assert is_follow_up("What about the other one?")
+    assert not is_follow_up("¿Qué hago con la katana de lava?")
+    assert not is_follow_up("¿Qué es este objeto que tengo seleccionado?")
+    assert not is_follow_up("¿Qué me recomiendas plantar mañana?")
+
+
+async def test_only_follow_ups_carry_the_conversation(stardew: LoadedProfile, reference: Reference) -> None:
+    # Una pregunta nueva va sin las respuestas anteriores: el modelo copiaba de ellas sus errores.
+    provider = Recorder("Evita las judías verdes.")
+    await _answer(provider, stardew, reference, "¿Qué planto mañana?", "¿Qué hago con la katana de lava?")
+    assert [m.role for m in provider.calls[-1]] == ["system", "user"]
+    # Una que sigue a la anterior lleva el último turno, y su pregunta sirve para buscar los datos.
+    provider = Recorder("Pierre las vende.")
+    await _answer(provider, stardew, reference, "¿Cuánto tardan las chirivías?", "¿Y dónde se compran?")
+    roles = [m.role for m in provider.calls[-1]]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert "Chirivía (Parsnip)" in provider.calls[-1][-1].text
 
 
 def test_plain_text_removes_markdown() -> None:
