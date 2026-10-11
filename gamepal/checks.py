@@ -23,6 +23,7 @@ from gamepal.config import AppConfig, OcrBackendName, load_config, rapidocr_avai
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import LocalOpenAIProvider, ProviderError
+from gamepal.system import can_open_settings
 from gamepal.voice.audio import list_devices
 
 if TYPE_CHECKING:
@@ -56,6 +57,8 @@ class Check(BaseModel):
     fix: str = ""
     # Un comando para copiar y pegar, si ayuda.
     command: str = ""
+    # Panel de ajustes del sistema que game-pal puede abrir para arreglarlo (ver system.SETTINGS_PANES).
+    settings: str = ""
     # Sin esto game-pal no puede aconsejar; lo demás es opcional.
     required: bool = True
 
@@ -153,6 +156,7 @@ def check_capture(backend: CaptureBackend | None, error: str | None, windows: li
             state="error",
             detail="macOS no da permiso de Grabación de pantalla",
             fix=_mac_privacy("Grabación de pantalla"),
+            settings="screen-recording",
         )
     if backend is None or windows is None:
         fix = "Vuelve a arrancar game-pal."
@@ -424,7 +428,8 @@ def check_voice(config: AppConfig, devices: Callable[[], dict[str, list[str]]] |
     fix = _mac_privacy("Micrófono") if voice.enabled and sys.platform == "darwin" else ""
     if fix:
         fix = "Si no te oye: " + fix[0].lower() + fix[1:]
-    return Check(id="voice", title=title, state="ok", required=False, detail=detail, fix=fix)
+    pane = "microphone" if voice.enabled and can_open_settings("microphone") else ""
+    return Check(id="voice", title=title, state="ok", required=False, detail=detail, fix=fix, settings=pane)
 
 
 def check_hotkeys(config: AppConfig) -> Check:
@@ -446,6 +451,7 @@ def check_hotkeys(config: AppConfig) -> Check:
             required=False,
             detail="macOS no deja escuchar el teclado",
             fix=_mac_privacy("Accesibilidad (y Monitorización de entrada)"),
+            settings="accessibility",
         )
     if _wayland():
         return Check(

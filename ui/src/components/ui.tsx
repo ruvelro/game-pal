@@ -62,3 +62,14 @@ export function SaveBar({ onSave, saved, error }: { onSave: () => void; saved: b
     </div>
   );
 }
+
+/** «<ctrl>+<alt>+p» (sintaxis de los atajos globales) → «Ctrl+Alt+P». */
+export function formatKey(combo: string): string {
+  return combo
+    .split("+")
+    .map((part) => {
+      const key = part.replace(/^<|>$/g, "");
+      return key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1);
+    })
+    .join("+");
+}

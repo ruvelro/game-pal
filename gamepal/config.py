@@ -205,6 +205,8 @@ class GuiConfig(_Model):
 
 class AppConfig(_Model):
     version: int = 1
+    # El asistente de primer uso se muestra hasta que el jugador lo termina o lo salta.
+    setup_completed: bool = False
     profile: str = "generic"
     # Cambia solo al perfil del juego que esté abierto. Elegir un perfil a mano lo desactiva.
     auto_detect_game: bool = True

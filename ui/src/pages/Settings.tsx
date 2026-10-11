@@ -3,7 +3,7 @@ import { Card, Field, PageHeader, SaveBar } from "../components/ui";
 import { t } from "../i18n";
 import { useConfig } from "../store";
 
-export function Settings() {
+export function Settings({ onSetup }: { onSetup: () => void }) {
   const { config, setConfig, save, error, saved } = useConfig();
   if (!config) return null;
   const capture = (patch: Partial<AppConfig["capture"]>) =>
@@ -12,7 +12,11 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
+      <PageHeader
+        title={t("settings.title")}
+        subtitle={t("settings.subtitle")}
+        actions={<button onClick={onSetup}>{t("setup.reopen")}</button>}
+      />
       <Card>
         <div className="two-col tight">
           <Field label={t("settings.ocr")}>

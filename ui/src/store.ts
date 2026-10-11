@@ -122,12 +122,15 @@ export function useConfig() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    api
-      .get<AppConfig>("/api/config")
-      .then(setConfig)
-      .catch((e: Error) => setError(e.message));
-  }, []);
+  const reload = useCallback(
+    () =>
+      api
+        .get<AppConfig>("/api/config")
+        .then(setConfig)
+        .catch((e: Error) => setError(e.message)),
+    [],
+  );
+  useEffect(() => void reload(), [reload]);
 
   const save = useCallback(async (next: AppConfig) => {
     setError(null);
@@ -143,5 +146,5 @@ export function useConfig() {
     }
   }, []);
 
-  return { config, setConfig, save, error, saved };
+  return { config, setConfig, save, reload, error, saved };
 }
