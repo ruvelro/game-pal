@@ -74,6 +74,20 @@ class ScreenRead(Event):
     lines: list[TextLine]
 
 
+class ScreenDetected(Event):
+    """Pantalla reconocida (screen_id) o fin de la pantalla anterior (screen_id = None)."""
+
+    topic: ClassVar[str] = "perception.screen"
+    screen_id: str | None
+    name: str = ""
+    confidence: float = 0.0
+    certain: bool = False
+    complete: bool = True
+    source: Literal["signals", "vision"] = "signals"
+    data: dict[str, Any] = Field(default_factory=dict)
+    frame_id: int = 0
+
+
 class StatusChanged(Event):
     topic: ClassVar[str] = "status"
     component: Literal["capture", "ocr", "provider", "profile", "daemon"]

@@ -1,13 +1,73 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type ProfileSummary, type WindowSummary } from "../api";
+import { api, type ProfileInfo, type ProfileSummary, type ProfileTest, type WindowSummary } from "../api";
+import { ScreenData } from "../components/ScreenData";
 import { Card, Field, PageHeader, SaveBar } from "../components/ui";
 import { LANGUAGES, t } from "../i18n";
 import { useConfig } from "../store";
+
+function ProfileTester() {
+  const [result, setResult] = useState<ProfileTest | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await api.post<ProfileTest>("/api/profile/test"));
+    } catch (e) {
+      setResult(null);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title={t("game.test")}>
+      <button onClick={() => void run()} disabled={busy}>
+        {t("game.test.run")}
+      </button>
+      {error && <p className="muted">{error.includes("lectura") ? t("game.test.empty") : error}</p>}
+      {result && (
+        <div className="test-result">
+          <p>
+            <span className="muted small">{t("game.test.result")}: </span>
+            <strong>{result.screen ?? "—"}</strong>{" "}
+            <span className="muted small">
+              {Math.round(result.confidence * 100)} % · {result.lines} líneas
+            </span>
+          </p>
+          <ScreenData data={result.data} />
+          <table className="candidates">
+            <tbody>
+              {result.candidates.map((c) => (
+                <tr key={c.id} className={c.matched ? "ok" : ""}>
+                  <td>
+                    <strong>{c.id}</strong>
+                    <div className="muted small">{c.description}</div>
+                  </td>
+                  <td className="num">{Math.round(c.score * 100)} %</td>
+                  <td className="small">
+                    {c.matched
+                      ? `${t("game.test.matched")}: ${c.evidence.slice(0, 3).join(" · ")}`
+                      : `${t("game.test.failed")}: ${c.failed.join(", ")}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export function Game() {
   const { config, setConfig, save, error, saved } = useConfig();
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [windows, setWindows] = useState<WindowSummary[]>([]);
+  const [info, setInfo] = useState<ProfileInfo | null>(null);
 
   const loadWindows = useCallback(() => {
     api
@@ -16,16 +76,29 @@ export function Game() {
       .catch(() => setWindows([]));
   }, []);
 
+  const loadInfo = useCallback(() => {
+    api
+      .get<ProfileInfo>("/api/profile")
+      .then(setInfo)
+      .catch(() => setInfo(null));
+  }, []);
+
   useEffect(() => {
     api
       .get<{ profiles: ProfileSummary[] }>("/api/profiles")
       .then((data) => setProfiles(data.profiles))
       .catch(() => undefined);
     loadWindows();
-  }, [loadWindows]);
+    loadInfo();
+  }, [loadWindows, loadInfo]);
 
   if (!config) return null;
   const selected = profiles.find((p) => p.id === config.profile);
+  const gameDir = config.game_dirs[config.profile] ?? "";
+
+  const onSave = async () => {
+    if (await save(config)) loadInfo();
+  };
 
   return (
     <>
@@ -59,6 +132,21 @@ export function Game() {
             <button onClick={loadWindows}>{t("game.window.refresh")}</button>
           </div>
         </Field>
+        {info?.uses_game_text && info.id === config.profile && (
+          <Field label={t("game.dir")} hint={t("game.dir.hint")}>
+            <input
+              value={gameDir}
+              placeholder={info.install_dir ?? ""}
+              spellCheck={false}
+              onChange={(e) =>
+                setConfig({ ...config, game_dirs: { ...config.game_dirs, [config.profile]: e.target.value } })
+              }
+            />
+            <span className={info.install_dir ? "ok-text small" : "muted small"}>
+              {info.install_dir ? `${t("game.dir.found")}: ${info.install_dir}` : t("game.dir.missing")}
+            </span>
+          </Field>
+        )}
         <div className="two-col tight">
           <Field label={t("game.lang")}>
             <select
@@ -85,8 +173,32 @@ export function Game() {
             </select>
           </Field>
         </div>
-        <SaveBar onSave={() => void save(config)} saved={saved} error={error} />
+        <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
       </Card>
+
+      {info && info.id === config.profile && Object.keys(info.vocabulary).length > 0 && (
+        <Card title={t("game.vocab")}>
+          <div className="vocab">
+            {Object.entries(info.vocabulary).map(([name, count]) => (
+              <span className="chip-static" key={name}>
+                {name} <strong>{count}</strong>
+              </span>
+            ))}
+          </div>
+          {info.warnings.length > 0 && (
+            <>
+              <h2 className="spaced">{t("game.warnings")}</h2>
+              <ul className="warnings">
+                {info.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Card>
+      )}
+
+      {info && info.screens.length > 0 && <ProfileTester />}
     </>
   );
 }

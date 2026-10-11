@@ -215,67 +215,56 @@ profiles/hades-2/
 
 ### 5.1 `profile.yaml` (extracto)
 
+La guía completa, con todas las señales y opciones, está en [profiles.md](profiles.md). Extracto del perfil de Hades II:
+
 ```yaml
 id: hades-2
 name: Hades II
-version: 1
 game:
-  process: [Hades2, Hades2.exe]
-  window_title: "Hades II"
-  languages_supported: [en, es, fr, de, it, pt, ja, ko, zh]
-  text_files:                     # opcional, para vocabulario y descripciones exactas
-    - path: "Content/Game/Text/{lang}/TraitText.{lang}.sjson"
-      kind: sjson
+  process: [Hades2, Hades II]
+  window_title: Hades II
+  languages_supported: [en, es, fr, de, it, pt, ja, ko, zh, ru, pl]
+  install_paths:
+    windows: ["%ProgramFiles(x86)%/Steam/steamapps/common/Hades II"]
+vocabulary:
+  files: [vocabulary.yaml]
+  game_text:
+    - set: boons
+      path: "Content/Game/Text/{lang}/TraitText.{lang}.sjson"
+      id_pattern: "Boon$"
 screens:
   - id: boon_choice
     description: Elección de bendición entre varias opciones
-    signals:                      # todas relativas, ninguna coordenada
-      any_of:
-        - text_matches: { pattern: "^(boons? of|choose a boon)", region: top, fuzzy: 1 }
-        - text_matches: { pattern: "^(bendiciones? de|elige una bendición)", region: top, fuzzy: 1 }
-      all_of:
-        - repeated_rows: { min: 2, with: { vocabulary: rarity } }
-        - text_matches: { vocabulary: confirm_button, region: bottom }
-    extract:
-      options:
-        each: row_with_vocabulary: rarity
-        fields:
-          name: { nearest_text: left, vocabulary: boons }
-          rarity: { vocabulary: rarity }
-          effect: { text_below: name, max_lines: 3 }
-    vision: on_uncertain          # never | on_uncertain | always
-    proactive:
-      enabled: true
-      cooldown_seconds: 8
-      task: compare_options       # tarea predefinida con esquema JSON
-    outputs: [overlay, voice]
-  - id: boss_intro
     signals:
-      all_of:
-        - text_matches: { vocabulary: bosses, region: center }
-        - text_below: { vocabulary: boss_titles }
-    proactive: { enabled: true, task: boss_briefing, once_per_encounter: true }
-evidence:
-  save_reader: plugin:HadesSaveReader   # opcional
-  save_paths:
-    windows: "%USERPROFILE%/Saved Games/Hades II"
-    macos: "~/Library/Application Support/Supergiant Games/Hades II"
-    linux: "~/.local/share/Supergiant Games/Hades II"
+      any_of:
+        - repeated_rows: { min: 2, vocabulary: boons }
+        - all_of:
+            - text_matches: { vocabulary: boon_menu_titles, region: top }
+            - repeated_rows: { min: 2, vocabulary: rarity }
+      none_of:
+        - text_matches: { vocabulary: reading_menus, region: top }
+    extract:
+      lists:
+        options:
+          anchor: { vocabulary: rarity }
+          fields:
+            rarity: { source: anchor, vocabulary: rarity }
+            name: { source: same_row, vocabulary: boons }
+            effect: { source: below, max_lines: 3 }
+    vision: on_uncertain
+    proactive: { enabled: true, cooldown_seconds: 6, task: compare_options }
+    outputs: [overlay, voice]
 knowledge:
   sources:
     - url: https://hades.fandom.com/wiki/Hades_II
-      depth: 2
-      include: ["/wiki/*"]
-    - url: https://www.example-guide.com/hades-2/builds
-  refresh: weekly
-prompts:
-  advisor: prompts/advisor.md
-  glossary: prompts/glossary.md
+      depth: 1
 ```
 
 ### 5.2 Señales disponibles
 
-`text_matches`, `vocabulary`, `repeated_rows`, `text_below`, `text_above`, `same_row`, `count_at_least`, `absent`, `color_dominant` (para pantallas sin texto, como una pantalla de muerte roja). Todas aceptan `region` como banda relativa (`top`, `center`, `bottom`, `left`, `right`) nunca como números. Los perfiles se validan contra un JSON Schema y la GUI muestra errores en línea.
+`text_matches`, `repeated_rows`, `text_below`, `text_above`, `same_row`, `count_at_least`, `absent` y `color_dominant`, combinables con `all_of`, `any_of` y `none_of`. La única noción espacial son bandas de un tercio (`top`, `middle`, `bottom`, `left`, `center`, `right`); una lista de bandas es su intersección. Los perfiles se validan contra un JSON Schema publicado en `profiles/profile.schema.json`, y `game-pal profiles` avisa de vocabularios usados sin declarar.
+
+Una pantalla se confirma con dos lecturas coincidentes, o con una sola si la puntuación es alta y no hay otra candidata cercana. Se da por cerrada tras dos lecturas sin ella; mientras tanto se pide releer la pantalla aunque no haya cambiado.
 
 ### 5.3 Plugins
 
@@ -372,7 +361,7 @@ game-pal/
 | Hito | Contenido |
 | --- | --- |
 | M1 · Esqueleto ✅ | Daemon, bus, GUI básica, captura en los tres sistemas, OCR, hash perceptual, perfil genérico, proveedor local |
-| M2 · Entender | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
+| M2 · Entender ✅ | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
 | M3 · Hablar | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
 | M4 · Saber | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
 | M5 · Recordar | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |

@@ -47,7 +47,7 @@ def test_status_and_security_headers(client: TestClient) -> None:
 
 def test_profiles_and_windows(client: TestClient) -> None:
     profiles = client.get("/api/profiles", headers=AUTH).json()
-    assert [p["id"] for p in profiles["profiles"]] == ["generic"]
+    assert {p["id"] for p in profiles["profiles"]} == {"generic", "hades-2"}
     windows = client.get("/api/windows", headers=AUTH).json()
     assert windows[0]["title"] == "Mi Juego"
 
@@ -97,3 +97,24 @@ def test_static_paths_cannot_escape(client: TestClient) -> None:
     response = client.get("/../../pyproject.toml", headers=HOST)
     assert "game-pal" in response.text
     assert "[project]" not in response.text
+
+
+def test_profile_info_and_test(client: TestClient) -> None:
+    config = client.get("/api/config", headers=AUTH).json()
+    config["profile"] = "hades-2"
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+    info = client.get("/api/profile", headers=AUTH).json()
+    assert info["id"] == "hades-2"
+    assert info["uses_game_text"] is True
+    assert info["vocabulary"]["bosses"] == 8
+    assert info["warnings"] == []
+    # Sin ninguna lectura todavía, la prueba lo explica en vez de fallar.
+    assert client.post("/api/profile/test", headers=AUTH).status_code == 409
+
+
+def test_game_dir_must_exist(client: TestClient, tmp_path: Path) -> None:
+    config = client.get("/api/config", headers=AUTH).json()
+    config["game_dirs"] = {"hades-2": str(tmp_path / "no-existe")}
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 422
+    config["game_dirs"] = {"hades-2": str(tmp_path)}
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200

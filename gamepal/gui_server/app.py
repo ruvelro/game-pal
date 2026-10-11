@@ -24,6 +24,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from gamepal import __version__
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
+from gamepal.perception.classifier import classify
+from gamepal.perception.vocabulary import expand_path
+from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
 
@@ -111,6 +114,9 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             await probe.aclose()
         except (ValidationError, UnsafeUrlError, ProviderError, json.JSONDecodeError) as exc:
             raise HTTPException(422, str(exc)) from exc
+        for profile_id, folder in config.game_dirs.items():
+            if folder and not expand_path(folder).is_dir():
+                raise HTTPException(422, f"La carpeta del juego para '{profile_id}' no existe: {folder}")
         await daemon.apply(config)
         return daemon.config.model_dump(mode="json")
 
@@ -130,6 +136,62 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
                 for p in profiles.values()
             ],
             "errors": errors,
+        }
+
+    @app.get("/api/profile", dependencies=auth)
+    async def profile_info() -> dict[str, Any]:
+        loaded = daemon.c.profile
+        if loaded is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, daemon.c.errors.get("profile", "Sin perfil"))
+        warnings = await asyncio.to_thread(lint, loaded)
+        vocabulary = daemon.c.vocabulary
+        return {
+            "id": loaded.profile.id,
+            "name": loaded.profile.name,
+            "screens": [{"id": s.id, "description": s.description} for s in loaded.profile.screens],
+            "uses_game_text": bool(loaded.profile.vocabulary.game_text),
+            "install_dir": str(daemon.c.install_dir) if daemon.c.install_dir else None,
+            "vocabulary": vocabulary.sets(),
+            "sources": [{"set": v.set, "origin": v.origin, "entries": v.entries} for v in vocabulary.sources],
+            "warnings": warnings,
+        }
+
+    @app.post("/api/profile/test", dependencies=auth)
+    async def profile_test() -> dict[str, Any]:
+        """Evalúa todas las pantallas del perfil sobre la última lectura, para depurar perfiles."""
+        loaded, read = daemon.c.profile, daemon.last_read
+        if loaded is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Sin perfil")
+        if read is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Aún no hay ninguna lectura de pantalla")
+        watcher = daemon.c.watcher
+        frame = watcher.frame_for_read(read.frame_id) if watcher else None
+        result = await asyncio.to_thread(
+            classify,
+            loaded.profile,
+            daemon.c.vocabulary,
+            read.lines,
+            daemon.config.output_language,
+            frame.image if frame else None,
+        )
+        return {
+            "screen": result.screen_id,
+            "confidence": round(result.confidence, 3),
+            "certain": result.certain,
+            "complete": result.complete,
+            "data": result.data,
+            "lines": len(read.lines),
+            "candidates": [
+                {
+                    "id": c.screen.id,
+                    "description": c.screen.description,
+                    "matched": c.matched,
+                    "score": round(c.score, 3),
+                    "evidence": c.evidence[:6],
+                    "failed": c.failed,
+                }
+                for c in result.candidates
+            ],
         }
 
     @app.get("/api/windows", dependencies=auth)
@@ -196,9 +258,15 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
         ) or "Eres un compañero de juego útil y conciso."
         system = system.replace("{output_language}", daemon.config.output_language)
         context = ""
+        if body.include_screen and daemon.current_screen is not None:
+            screen = daemon.current_screen
+            details = json.dumps(screen.data, ensure_ascii=False)
+            context += (
+                f'\n\n<pantalla_reconocida id="{screen.screen_id}">\n{screen.name}\n{details}\n</pantalla_reconocida>'
+            )
         if body.include_screen and daemon.last_read is not None:
             text = "\n".join(line.text for line in daemon.last_read.lines)
-            context = f"\n\n<texto_en_pantalla>\n{text}\n</texto_en_pantalla>"
+            context += f"\n\n<texto_en_pantalla>\n{text}\n</texto_en_pantalla>"
         messages = [Message("system", system), Message("user", body.prompt + context)]
         try:
             result = await provider.chat(messages, max_tokens=600)

@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=../profile.schema.json
+# Perfil de Hades II.
+#
+# Las pantallas se reconocen por su texto, nunca por coordenadas. Los nombres de bendiciones y
+# recuerdos se leen de los ficheros de texto del juego instalado, así que funcionan en cualquier
+# idioma que tenga el juego. Si el juego no está en una ruta conocida, elige su carpeta en la GUI.
+id: hades-2
+name: Hades II
+version: 1
+description: Roguelike de Supergiant Games. Reconoce bendiciones, mejoras, recuerdos, jefes y victorias.
+game:
+  process: [Hades2, Hades II]
+  window_title: Hades II
+  languages_supported: [en, es, fr, de, it, pt, ja, ko, zh, ru, pl]
+  install_paths:
+    windows:
+      - "%ProgramFiles(x86)%/Steam/steamapps/common/Hades II"
+      - "C:/Program Files (x86)/Steam/steamapps/common/Hades II"
+      - "C:/Program Files/Epic Games/HadesII"
+    macos:
+      - "~/Library/Application Support/Steam/steamapps/common/Hades II"
+    linux:
+      - "~/.local/share/Steam/steamapps/common/Hades II"
+      - "~/.steam/steam/steamapps/common/Hades II"
+
+vocabulary:
+  files: [vocabulary.yaml]
+  game_text:
+    # Formato de los textos del juego: { Texts = [ { Id = "..." DisplayName = "..." } ] }.
+    # Pendiente de verificar contra una instalación real.
+    - set: boons
+      path: "Content/Game/Text/{lang}/TraitText.{lang}.sjson"
+      id_pattern: "Boon$"
+    - set: keepsakes
+      path: "Content/Game/Text/{lang}/TraitText.{lang}.sjson"
+      id_pattern: "Keepsake$"
+  # Código de idioma de game-pal → carpeta de idioma del juego (sin verificar para pt y zh).
+  language_codes:
+    pt: pt-BR
+    zh: zh-CN
+
+screens:
+  - id: boon_choice
+    description: Elección de bendición entre varias opciones
+    signals:
+      any_of:
+        # Con los textos del juego: dos o más filas con nombres de bendiciones.
+        - repeated_rows: { min: 2, vocabulary: boons }
+        # Sin ellos: título del menú y dos o más filas con rareza.
+        - all_of:
+            - text_matches: { vocabulary: boon_menu_titles, region: top }
+            - repeated_rows: { min: 2, vocabulary: rarity }
+      none_of:
+        - text_matches: { vocabulary: reading_menus, region: top }
+        - text_matches: { vocabulary: pom_titles, region: top }
+        - text_matches: { vocabulary: keepsake_titles, region: top }
+    extract:
+      lists:
+        options:
+          anchor: { vocabulary: rarity }
+          min_items: 2
+          max_items: 4
+          fields:
+            rarity: { source: anchor, vocabulary: rarity }
+            name: { source: same_row, vocabulary: boons }
+            effect: { source: below, max_lines: 3 }
+    vision: on_uncertain
+    proactive: { enabled: true, cooldown_seconds: 6, task: compare_options }
+    outputs: [overlay, voice]
+
+  - id: pom_choice
+    description: Mejora de nivel de una bendición que ya tienes (Granada del Poder)
+    signals:
+      all_of:
+        - text_matches: { vocabulary: pom_titles, region: top }
+        - count_at_least: { lines: 3 }
+    extract:
+      lists:
+        options:
+          anchor: { vocabulary: boons }
+          min_items: 1
+          max_items: 4
+          fields:
+            name: { source: anchor, vocabulary: boons }
+            effect: { source: below, max_lines: 3 }
+    vision: on_uncertain
+    proactive: { enabled: true, cooldown_seconds: 6, task: compare_options }
+    outputs: [overlay]
+
+  - id: hammer_choice
+    description: Elección de mejora del arma (Martillo de Dédalo)
+    signals:
+      text_matches: { vocabulary: hammer_titles, region: top }
+    vision: always
+    proactive: { enabled: true, cooldown_seconds: 6, task: compare_options }
+    outputs: [overlay]
+
+  - id: keepsake_choice
+    description: Elección de recuerdo antes de entrar en una zona
+    signals:
+      all_of:
+        - text_matches: { vocabulary: keepsake_titles, region: top }
+      none_of:
+        - text_matches: { vocabulary: reading_menus, region: top }
+    extract:
+      values:
+        selected: { vocabulary: keepsakes }
+    vision: on_uncertain
+    proactive: { enabled: true, cooldown_seconds: 10, task: suggest_keepsake }
+    outputs: [overlay]
+
+  - id: boss_intro
+    description: Presentación de un jefe
+    signals:
+      any_of:
+        - text_below:
+            anchor: { vocabulary: bosses }
+            target: { vocabulary: boss_titles }
+        - same_row:
+            anchor: { vocabulary: bosses }
+            target: { vocabulary: boss_titles }
+    extract:
+      values:
+        boss: { vocabulary: bosses }
+    vision: never
+    proactive: { enabled: true, task: boss_briefing, once_per_encounter: true }
+    outputs: [overlay, voice]
+
+  - id: victory
+    description: Pantalla de victoria con el resumen de la partida
+    signals:
+      all_of:
+        - text_matches: { vocabulary: victory_titles, region: top }
+        - text_matches: { vocabulary: results_labels }
+    vision: never
+    proactive: { enabled: true, task: run_summary }
+    outputs: [text, voice]
+
+  - id: reading_menu
+    description: Menú de pausa, inventario o historial (no es una decisión)
+    signals:
+      text_matches: { vocabulary: reading_menus, region: top }
+    vision: never
+    outputs: [text]
+
+knowledge:
+  sources:
+    - url: https://hades.fandom.com/wiki/Hades_II
+      depth: 1
+      include: ["/wiki/*"]
+  refresh: weekly
+
+prompts:
+  advisor: prompts/advisor.md

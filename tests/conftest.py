@@ -67,3 +67,9 @@ def app_paths(tmp_path: Path) -> AppPaths:
 @pytest.fixture
 def repo_profiles() -> Path:
     return Path(__file__).resolve().parent.parent / "profiles"
+
+
+def line(text: str, x: float, y: float, w: float = 0.15, h: float = 0.04, confidence: float = 0.99) -> TextLine:
+    from gamepal.events import Box
+
+    return TextLine(text=text, confidence=confidence, box=Box(x=x, y=y, width=w, height=h))

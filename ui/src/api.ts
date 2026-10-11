@@ -90,6 +90,53 @@ export interface FrameCaptured {
   changed: boolean;
 }
 
+export interface VocabValue {
+  id: string;
+  name: string;
+  seen: string;
+}
+
+export type FieldValue = string | VocabValue;
+
+export interface ScreenDetected {
+  screen_id: string | null;
+  name: string;
+  confidence: number;
+  certain: boolean;
+  complete: boolean;
+  source: "signals" | "vision";
+  data: Record<string, FieldValue | Array<Record<string, FieldValue>>>;
+  frame_id: number;
+}
+
+export interface ProfileInfo {
+  id: string;
+  name: string;
+  screens: Array<{ id: string; description: string }>;
+  uses_game_text: boolean;
+  install_dir: string | null;
+  vocabulary: Record<string, number>;
+  sources: Array<{ set: string; origin: string; entries: number }>;
+  warnings: string[];
+}
+
+export interface ProfileTest {
+  screen: string | null;
+  confidence: number;
+  certain: boolean;
+  complete: boolean;
+  data: ScreenDetected["data"];
+  lines: number;
+  candidates: Array<{
+    id: string;
+    description: string;
+    matched: boolean;
+    score: number;
+    evidence: string[];
+    failed: string[];
+  }>;
+}
+
 export interface BusMessage {
   topic: string;
   data: unknown;
@@ -99,6 +146,7 @@ export interface AppConfig {
   version: number;
   profile: string;
   window_title: string | null;
+  game_dirs: Record<string, string>;
   game_language: string;
   output_language: string;
   capture: {
@@ -110,7 +158,13 @@ export interface AppConfig {
     require_foreground: boolean;
   };
   ocr: { backend: "rapidocr" | "apple-vision" | "none"; min_confidence: number };
-  provider: { kind: "local-openai"; base_url: string; model: string; timeout_seconds: number };
+  provider: {
+    kind: "local-openai";
+    base_url: string;
+    model: string;
+    vision_model: string;
+    timeout_seconds: number;
+  };
   gui: { port: number; open_browser: boolean };
 }
 

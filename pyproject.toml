@@ -31,6 +31,7 @@ dependencies = [
     "pyobjc-framework-Cocoa>=11.0; sys_platform == 'darwin'",
     "pyobjc-framework-ScreenCaptureKit>=11.0; sys_platform == 'darwin'",
     "python-xlib>=0.33; sys_platform == 'linux'",
+    "rapidfuzz>=3.9",
 ]
 
 [project.optional-dependencies]

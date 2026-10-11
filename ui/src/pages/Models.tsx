@@ -71,6 +71,24 @@ export function Models() {
             <input value={provider.model} onChange={(e) => update({ model: e.target.value })} spellCheck={false} />
           )}
         </Field>
+        <Field label={t("models.vision")} hint={t("models.vision.hint")}>
+          {models && models.length > 0 ? (
+            <select value={provider.vision_model} onChange={(e) => update({ vision_model: e.target.value })}>
+              <option value="">—</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={provider.vision_model}
+              onChange={(e) => update({ vision_model: e.target.value })}
+              spellCheck={false}
+            />
+          )}
+        </Field>
         {models?.length === 0 && <p className="muted">{t("models.none")}</p>}
         {loadError && (
           <p className="error-text" role="alert">

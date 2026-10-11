@@ -7,9 +7,11 @@ reconocen por su texto y por relaciones relativas (las señales se evalúan a pa
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+
+from gamepal.profiles.signals import Extract, SignalNode
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}$")
 _LANG_RE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
@@ -26,10 +28,19 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class PlatformPaths(_Model):
+    windows: list[str] = Field(default_factory=list)
+    macos: list[str] = Field(default_factory=list)
+    linux: list[str] = Field(default_factory=list)
+
+
 class GameInfo(_Model):
     process: list[str] = Field(default_factory=list, description="Nombres del ejecutable, sin ruta")
     window_title: str | None = Field(default=None, description="Subcadena del título de la ventana")
     languages_supported: list[str] = Field(default_factory=lambda: ["en"])
+    install_paths: PlatformPaths = Field(
+        default_factory=PlatformPaths, description="Carpetas típicas de instalación; admiten ~ y %VARIABLES%"
+    )
 
     @field_validator("process")
     @classmethod
@@ -58,9 +69,8 @@ class ProactiveRule(_Model):
 class Screen(_Model):
     id: str
     description: str = ""
-    # Las señales se validarán con un esquema tipado en M2; hoy se aceptan como datos.
-    signals: dict[str, Any] = Field(default_factory=dict)
-    extract: dict[str, Any] = Field(default_factory=dict)
+    signals: SignalNode
+    extract: Extract = Field(default_factory=Extract)
     vision: Literal["never", "on_uncertain", "always"] = "on_uncertain"
     proactive: ProactiveRule = Field(default_factory=ProactiveRule)
     outputs: list[Output] = Field(default_factory=_default_outputs)
@@ -71,6 +81,32 @@ class Screen(_Model):
         if not re.match(r"^[a-z0-9_]{2,64}$", value):
             raise ValueError("El id de pantalla solo admite minúsculas, dígitos y guion bajo")
         return value
+
+
+class GameTextSource(_Model):
+    """Un fichero de texto del propio juego del que sacar nombres en todos sus idiomas."""
+
+    set: str = Field(pattern=r"^[a-z0-9_]{2,64}$", description="Conjunto del vocabulario que alimenta")
+    path: str = Field(description="Ruta relativa a la instalación; {lang} se sustituye por el idioma")
+    format: Literal["sjson"] = "sjson"
+    id_key: str = "Id"
+    name_key: str = "DisplayName"
+    id_pattern: str | None = Field(default=None, description="Solo se incluyen ids que casen con esta regex")
+
+    @field_validator("path")
+    @classmethod
+    def _relative(cls, value: str) -> str:
+        if value.startswith(("/", "\\")) or ".." in value.replace("\\", "/").split("/") or ":" in value:
+            raise ValueError("La ruta debe ser relativa a la carpeta del juego")
+        return value
+
+
+class VocabularyConfig(_Model):
+    files: list[str] = Field(default_factory=list, description="Ficheros YAML del perfil")
+    game_text: list[GameTextSource] = Field(default_factory=list)
+    language_codes: dict[str, str] = Field(
+        default_factory=dict, description="Código de idioma de game-pal → código que usa el juego en sus rutas"
+    )
 
 
 class SavePaths(_Model):
@@ -104,6 +140,7 @@ class GameProfile(_Model):
     description: str = ""
     game: GameInfo = Field(default_factory=GameInfo)
     screens: list[Screen] = Field(default_factory=list)
+    vocabulary: VocabularyConfig = Field(default_factory=VocabularyConfig)
     evidence: Evidence = Field(default_factory=Evidence)
     knowledge: Knowledge = Field(default_factory=Knowledge)
     prompts: dict[str, str] = Field(default_factory=dict, description="Rol → fichero Markdown relativo")
@@ -123,6 +160,14 @@ class GameProfile(_Model):
         if duplicates:
             raise ValueError(f"Pantallas duplicadas: {', '.join(sorted(duplicates))}")
         return screens
+
+    @field_validator("vocabulary")
+    @classmethod
+    def _relative_vocab(cls, vocabulary: VocabularyConfig) -> VocabularyConfig:
+        for path in vocabulary.files:
+            if path.startswith(("/", "\\")) or ".." in path.replace("\\", "/").split("/") or ":" in path:
+                raise ValueError(f"El vocabulario '{path}' debe ser una ruta relativa dentro del perfil")
+        return vocabulary
 
     @field_validator("prompts")
     @classmethod

@@ -497,3 +497,117 @@ input[type="checkbox"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Pantallas reconocidas -------------------------------------------------------------------- */
+
+.screen-head {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.screen-name {
+  font-size: 1.1rem;
+}
+
+.chip-static {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.chip-static.warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.chip-static strong {
+  color: var(--text);
+}
+
+.options {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.options li {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.option-head {
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.rarity {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.rarity.r-rare { color: #6fa8ff; }
+.rarity.r-epic { color: #b88cff; }
+.rarity.r-heroic { color: #ff7fb0; }
+.rarity.r-legendary { color: #ffaa4c; }
+.rarity.r-duo { color: #f4dc62; }
+
+.vocab {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spaced {
+  margin-top: 18px;
+}
+
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--warn);
+}
+
+.test-result {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.candidates {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.candidates td {
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.candidates tr.ok td:first-child {
+  border-left: 3px solid var(--mint);
+}
+
+.candidates .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

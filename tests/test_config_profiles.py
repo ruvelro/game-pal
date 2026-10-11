@@ -77,3 +77,38 @@ def test_user_profile_overrides_bundled(tmp_path: Path, repo_profiles: Path) -> 
 def test_schema_has_no_coordinates() -> None:
     schema = GameProfile.model_json_schema()
     assert "Screen" in schema["$defs"]
+
+
+def test_signals_are_validated(tmp_path: Path) -> None:
+    folder = _write(
+        tmp_path / "juego",
+        "id: juego\nname: x\nscreens:\n  - id: menu\n    signals: {text_matches: {pattern: '(sin cerrar'}}\n",
+    )
+    with pytest.raises(ProfileError, match="regular"):
+        load_profile(folder)
+
+
+def test_lint_reports_undeclared_vocabulary(tmp_path: Path) -> None:
+    from gamepal.profiles.lint import lint
+
+    folder = _write(
+        tmp_path / "juego",
+        "id: juego\nname: x\nscreens:\n  - id: menu\n    signals: {text_matches: {vocabulary: fantasma}}\n",
+    )
+    assert lint(load_profile(folder)) == ["La pantalla 'menu' usa el vocabulario 'fantasma', que no está declarado"]
+
+
+def test_bundled_profiles_have_no_warnings(repo_profiles: Path) -> None:
+    from gamepal.profiles.lint import lint
+
+    for name in ("generic", "hades-2"):
+        assert lint(load_profile(repo_profiles / name, bundled=True)) == []
+
+
+def test_committed_schema_is_up_to_date(repo_profiles: Path) -> None:
+    import json
+
+    committed = json.loads((repo_profiles / "profile.schema.json").read_text(encoding="utf-8"))
+    assert committed == GameProfile.model_json_schema(), (
+        "Regenera con: uv run game-pal schema --out profiles/profile.schema.json"
+    )

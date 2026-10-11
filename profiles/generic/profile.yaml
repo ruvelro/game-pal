@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../profile.schema.json
 # Perfil genérico: funciona con cualquier juego.
 # No reconoce pantallas concretas; lee el texto visible y deja que el modelo razone.
 # Úsalo como punto de partida para crear el perfil de un juego nuevo.
