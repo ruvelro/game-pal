@@ -24,6 +24,10 @@ class ProviderError(RuntimeError):
     pass
 
 
+class AnswerCutShort(ProviderError):
+    """La respuesta llegó al límite de largo a media frase. Lo ya recibido sirve, pero hay que decirlo."""
+
+
 @dataclass(frozen=True, slots=True)
 class ImagePart:
     data_url: str

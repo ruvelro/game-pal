@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "Calendar": {
+      "additionalProperties": false,
+      "description": "Calendario del juego, para dar ya calculados los días que quedan de estación.",
+      "properties": {
+        "seasons": {
+          "description": "Estaciones en orden, con el id del guardado",
+          "items": {
+            "type": "string"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "days_per_season": {
+          "default": 0,
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Days Per Season",
+          "type": "integer"
+        }
+      },
+      "title": "Calendar",
+      "type": "object"
+    },
     "ColorDominant": {
       "additionalProperties": false,
       "properties": {
@@ -316,6 +339,14 @@
           ],
           "title": "Refresh",
           "type": "string"
+        },
+        "lookup": {
+          "description": "Wikis donde buscar la ficha de lo que se ve o se pregunta, por idioma",
+          "items": {
+            "$ref": "#/$defs/WikiLookup"
+          },
+          "title": "Lookup",
+          "type": "array"
         }
       },
       "title": "Knowledge",
@@ -1001,6 +1032,33 @@
       },
       "title": "VocabularyConfig",
       "type": "object"
+    },
+    "WikiLookup": {
+      "additionalProperties": false,
+      "description": "Wiki (MediaWiki) donde buscar al momento la ficha de un objeto por su nombre exacto.",
+      "properties": {
+        "api": {
+          "description": "Dirección de api.php, solo https",
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Api",
+          "type": "string"
+        },
+        "language": {
+          "description": "Idioma de los títulos de esa wiki: es, en…",
+          "maxLength": 8,
+          "minLength": 2,
+          "title": "Language",
+          "type": "string"
+        }
+      },
+      "required": [
+        "api",
+        "language"
+      ],
+      "title": "WikiLookup",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -1044,6 +1102,17 @@
     },
     "knowledge": {
       "$ref": "#/$defs/Knowledge"
+    },
+    "reference": {
+      "description": "Tablas YAML con datos exactos del juego (cultivos, precios…), relativas",
+      "items": {
+        "type": "string"
+      },
+      "title": "Reference",
+      "type": "array"
+    },
+    "calendar": {
+      "$ref": "#/$defs/Calendar"
     },
     "prompts": {
       "additionalProperties": {

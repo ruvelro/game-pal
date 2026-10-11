@@ -127,9 +127,26 @@ class KnowledgeSource(_Model):
     language: str | None = None
 
 
+class WikiLookup(_Model):
+    """Wiki (MediaWiki) donde buscar al momento la ficha de un objeto por su nombre exacto."""
+
+    api: HttpUrl = Field(description="Dirección de api.php, solo https")
+    language: str = Field(min_length=2, max_length=8, description="Idioma de los títulos de esa wiki: es, en…")
+
+
 class Knowledge(_Model):
     sources: list[KnowledgeSource] = Field(default_factory=list)
     refresh: Literal["manual", "daily", "weekly", "monthly"] = "manual"
+    lookup: list[WikiLookup] = Field(
+        default_factory=list, description="Wikis donde buscar la ficha de lo que se ve o se pregunta, por idioma"
+    )
+
+
+class Calendar(_Model):
+    """Calendario del juego, para dar ya calculados los días que quedan de estación."""
+
+    seasons: list[str] = Field(default_factory=list, description="Estaciones en orden, con el id del guardado")
+    days_per_season: int = Field(default=0, ge=0, le=400)
 
 
 class GameProfile(_Model):
@@ -142,6 +159,10 @@ class GameProfile(_Model):
     vocabulary: VocabularyConfig = Field(default_factory=VocabularyConfig)
     evidence: Evidence = Field(default_factory=Evidence)
     knowledge: Knowledge = Field(default_factory=Knowledge)
+    reference: list[str] = Field(
+        default_factory=list, description="Tablas YAML con datos exactos del juego (cultivos, precios…), relativas"
+    )
+    calendar: Calendar = Field(default_factory=Calendar)
     prompts: dict[str, str] = Field(default_factory=dict, description="Rol → fichero Markdown relativo")
 
     @field_validator("id")

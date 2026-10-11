@@ -30,6 +30,8 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **«No tiene el modelo…».** El modelo elegido no está descargado en el servidor. En Ollama: `ollama pull <modelo>`. O elige otro en la página Modelos.
 
+**Las respuestas se inventan días o precios.** game-pal da al modelo el calendario, los datos de cultivos y la ficha de la wiki de lo que se ve, con la orden de no dar cifras que no estén ahí. Si aun así pasa, comprueba en Conocimiento que el perfil tiene sus datos y que hay conexión para buscar fichas.
+
 **Las respuestas tardan mucho o se cortan.** El modelo es demasiado grande para tu equipo. Elige uno más pequeño en Modelos; el recomendado está marcado.
 
 **«Se ha quedado pensando» o tarda en empezar a hablar.** Los modelos que razonan (Qwen 3, DeepSeek R1, gpt-oss…) piensan antes de contestar. En Modelos › Cómo responde puedes desactivar «Dejar que piense antes de responder», que es lo más rápido, o darle más margen para pensar en las opciones avanzadas. La página dice si tu modelo razona y si se le puede apagar. El largo de las respuestas se elige en la misma tarjeta.
@@ -47,6 +49,8 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 **Windows ARM.** RapidOCR no existe para esa arquitectura y se usa Windows OCR, que necesita el paquete del idioma del juego (Configuración › Hora e idioma).
 
 ## Voz y atajos
+
+**La voz se cerraba con «Error processing file … phontab».** espeak-ng, que usa Piper, no acepta rutas de más de unos 160 caracteres para sus datos. game-pal les da una ruta corta y, si aun así fallara, usa la voz del sistema en lugar de cerrarse.
 
 **La primera vez tarda en activarse la voz.** Se descargan los modelos de voz (unos 140 MB con Whisper base). La GUI muestra una barra con el progreso.
 

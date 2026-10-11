@@ -10,7 +10,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -105,8 +105,9 @@ class GenerationConfig(_Model):
 
     # Largo máximo de una respuesta, sin contar lo que el modelo piense antes.
     answer_tokens: int = Field(default=500, ge=150, le=4000)
-    # Dejar pensar al modelo antes de responder: acierta más, pero tarda más en empezar a hablar.
-    thinking: bool = True
+    # Dejar pensar al modelo antes de responder. Desactivado: con los datos exactos que da game-pal (calendario,
+    # tablas del perfil, fichas) no hace falta, y pensar multiplica el tiempo de respuesta (de ~7 s a ~45 s).
+    thinking: bool = False
     # Margen para pensar, aparte de la respuesta.
     thinking_tokens: int = Field(default=2048, ge=512, le=16384)
 
@@ -223,8 +224,11 @@ class GuiConfig(_Model):
     open_browser: bool = True
 
 
+CONFIG_VERSION = 2
+
+
 class AppConfig(_Model):
-    version: int = 1
+    version: int = CONFIG_VERSION
     # El asistente de primer uso se muestra hasta que el jugador lo termina o lo salta.
     setup_completed: bool = False
     profile: str = "generic"
@@ -269,7 +273,19 @@ def load_config(path: Path) -> AppConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"{path} no contiene un objeto YAML")
-    return AppConfig.model_validate(raw)
+    return AppConfig.model_validate(migrate(raw))
+
+
+def migrate(raw: dict[str, Any]) -> dict[str, Any]:
+    """Pone al día una configuración guardada por una versión anterior."""
+    version = raw.get("version", 1)
+    if isinstance(version, int) and version < 2:
+        # La versión 1 guardaba «pensar» activado por defecto; ahora va desactivado (respuestas en segundos).
+        generation = raw.setdefault("generation", {})
+        if isinstance(generation, dict):
+            generation["thinking"] = False
+        raw["version"] = 2
+    return raw
 
 
 def save_config(config: AppConfig, path: Path) -> None:
