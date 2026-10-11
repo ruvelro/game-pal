@@ -53,7 +53,7 @@ async def _serve(paths: AppPaths, open_browser: bool | None) -> None:
     daemon = Daemon(paths)
     port = _free_port(daemon.config.gui.port)
     token = new_token()
-    app = create_app(daemon, token, port)
+    app = create_app(daemon, token, port, shutdown=lambda: setattr(server, "should_exit", True))
     server = uvicorn.Server(
         uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False, ws_max_size=65536)
     )

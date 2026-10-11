@@ -27,7 +27,10 @@ __all__ = [
 ]
 
 
-def create_provider(config: ProviderConfig) -> Provider:
+def create_provider(config: ProviderConfig) -> Provider | None:
+    """Proveedor del servidor local del jugador. El motor gestionado se crea al arrancar (None aquí)."""
+    if config.kind == "managed":
+        return None
     if config.kind == "local-openai":
         return LocalOpenAIProvider(config.base_url, config.model, timeout=config.timeout_seconds)
     raise ProviderError(f"Proveedor no soportado: {config.kind}")

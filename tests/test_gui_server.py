@@ -9,6 +9,7 @@ from starlette.websockets import WebSocketDisconnect
 from gamepal.config import AppConfig, KnowledgeConfig, OcrConfig, OutputConfig, OverlayConfig, save_config
 from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
+from gamepal.hardware import Gpu, HardwareInfo
 from gamepal.keystore import MemorySecretStore
 from gamepal.paths import AppPaths
 from tests.conftest import FakeBackend
@@ -28,7 +29,13 @@ def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
         update={"knowledge": KnowledgeConfig(embeddings="none")}
     )
     save_config(config, app_paths.config_file)
-    daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore())
+    daemon = Daemon(
+        app_paths,
+        backend_factory=FakeBackend,
+        bundled_dir=repo_profiles,
+        secrets=MemorySecretStore(),
+        hardware=lambda: HardwareInfo("linux", "x64", "cpu", 8, 16.0, [Gpu("RTX", "nvidia", 12.0)], vulkan=True),
+    )
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
         yield test_client
 
@@ -188,3 +195,40 @@ def test_activity_endpoint(client: TestClient) -> None:
     data = client.get("/api/activity", headers=AUTH).json()
     assert data["total"] == 0
     assert data["recent"] == []
+
+
+def test_hardware_and_engine_status(client: TestClient) -> None:
+    hardware = client.get("/api/hardware", headers=AUTH).json()
+    assert hardware["tier"] == 2
+    assert hardware["model_memory_gb"] == 12.0
+    engine = client.get("/api/engine", headers=AUTH).json()
+    assert engine["variant"] == "linux-vulkan-x64"
+    assert not engine["installed"]
+    assert {m["id"] for m in engine["models"]} >= {"gemma-4-e4b", "qwen3.5-0.8b"}
+
+
+def test_setup_applies_tier_and_validates_models(client: TestClient) -> None:
+    config = client.post("/api/setup/tier", headers=AUTH, json={"tier": 1, "engine": "managed"}).json()
+    assert config["provider"]["kind"] == "managed"
+    assert config["provider"]["model"] == "gemma-4-e4b"
+    assert config["hardware_tier"] == 1
+    status = client.get("/api/status", headers=AUTH).json()
+    runtime = [e["data"] for e in status["events"] if e["topic"] == "status" and e["data"]["component"] == "runtime"]
+    assert runtime[-1]["state"] == "waiting"
+
+    config["provider"]["vision_model"] = "qwen3.5-0.8b"
+    response = client.put("/api/config", headers=AUTH, json=config)
+    assert response.status_code == 422
+    assert "imágenes" in response.json()["detail"]
+    config["provider"]["vision_model"] = "no-existe"
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 422
+
+    assert client.post("/api/setup/done", headers=AUTH, json={"done": True}).status_code == 200
+    assert client.get("/api/config", headers=AUTH).json()["setup_done"] is True
+
+
+def test_engine_rejects_unknown_models(client: TestClient) -> None:
+    response = client.post("/api/engine/install", headers=AUTH, json={"models": ["nada"], "runtime": False})
+    assert response.status_code == 409
+    assert client.delete("/api/engine/models/nada", headers=AUTH).status_code == 409
+    assert client.post("/api/shutdown", headers=AUTH).status_code == 409

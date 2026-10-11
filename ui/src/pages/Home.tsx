@@ -10,12 +10,13 @@ const CARDS: Array<[Component, Parameters<typeof t>[0]]> = [
   ["capture", "card.capture"],
   ["ocr", "card.ocr"],
   ["provider", "card.provider"],
+  ["runtime", "card.runtime"],
   ["profile", "card.profile"],
   ["voice", "card.voice"],
   ["overlay", "card.overlay"],
 ];
 
-function Preview({ live, paused }: { live: LiveState; paused: boolean }) {
+export function Preview({ live, paused }: { live: LiveState; paused: boolean }) {
   const [src, setSrc] = useState<string | null>(null);
   const loading = useRef(false);
   const frameId = live.frame?.frame_id;

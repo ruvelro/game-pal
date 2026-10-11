@@ -52,7 +52,9 @@ class OcrConfig(_Model):
 
 
 class ProviderConfig(_Model):
-    kind: Literal["local-openai"] = "local-openai"
+    # local-openai: un servidor del jugador (Ollama, LM Studio…). managed: el motor que gestiona game-pal,
+    # y entonces model, fast_model y vision_model son ids del catálogo de modelos.
+    kind: Literal["local-openai", "managed"] = "local-openai"
     base_url: str = "http://127.0.0.1:11434/v1"
     model: str = ""
     # Modelo con visión para pantallas dudosas. Vacío: la visión queda desactivada.
@@ -60,6 +62,16 @@ class ProviderConfig(_Model):
     # Modelo pequeño y rápido para decidir cómo responder y para respuestas breves. Vacío: no se usa.
     fast_model: str = ""
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+
+
+class RuntimeConfig(_Model):
+    """Motor llama.cpp gestionado."""
+
+    # Variante del motor (id del catálogo) o auto: la mejor para este equipo.
+    variant: str = "auto"
+    context: int = Field(default=8192, ge=2048, le=262144)
+    # Modelos cargados a la vez como máximo; el resto se carga al pedirlo.
+    models_max: int = Field(default=2, ge=1, le=8)
 
 
 Role = Literal["reasoning", "fast", "vision"]
@@ -205,6 +217,10 @@ class GuiConfig(_Model):
 
 class AppConfig(_Model):
     version: int = 1
+    # El asistente de primer uso ya se completó (o se saltó).
+    setup_done: bool = False
+    # Nivel de hardware elegido en el asistente (0-3). Vacío: sin elegir.
+    hardware_tier: int | None = Field(default=None, ge=0, le=3)
     profile: str = "generic"
     # Ventana elegida a mano cuando el perfil no identifica el juego.
     window_title: str | None = None
@@ -219,6 +235,7 @@ class AppConfig(_Model):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)

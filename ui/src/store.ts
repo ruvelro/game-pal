@@ -4,6 +4,7 @@ import {
   connectEvents,
   type AppConfig,
   type BusMessage,
+  type DownloadProgress,
   type Component,
   type EvidenceSnapshot,
   type FrameCaptured,
@@ -30,6 +31,7 @@ export interface LiveState {
   knowledge: Record<number, KnowledgeProgress>;
   evidence: EvidenceSnapshot | null;
   activity: number;
+  downloads: Record<string, DownloadProgress>;
 }
 
 const initial: LiveState = {
@@ -45,6 +47,7 @@ const initial: LiveState = {
   knowledge: {},
   evidence: null,
   activity: 0,
+  downloads: {},
 };
 
 const MAX_ANSWERS = 6;
@@ -71,6 +74,10 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
     }
     case "evidence":
       return { ...state, evidence: (message.data as { snapshot: EvidenceSnapshot }).snapshot };
+    case "download": {
+      const progress = message.data as DownloadProgress;
+      return { ...state, downloads: { ...state.downloads, [progress.item]: progress } };
+    }
     case "activity":
       return { ...state, activity: state.activity + 1 };
     case "voice.state":

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api, token } from "./api";
+import { useEffect, useState } from "react";
+import { api, token, type AppConfig } from "./api";
 import { t, type Key } from "./i18n";
 import { Activity } from "./pages/Activity";
 import { Game } from "./pages/Game";
@@ -9,6 +9,7 @@ import { Memory } from "./pages/Memory";
 import { Models } from "./pages/Models";
 import { Output } from "./pages/Output";
 import { Settings } from "./pages/Settings";
+import { Setup } from "./pages/Setup";
 import { Voice } from "./pages/Voice";
 import { useLive, useStatus } from "./store";
 
@@ -42,11 +43,27 @@ function Shell() {
   const [page, setPage] = useState<Page>("home");
   const live = useLive();
   const { status, refresh } = useStatus();
+  const [setup, setSetup] = useState<boolean | null>(null);
+  useEffect(() => {
+    api
+      .get<AppConfig>("/api/config")
+      .then((config) => setSetup(!config.setup_done))
+      .catch(() => setSetup(false));
+  }, []);
 
   const toggle = async () => {
     await api.post(status?.paused ? "/api/watcher/resume" : "/api/watcher/pause");
     await refresh();
   };
+
+  if (setup === null) return null;
+  if (setup) {
+    return (
+      <main className="setup-page">
+        <Setup live={live} onDone={() => setSetup(false)} />
+      </main>
+    );
+  }
 
   return (
     <div className="shell">
@@ -78,9 +95,9 @@ function Shell() {
         {page === "memory" && <Memory />}
         {page === "voice" && <Voice />}
         {page === "output" && <Output />}
-        {page === "models" && <Models />}
+        {page === "models" && <Models live={live} />}
         {page === "activity" && <Activity live={live} />}
-        {page === "settings" && <Settings />}
+        {page === "settings" && <Settings onSetup={() => setSetup(true)} />}
       </main>
     </div>
   );

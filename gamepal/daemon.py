@@ -16,6 +16,7 @@ from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_back
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.evidence.service import EvidenceService
+from gamepal.hardware import HardwareInfo, detect
 from gamepal.keystore import SecretStore
 from gamepal.knowledge import KnowledgeService
 from gamepal.memory import MemoryService
@@ -30,6 +31,8 @@ from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
+from gamepal.runtime.catalog import bundled_catalog
+from gamepal.runtime.service import EngineService
 from gamepal.voice.service import VoiceService
 
 log = logging.getLogger(__name__)
@@ -59,6 +62,7 @@ class Daemon:
         backend_factory: Callable[[], CaptureBackend] = create_backend,
         bundled_dir: Path | None = None,
         secrets: SecretStore | None = None,
+        hardware: Callable[[], HardwareInfo] = detect,
     ) -> None:
         self.paths = paths
         self._backend_factory = backend_factory
@@ -66,7 +70,22 @@ class Daemon:
         self.config: AppConfig = load_config(paths.config_file)
         self.secrets = secrets or SecretStore()
         self.activity = ActivityStore(paths.data_dir / "activity.sqlite")
-        self.hub = ProviderHub(self.bus, config=lambda: self.config, secrets=self.secrets, activity=self.activity)
+        self.engine = EngineService(
+            self.bus,
+            paths.data_dir / "engine",
+            paths.log_dir,
+            bundled_catalog(),
+            config=lambda: self.config,
+            on_change=self._create_provider,
+            hardware=hardware,
+        )
+        self.hub = ProviderHub(
+            self.bus,
+            config=lambda: self.config,
+            secrets=self.secrets,
+            activity=self.activity,
+            local_endpoint=lambda: self.engine.endpoint,
+        )
         self.profiles = ProfileStore(bundled_dir or bundled_profiles_dir(), paths.user_profiles_dir)
         self.c = Components()
         self.last_read: ScreenRead | None = None
@@ -165,6 +184,7 @@ class Daemon:
         await self._stop_interpreter()
         await self._stop_watcher()
         await self.hub.aclose()
+        await self.engine.stop()
         self.activity.close()
         if self._listener is not None:
             self._listener.cancel()
@@ -210,6 +230,8 @@ class Daemon:
                 await self.memory.open(self.c.profile.profile.id if self.c.profile else None)
             if first or config.ocr != previous.ocr or config.game_language != previous.game_language:
                 await self._create_ocr()
+            if first or config.provider != previous.provider or config.runtime != previous.runtime:
+                await self.engine.sync()
             if (
                 first
                 or config.provider != previous.provider

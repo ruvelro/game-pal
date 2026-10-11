@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AppConfig } from "../api";
+import { EnginePanel, useEngine } from "../components/Engine";
 import { Card, Field, PageHeader, SaveBar } from "../components/ui";
 import { t, type Key } from "../i18n";
-import { useConfig } from "../store";
+import { useConfig, type LiveState } from "../store";
 
 type Cloud = "openai" | "anthropic" | "openrouter";
 type ProviderName = "local" | Cloud;
@@ -155,7 +156,48 @@ function CloudCard({
   );
 }
 
-export function Models() {
+function ManagedModels({
+  config,
+  setConfig,
+  live,
+}: {
+  config: AppConfig;
+  setConfig: (c: AppConfig) => void;
+  live: LiveState;
+}) {
+  const { engine, reload } = useEngine(live);
+  const installed = engine?.models.filter((m) => m.installed) ?? [];
+  const provider = config.provider;
+  const update = (patch: Partial<typeof provider>) => setConfig({ ...config, provider: { ...provider, ...patch } });
+  const picker = (field: "model" | "fast_model" | "vision_model", vision = false) => (
+    <select value={provider[field]} onChange={(e) => update({ [field]: e.target.value })}>
+      <option value="">{field === "model" ? "—" : t("models.none.option")}</option>
+      {installed
+        .filter((m) => !vision || m.vision)
+        .map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+    </select>
+  );
+  return (
+    <>
+      <EnginePanel live={live} onChange={reload} />
+      <div className="two-col tight">
+        <Field label={t("models.role.reasoning")}>{picker("model")}</Field>
+        <Field label={t("models.fast")} hint={t("models.fast.hint")}>
+          {picker("fast_model")}
+        </Field>
+        <Field label={t("models.vision")} hint={t("models.vision.hint")}>
+          {picker("vision_model", true)}
+        </Field>
+      </div>
+    </>
+  );
+}
+
+export function Models({ live }: { live: LiveState }) {
   const { config, setConfig, save, error, saved } = useConfig();
   const [keys, setKeys] = useState<Record<Cloud, boolean>>({ openai: false, anthropic: false, openrouter: false });
   const [summary, setSummary] = useState("");
@@ -288,6 +330,28 @@ export function Models() {
       </Card>
 
       <Card title={t("models.local.title")}>
+        <div className="row wrap" role="radiogroup" aria-label={t("models.local.title")}>
+          <label className="check">
+            <input
+              type="radio"
+              checked={provider.kind === "managed"}
+              onChange={() => updateLocal({ kind: "managed", model: "", fast_model: "", vision_model: "" })}
+            />
+            {t("engine.kind.managed")}
+          </label>
+          <label className="check">
+            <input
+              type="radio"
+              checked={provider.kind === "local-openai"}
+              onChange={() => updateLocal({ kind: "local-openai", model: "", fast_model: "", vision_model: "" })}
+            />
+            {t("engine.kind.external")}
+          </label>
+        </div>
+        {provider.kind === "managed" ? (
+          <ManagedModels config={config} setConfig={setConfig} live={live} />
+        ) : (
+          <>
         <p className="muted small">{t("models.subtitle.local")}</p>
         <Field label={t("models.url")}>
           <div className="row">
@@ -324,6 +388,8 @@ export function Models() {
         </div>
         {localModels?.length === 0 && <p className="muted">{t("models.none")}</p>}
         {localError && <p className="error-text">{localError}</p>}
+          </>
+        )}
         <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
       </Card>
 
