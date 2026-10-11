@@ -19,6 +19,17 @@ datas = [
 binaries = []
 hiddenimports = collect_submodules("gamepal") + ["defusedxml", "defusedxml.ElementTree"]
 
+# Solo se usa la inferencia de onnxruntime y de piper. Sus herramientas (cuantización, transformers,
+# conversión, entrenamiento) importan onnx o torch, que no se instalan, y en Windows el análisis de
+# PyInstaller se cae al cargarlas.
+TOOLS = (
+    "onnxruntime.quantization",
+    "onnxruntime.transformers",
+    "onnxruntime.tools",
+    "onnxruntime.datasets",
+    "piper.train",
+)
+
 # Paquetes con datos, modelos o bibliotecas nativas que PyInstaller no ve solo.
 for package in ("rapidocr", "piper", "ctranslate2", "sdl2dll", "onnxruntime", "tokenizers"):
     try:
@@ -27,7 +38,7 @@ for package in ("rapidocr", "piper", "ctranslate2", "sdl2dll", "onnxruntime", "t
         continue
     datas += d
     binaries += b
-    hiddenimports += h
+    hiddenimports += [name for name in h if not name.startswith(TOOLS)]
 for package in ("faster_whisper", "trafilatura", "justext", "courlan", "htmldate"):
     datas += collect_data_files(package)
 for package in ("uvicorn", "pynput", "pystray", "keyring.backends", "anthropic"):
@@ -51,7 +62,7 @@ analysis = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["pytest", "mypy", "ruff", "IPython", "matplotlib", "notebook"],
+    excludes=["pytest", "mypy", "ruff", "IPython", "matplotlib", "notebook", *TOOLS],
     noarchive=False,
 )
 pyz = PYZ(analysis.pure)
