@@ -3,7 +3,7 @@
     uv run python scripts/stardew_reference.py
 
 Lee las fichas de cada cultivo y de sus semillas con la API de MediaWiki (no el HTML), y los nombres en
-cada idioma de los enlaces entre wikis. Escribe profiles/stardew-valley/data/crops.yaml, que el asistente
+cada idioma de los enlaces entre wikis. Escribe profiles/stardew-valley/reference/crops.yaml, que el asistente
 usa como dato exacto: así no tiene que recordar cuánto tarda en crecer cada cultivo.
 """
 
@@ -51,7 +51,7 @@ KEYWORDS = {
     "en": ["plant", "sow", "crop", "harvest", "seed", "grow", "ripen", "farm"],
 }  # fmt: skip
 FESTIVALS = {"egg_festival": "Egg Festival"}
-OUT = Path(__file__).resolve().parent.parent / "profiles" / "stardew-valley" / "data" / "crops.yaml"
+OUT = Path(__file__).resolve().parent.parent / "profiles" / "stardew-valley" / "reference" / "crops.yaml"
 
 
 def api(params: dict[str, str]) -> dict[str, Any]:

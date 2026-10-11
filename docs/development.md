@@ -69,7 +69,7 @@ uv run game-pal schema --out profile.schema.json
 ## Datos de los perfiles
 
 ```bash
-uv run python scripts/stardew_reference.py   # regenera profiles/stardew-valley/data/crops.yaml desde la wiki
+uv run python scripts/stardew_reference.py   # regenera profiles/stardew-valley/reference/crops.yaml desde la wiki
 ```
 
 Ver «Datos exactos» en [profiles.md](profiles.md).

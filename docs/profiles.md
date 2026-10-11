@@ -193,7 +193,7 @@ Los modelos pequeños, y más sin pensar antes de responder, se inventan cifras 
 ```yaml
 # Tablas YAML con datos del juego. game-pal busca en ellas lo que se pregunta o se ve (en cualquier idioma,
 # singular o plural) y se lo da al modelo, con las fechas ya calculadas.
-reference: [data/crops.yaml]
+reference: [reference/crops.yaml]
 
 # Con el día del guardado, game-pal da hecho cuántos días quedan de estación.
 calendar:

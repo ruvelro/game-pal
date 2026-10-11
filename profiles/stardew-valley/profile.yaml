@@ -110,7 +110,7 @@ knowledge:
       language: en
 
 # Datos exactos (generados desde la wiki con scripts/stardew_reference.py): el asistente no los recuerda.
-reference: [data/crops.yaml]
+reference: [reference/crops.yaml]
 calendar:
   seasons: [spring, summer, fall, winter]
   days_per_season: 28
