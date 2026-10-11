@@ -11,7 +11,7 @@ import threading
 from ctypes import wintypes
 from typing import Any
 
-from gamepal.overlay.model import View
+from gamepal.overlay.model import Rect, View
 
 if sys.platform != "win32":  # pragma: no cover
     raise ImportError("Este módulo solo funciona en Windows")
@@ -32,6 +32,7 @@ WDA_EXCLUDEFROMCAPTURE = 0x11
 WM_PAINT = 0x000F
 WM_DESTROY = 0x0002
 WM_APP_UPDATE = 0x8001
+SPI_GETWORKAREA = 0x0030
 WM_APP_QUIT = 0x8002
 SW_HIDE = 0
 SW_SHOWNOACTIVATE = 4
@@ -115,6 +116,7 @@ def _declare() -> None:
         (user32, "TranslateMessage", [ctypes.POINTER(w.MSG)], w.BOOL),
         (user32, "DispatchMessageW", [ctypes.POINTER(w.MSG)], ctypes.c_ssize_t),
         (user32, "PostQuitMessage", [ctypes.c_int], None),
+        (user32, "SystemParametersInfoW", [w.UINT, w.UINT, w.LPVOID, w.UINT], w.BOOL),
         (kernel32, "GetModuleHandleW", [w.LPCWSTR], w.HMODULE),
         (gdi32, "CreateFontW", [ctypes.c_int] * 5 + [w.DWORD] * 8 + [w.LPCWSTR], w.HFONT),
         (gdi32, "CreateSolidBrush", [w.COLORREF], w.HBRUSH),
@@ -232,6 +234,13 @@ class WindowsOverlay:
             user32.PostQuitMessage(0)
             return 0
         return int(user32.DefWindowProcW(hwnd, msg, wparam, lparam))
+
+    def screen(self) -> Rect | None:
+        """Zona de trabajo del monitor principal (sin la barra de tareas), en píxeles reales."""
+        area = wintypes.RECT()
+        if not user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(area), 0):
+            return None
+        return Rect(area.left, area.top, area.right - area.left, area.bottom - area.top)
 
     def run(self) -> None:
         message = wintypes.MSG()

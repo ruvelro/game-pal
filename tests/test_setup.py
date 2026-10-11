@@ -241,6 +241,11 @@ async def test_models_detects_a_busy_port() -> None:
         ("No hay modelo seleccionado para local", "Aún no has elegido el modelo"),
         ("No se pudo contactar con local: ConnectError", "No consigo hablar con Ollama"),
         ("local respondió 404: model 'qwen3:8b' not found", "ollama pull qwen3:8b"),
+        # Ollama 0.40 responde 502 cuando no tiene el modelo: no es falta de memoria.
+        ("local respondió 502: no available node advertises the requested model", "ollama pull qwen3:8b"),
+        ('local respondió 400: model "qwen3:8b" not found, try pulling it first', "ollama pull qwen3:8b"),
+        ("local: el modelo gastó todo el margen pensando y no llegó a responder", "se ha quedado pensando"),
+        ("el modelo no devolvió ningún texto", "no ha devuelto ninguna respuesta"),
         ("local respondió 503: model inventory unavailable", "otro programa"),
         ("Anthropic rechazó la clave de API", "Anthropic (Claude) no acepta la clave"),
         ("openrouter respondió 429: rate limited", "límite de uso"),

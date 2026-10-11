@@ -163,6 +163,99 @@ function CloudCard({
   );
 }
 
+const LENGTHS: Array<[number, Key]> = [
+  [300, "gen.length.300"],
+  [500, "gen.length.500"],
+  [1000, "gen.length.1000"],
+  [2000, "gen.length.2000"],
+];
+const BUDGETS = [1024, 2048, 4096, 8192];
+
+interface Thinking {
+  model: string;
+  reasons: boolean | null;
+  can_disable: boolean | null;
+}
+
+/** Largo de las respuestas y razonamiento: cuánto escribe y cuánto piensa el modelo. */
+function GenerationCard({ config, setConfig }: { config: AppConfig; setConfig: (c: AppConfig) => void }) {
+  const generation = config.generation;
+  const update = (patch: Partial<typeof generation>) =>
+    setConfig({ ...config, generation: { ...generation, ...patch } });
+  const [thinking, setThinking] = useState<Thinking | null>(null);
+  const routed = `${config.routing.reasoning.provider}:${config.provider.model}`;
+  useEffect(() => {
+    setThinking(null);
+    api
+      .get<Thinking>("/api/provider/thinking")
+      .then(setThinking)
+      .catch(() => undefined);
+  }, [routed]);
+
+  // Un valor a mano en config.yaml también se muestra, aunque no sea uno de los habituales.
+  const lengths = LENGTHS.some(([n]) => n === generation.answer_tokens)
+    ? LENGTHS
+    : [...LENGTHS, [generation.answer_tokens, null] as [number, null]];
+  const budgets = BUDGETS.includes(generation.thinking_tokens) ? BUDGETS : [...BUDGETS, generation.thinking_tokens];
+  const model = thinking?.model ?? "";
+  let status = "";
+  if (thinking && model) {
+    if (thinking.reasons === true) {
+      status = `${t("gen.status.reasons").replace("{model}", model)} ${t(
+        thinking.can_disable === false ? "gen.status.reasons.always" : "gen.status.reasons.off",
+      )}`;
+    } else if (thinking.reasons === false) {
+      status = t("gen.status.plain").replace("{model}", model);
+    } else {
+      status = t("gen.status.unknown").replace("{model}", model);
+    }
+  }
+
+  return (
+    <Card title={t("gen.title")}>
+      <Field label={t("gen.length")} hint={t("gen.length.hint")}>
+        <select
+          value={generation.answer_tokens}
+          onChange={(e) => update({ answer_tokens: Number(e.target.value) })}
+        >
+          {lengths.map(([n, label]) => (
+            <option key={n} value={n}>
+              {label ? t(label) : `${n} ${t("gen.budget.tokens")}`}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={generation.thinking}
+          onChange={(e) => update({ thinking: e.target.checked })}
+        />
+        <span>
+          {t("gen.thinking")}
+          <span className="field-hint block">{t("gen.thinking.hint")}</span>
+        </span>
+      </label>
+      {status && <p className="muted small">{status}</p>}
+      <Advanced>
+        <Field label={t("gen.budget")} hint={t("gen.budget.hint")}>
+          <select
+            value={generation.thinking_tokens}
+            onChange={(e) => update({ thinking_tokens: Number(e.target.value) })}
+            disabled={!generation.thinking}
+          >
+            {budgets.map((n) => (
+              <option key={n} value={n}>
+                {n} {t("gen.budget.tokens")}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Advanced>
+    </Card>
+  );
+}
+
 export function Models() {
   const { config, setConfig, save, error, saved, saving } = useConfig();
   const [keys, setKeys] = useState<Record<Cloud, boolean>>({ openai: false, anthropic: false, openrouter: false });
@@ -389,6 +482,8 @@ export function Models() {
           </Field>
         </Advanced>
       </Card>
+
+      <GenerationCard config={config} setConfig={setConfig} />
 
       <h2 className="section-title">{t("models.cloud.title")}</h2>
       <div className="two-col">

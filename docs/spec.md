@@ -163,6 +163,8 @@ Implementación (M6): cada rol (`reasoning`, `fast`, `vision`) tiene un proveedo
 
 Cada petición lleva etiqueta de rol, proveedor, tokens y latencia, y aparece en el panel de actividad. El registro vive en SQLite local; el coste usa el que informa el proveedor (OpenRouter) o una estimación por tarifa marcada como tal. Antes de enviar una captura a un proveedor remoto por primera vez en la sesión, la GUI lo avisa.
 
+Modelos que razonan: lo que piensan antes de responder cuenta en el límite de tokens. Cada petición lleva el largo de la respuesta y, aparte, el margen para pensar (`generation` en la configuración: largo de respuesta, si se deja pensar y cuánto). Las tareas internas (enrutar, palabras clave, visión) nunca piensan. game-pal averigua si el modelo razona: Ollama lo dice en `/api/show`, y con otros servidores se nota en la primera respuesta. El margen solo se suma si el modelo razona, para no alargar las respuestas de los que no lo hacen, y el razonamiento se apaga cuando el servidor lo permite (`reasoning_effort` en Ollama, `chat_template_kwargs` en llama.cpp, vLLM y MLX, `reasoning.enabled` en OpenRouter). Si una respuesta se queda sin margen antes de decir nada, se repite una vez sin pensar (o con el doble de margen si no se puede apagar). Si tampoco responde, se avisa: nunca se deja una respuesta en blanco.
+
 Presupuesto de contexto: las instrucciones del sistema se componen por bloques con caché de prompt cuando el proveedor lo soporte; el registro de evidencia se resume de forma incremental para mantenerse bajo un límite de tokens configurable; las capturas se recortan a la ventana del juego y se reescalan a un ancho máximo por rol.
 
 ### 4.5 Conocimiento

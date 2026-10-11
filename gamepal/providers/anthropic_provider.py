@@ -3,7 +3,9 @@
 Notas de los modelos actuales:
 - En Claude Opus 5.5 el razonamiento va siempre activo y no se admite `temperature`; la profundidad
   se controla con `output_config.effort`. Las respuestas cortas de un juego van con esfuerzo bajo.
-- El razonamiento consume `max_tokens`, así que se deja margen aunque la respuesta sea breve.
+- El razonamiento consume `max_tokens`, así que se deja margen aunque la respuesta sea breve. Con
+  `think` (tokens para pensar) el margen es el que elige el jugador y el esfuerzo sube a medio; sin él,
+  el esfuerzo es bajo.
 - Con los modelos que lo admiten se activa el respaldo del servidor ante rechazos (`fallbacks: "default"`):
   si un filtro de seguridad declina la petición, la API la repite con otro modelo adecuado.
 """
@@ -27,9 +29,9 @@ MIN_MAX_TOKENS = 2048
 UsageSink = Callable[[Usage], None]
 
 
-def _effort(max_tokens: int) -> str:
-    # Respuestas cortas y tareas rápidas: esfuerzo bajo; respuestas razonadas: medio.
-    return "low" if max_tokens <= 200 else "medium"
+def _effort(think: int) -> str:
+    # Tareas internas y respuestas rápidas: esfuerzo bajo; respuestas en las que puede pensar: medio.
+    return "medium" if think > 0 else "low"
 
 
 def _blocks(message: Message) -> str | list[dict[str, Any]]:
@@ -73,14 +75,14 @@ class AnthropicProvider:
     async def aclose(self) -> None:
         await self._client.close()
 
-    def _params(self, messages: list[Message], model: str | None, max_tokens: int) -> dict[str, Any]:
+    def _params(self, messages: list[Message], model: str | None, max_tokens: int, think: int) -> dict[str, Any]:
         chosen = model or self.model
         system, turns = _split(messages)
         params: dict[str, Any] = {
             "model": chosen,
-            "max_tokens": max(max_tokens * 4, MIN_MAX_TOKENS),
+            "max_tokens": max(max_tokens + think, max_tokens * 4, MIN_MAX_TOKENS),
             "messages": turns,
-            "output_config": {"effort": _effort(max_tokens)},
+            "output_config": {"effort": _effort(think)},
         }
         if system:
             params["system"] = system
@@ -132,8 +134,9 @@ class AnthropicProvider:
         max_tokens: int = 512,
         temperature: float = 0.2,
         json_schema: dict[str, Any] | None = None,
+        think: int = 0,
     ) -> ChatResult:
-        params = self._params(messages, model, max_tokens)
+        params = self._params(messages, model, max_tokens, think)
         if json_schema is not None:
             params["output_config"] = {
                 **params["output_config"],
@@ -162,8 +165,9 @@ class AnthropicProvider:
         max_tokens: int = 512,
         temperature: float = 0.2,
         on_usage: UsageSink | None = None,
+        think: int = 0,
     ) -> AsyncIterator[str]:
-        params = self._params(messages, model, max_tokens)
+        params = self._params(messages, model, max_tokens, think)
         try:
             async with self._client.beta.messages.stream(**params) as stream:
                 async for text in stream.text_stream:

@@ -111,15 +111,16 @@ async def test_anthropic_request_shape() -> None:
     image = ImagePart.from_rgb(pattern(1), max_width=64)
     messages = [Message("system", "Eres útil."), Message("user", "¿Qué cojo?", (image,))]
     usages: list[Usage] = []
-    text = "".join([d async for d in provider.chat_stream(messages, max_tokens=500, on_usage=usages.append)])
+    stream = provider.chat_stream(messages, max_tokens=500, on_usage=usages.append, think=2048)
+    text = "".join([d async for d in stream])
     assert text == "Coge el rayo."
     params = fake.calls[0]
     assert params["model"] == "claude-opus-5-5"
     assert params["system"] == "Eres útil."
     assert "temperature" not in params
     assert "thinking" not in params
-    assert params["output_config"] == {"effort": "medium"}
-    assert params["max_tokens"] >= 2048  # margen para el razonamiento
+    assert params["output_config"] == {"effort": "medium"}  # puede pensar: esfuerzo medio
+    assert params["max_tokens"] >= 500 + 2048  # la respuesta más el margen para pensar
     assert params["fallbacks"] == "default"
     assert params["betas"] == ["server-side-fallback-2026-07-01"]
     blocks = params["messages"][0]["content"]
