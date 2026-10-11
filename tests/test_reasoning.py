@@ -188,7 +188,9 @@ async def test_answers_follow_the_length_and_thinking_settings(stardew: LoadedPr
     seen: list[dict[str, Any]] = []
     transport = server(lambda b: sse({"content": "Fresas."}), seen, THINKS)
     provider = LocalOpenAIProvider(URL, "qwen3.6", transport=transport)
-    config = AppConfig.model_validate({"generation": {"answer_tokens": 1000, "thinking_tokens": 4096}})
+    config = AppConfig.model_validate(
+        {"generation": {"answer_tokens": 1000, "thinking": True, "thinking_tokens": 4096}}
+    )
     assert (await _ask(config, provider, stardew)).text == "Fresas."
     assert seen[-1]["max_tokens"] == 1000 + 4096
     config.generation.thinking = False

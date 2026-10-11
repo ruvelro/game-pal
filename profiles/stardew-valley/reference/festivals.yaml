@@ -1,0 +1,205 @@
+# Generado con scripts/stardew_reference.py desde la wiki oficial. No lo edites a mano: vuelve a
+# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos, fechas ni precios.
+id: festivals
+source: Stardew Valley Wiki
+source_url: https://stardewvalleywiki.com/Festivals
+generated: '2026-10-12'
+festivals:
+- names:
+    en: Egg Festival
+    de: Eierfest
+    es: Festival del huevo
+    fr: Fête des Oeufs
+    hu: Tojás Fesztivál
+    it: Festival delle uova
+    ja: エッグフェスティバル
+    ko: 달걀 축제
+    pt: Festival do Ovo
+    ru: Яичный фестиваль
+    tr: Yumurta Şöleni
+    zh: 复活节
+  season: spring
+  days:
+  - 13
+- names:
+    en: Desert Festival
+    de: Wüstenfestival
+    es: Festival del Desierto
+    fr: Festival du désert
+    hu: Sivatagi fesztivál
+    it: Festival del Deserto
+    ja: 砂漠フェスティバル
+    ko: 사막 축제
+    pt: Festival do Deserto
+    ru: Пустынный фестиваль
+    tr: Çöl Şöleni
+    zh: 沙漠节
+  season: spring
+  days:
+  - 15
+  - 16
+  - 17
+- names:
+    en: Flower Dance
+    de: Blumentanz
+    es: Danza floral
+    fr: Danse des Fleurs
+    hu: Virágtánc
+    it: Ballo dei fiori
+    ja: フラワーダンス
+    ko: 봄꽃 무도회
+    pt: Dança das Flores
+    ru: Цветочные танцы
+    tr: Çiçek Dansı
+    zh: 花舞节
+  season: spring
+  days:
+  - 24
+- names:
+    en: Luau
+    de: Luau
+    es: Luau
+    fr: Fête Hawaïenne
+    hu: Luau
+    it: Luau
+    ja: ルアウパーティー
+    ko: 루아우
+    pt: Luau
+    ru: Луау
+    tr: Luau
+    zh: 夏威夷宴会
+  season: summer
+  days:
+  - 11
+- names:
+    en: Trout Derby
+    de: Forellenderby
+    es: Derby de la Trucha
+    fr: Derby de la truite
+    hu: Pisztráng derbi
+    it: Torneo della Trota
+    ja: マス釣り大会
+    ko: 송어 시합
+    pt: Competição de Truta
+    ru: Форелевый турнир
+    tr: Alabalık Yarışı
+    zh: 鳟鱼大赛
+  season: summer
+  days:
+  - 20
+  - 21
+- names:
+    en: Dance of the Moonlight Jellies
+    de: Tanz der Mondlichtquallen
+    es: Danza de las medusas lunares
+    fr: Danse des Méduses Clair de Lune
+    hu: A Holdfény Medúzák Tánca
+    it: Danza delle meduse lunari
+    ja: ゲッコウクラゲのダンス
+    ko: 달빛 해파리들의 춤
+    pt: Dança das Medusas-da-Lua
+    ru: Танец полуночных медуз
+    tr: Ayışığı Denizanalarının Dansı
+    zh: 月光水母起舞
+  season: summer
+  days:
+  - 28
+- names:
+    en: Stardew Valley Fair
+    de: Sterntautaler Volksfest
+    es: Feria de Stardew Valley
+    fr: Grand Festival de Stardew Valley
+    hu: Stardew Valley Vásár
+    it: Fiera di Stardew Valley
+    ja: スターデューバレーまつり
+    ko: 스타듀 밸리 품평회
+    pt: Feira do Vale do Orvalho
+    ru: Ярмарка долины Стардью
+    tr: Yıldızçiyi Vadisi Şöleni
+    zh: 星露谷展览会
+  season: fall
+  days:
+  - 16
+- names:
+    en: Spirit's Eve
+    de: Geisternacht
+    es: Víspera de los espíritus
+    fr: Fête des Esprits
+    hu: Lelkek Éjszakája
+    it: Vigilia degli spiriti
+    ja: スピリットイブ
+    ko: 영령의 전야제
+    pt: Véspera dos Espíritos
+    ru: День всех духов
+    tr: Ruhluk Arefesi
+    zh: 万灵节
+  season: fall
+  days:
+  - 27
+- names:
+    en: Festival of Ice
+    de: Fest des Eises
+    es: Festival del hielo
+    fr: Festival des Glaces
+    hu: A Jég Fesztiválja
+    it: Festival del ghiaccio
+    ja: 氷まつり
+    ko: 얼음 축제
+    pt: Festival do Gelo
+    ru: Ледовый праздник
+    tr: Buz Şöleni
+    zh: 冰雪节
+  season: winter
+  days:
+  - 8
+- names:
+    en: SquidFest
+    de: Tintenfischfest
+    es: Festival del Calamar
+    fr: Fête du calamar
+    hu: Tintahal fesztivál
+    it: Calamaride
+    ja: イカ釣りまつり
+    ko: 오징어 축제
+    pt: Festival da Lula
+    ru: Кальмарофест
+    tr: Mürekkepbalığı Şenliği
+    zh: 鱿鱼节
+  season: winter
+  days:
+  - 12
+  - 13
+- names:
+    en: Night Market
+    de: Nachtmarkt
+    es: Mercado nocturno
+    fr: Marché nocturne
+    hu: Éjszakai Piac
+    it: Mercato notturno
+    ja: 夜の市
+    ko: 야시장
+    pt: Mercado Noturno
+    ru: Ночной рынок
+    tr: Akşam Pazarı
+    zh: 夜市
+  season: winter
+  days:
+  - 15
+  - 16
+  - 17
+- names:
+    en: Feast of the Winter Star
+    de: Fest des Wintersterns
+    es: Fiesta de la estrella de invierno
+    fr: Fête de l'Étoile Hivernale
+    hu: A Téli Csillag Ünnepe
+    it: Banchetto della Stella d'inverno
+    ja: 冬星祭
+    ko: 겨울 별의 만찬
+    pt: Festival da Estrela Invernal
+    ru: Пир Зимней звезды
+    tr: Kış Yıldızı Şöleni
+    zh: 冬日星盛宴
+  season: winter
+  days:
+  - 25

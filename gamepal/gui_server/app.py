@@ -487,6 +487,19 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
 
     # Evidencia y memoria -----------------------------------------------------------------------
 
+    @app.get("/api/evidence/names", dependencies=auth)
+    async def evidence_names() -> dict[str, dict[str, str]]:
+        """Los objetos del guardado en el idioma del juego (el guardado los nombra en inglés)."""
+        wiki, language = daemon.wiki, daemon.config.game_language
+        if wiki is None or language == "en":
+            return {"names": {}}
+        labels = [fact.label for fact in daemon.evidence.ledger.facts() if fact.kind == "item"]
+        try:
+            names = await asyncio.wait_for(wiki.translate(labels, language), 10)
+        except TimeoutError:
+            names = {}
+        return {"names": names}
+
     @app.get("/api/evidence", dependencies=auth)
     async def evidence() -> dict[str, Any]:
         service = daemon.evidence

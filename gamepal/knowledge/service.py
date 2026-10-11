@@ -87,6 +87,11 @@ class KnowledgeService:
         self.store = KnowledgeStore(self._root / f"{loaded.profile.id}.sqlite")
         self._sync_profile_sources(loaded)
         self._worker = asyncio.create_task(self._work(), name="knowledge")
+        # Una descarga que quedó a medias (game-pal se cerró) se retoma, en vez de quedarse «en curso».
+        for source in self.store.sources():
+            if source.status in ("running", "queued"):
+                self.store.set_status(source.id, "pending")
+                self.enqueue(source.id)
         self._scheduler = asyncio.create_task(self._schedule(), name="knowledge-refresh")
 
     async def close(self) -> None:
@@ -333,11 +338,14 @@ class KnowledgeService:
             while queue and pages < max_pages:
                 url, depth = queue.popleft()
                 previous = known.get(url)
+                # Las páginas de las que salen enlaces se piden enteras: con un «sin cambios» (304) no habría
+                # enlaces y no se seguiría con lo que falte, por ejemplo tras una descarga interrumpida.
+                cached = previous if depth >= depth_limit else None
                 try:
                     page = await fetcher.fetch(
                         url,
-                        etag=previous.etag if previous else None,
-                        last_modified=previous.last_modified if previous else None,
+                        etag=cached.etag if cached else None,
+                        last_modified=cached.last_modified if cached else None,
                     )
                 except FetchError as exc:
                     failures += 1

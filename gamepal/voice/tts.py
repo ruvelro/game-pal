@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
+import importlib.metadata
 import logging
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Protocol
@@ -81,12 +84,84 @@ class Tts(Protocol):
     def stop(self) -> None: ...
 
 
+PROBE_TIMEOUT_S = 60
+# espeak-ng guarda la ruta de sus datos en un búfer de 160 caracteres: con una ruta más larga no los encuentra y
+# termina el proceso entero. Pasa con instalaciones en carpetas profundas (un worktree, un usuario de Windows
+# con nombre largo…). Por encima de este largo se le da una ruta corta que apunta a los mismos datos.
+MAX_ESPEAK_PATH = 150
+
+
+def espeak_data_dir() -> Path | None:
+    """Carpeta de datos de espeak-ng que trae Piper, con una ruta lo bastante corta para espeak-ng."""
+    try:
+        from piper.phonemize_espeak import ESPEAK_DATA_DIR
+    except ImportError:
+        return None
+    original = Path(ESPEAK_DATA_DIR)
+    if len(str(original)) <= MAX_ESPEAK_PATH:
+        return original
+    short = Path(tempfile.gettempdir()) / "game-pal-espeak-ng-data"
+    if len(str(short)) > MAX_ESPEAK_PATH:
+        return original
+    try:
+        if sys.platform == "win32":
+            # En Windows un enlace simbólico pide permisos de administrador: se copia (unos 20 MB, una vez).
+            if not (short / "phontab").is_file():
+                shutil.copytree(original, short, dirs_exist_ok=True)
+        elif not short.is_symlink() or short.resolve() != original.resolve():
+            if short.is_symlink() or short.is_file():
+                short.unlink()
+            elif short.exists():
+                shutil.rmtree(short)
+            short.symlink_to(original, target_is_directory=True)
+    except OSError as exc:
+        log.warning("No se pudo preparar una ruta corta para espeak-ng: %s", exc)
+        return original
+    return short
+
+
+def piper_works(cache_dir: Path, data_dir: Path | None) -> bool:
+    """Si Piper funciona en este equipo, probado una vez en un proceso aparte (ver piper_probe)."""
+    try:
+        version = importlib.metadata.version("piper-tts")
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    if data_dir is None:
+        return False
+    marker = cache_dir / f"piper-check-{version}-{sys.platform}-{len(str(data_dir))}.txt"
+    try:
+        return marker.read_text(encoding="utf-8").strip() == "ok"
+    except OSError:
+        pass
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--run-module", "gamepal.voice.piper_probe", str(data_dir)]
+    else:
+        command = [sys.executable, "-m", "gamepal.voice.piper_probe", str(data_dir)]
+    try:
+        done = subprocess.run(  # noqa: S603 - orden fija
+            command, capture_output=True, timeout=PROBE_TIMEOUT_S, check=False
+        )
+        works = done.returncode == 0
+        if not works:
+            log.warning("Piper %s no funciona aquí: %s", version, done.stderr.decode("utf-8", "replace")[-300:])
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log.warning("No se pudo probar Piper: %s", exc)
+        return False  # sin recordarlo: puede ser algo pasajero
+    with contextlib.suppress(OSError):
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        marker.write_text("ok" if works else "bad", encoding="utf-8")
+    return works
+
+
 class PiperTts:
-    def __init__(self, model_path: Path, rate: float = 1.0) -> None:
+    def __init__(self, model_path: Path, rate: float = 1.0, data_dir: Path | None = None) -> None:
         from piper import PiperVoice, SynthesisConfig
 
         self.name = f"piper-{model_path.stem}"
-        self._voice: Any = PiperVoice.load(str(model_path))
+        if data_dir is not None:
+            self._voice: Any = PiperVoice.load(str(model_path), espeak_data_dir=data_dir)
+        else:
+            self._voice = PiperVoice.load(str(model_path))
         self._config: Any = SynthesisConfig(length_scale=1.0 / rate)
         self._lock = threading.Lock()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gamepal.config import ProviderConfig
 from gamepal.providers.base import (
+    AnswerCutShort,
     Capabilities,
     ChatResult,
     ImagePart,
@@ -15,6 +16,7 @@ from gamepal.providers.base import (
 from gamepal.providers.openai_compat import LocalOpenAIProvider
 
 __all__ = [
+    "AnswerCutShort",
     "Capabilities",
     "ChatResult",
     "ImagePart",

@@ -39,6 +39,8 @@ class OverlayProcess:
                 "GAMEPAL_WS": f"ws://127.0.0.1:{self._port}/api/events",
                 # El token va por el entorno, nunca por la línea de órdenes (visible para otros procesos).
                 "GAMEPAL_TOKEN": self._token,
+                # Si game-pal se cierra de golpe, el overlay lo nota y se cierra también.
+                "GAMEPAL_PARENT_PID": str(os.getpid()),
             }
             self._process = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "gamepal.overlay",

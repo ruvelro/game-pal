@@ -1,0 +1,1504 @@
+# Generado con scripts/stardew_reference.py desde la wiki oficial. No lo edites a mano: vuelve a
+# ejecutar el script. El asistente usa estos datos como exactos para no inventar tiempos, fechas ni precios.
+id: crops
+title:
+  es: Cultivos
+  en: Crops
+source: Stardew Valley Wiki
+source_url: https://stardewvalleywiki.com/Crops
+generated: '2026-10-12'
+keywords:
+  es:
+  - plantar
+  - planto
+  - planta
+  - sembrar
+  - siembro
+  - cultivo
+  - cultivar
+  - cosecha
+  - cosechar
+  - semilla
+  - huerto
+  - crecer
+  - crece
+  - madurar
+  - madura
+  - regar
+  en:
+  - plant
+  - sow
+  - crop
+  - harvest
+  - seed
+  - grow
+  - ripen
+  - farm
+events:
+  egg_festival:
+    season: spring
+    day: 13
+entries:
+- names:
+    en: Ancient Fruit
+    de: Uralte Frucht
+    es: Fruta milenaria
+    fr: Fruit ancien
+    hu: Ősi gyümölcs
+    it: Frutto antico
+    ja: 古代のフルーツ
+    ko: 고대 과일
+    pt: Fruta antiga
+    ru: Древний плод
+    tr: Eski Meyve
+    zh: 上古水果
+  seasons:
+  - spring
+  - summer
+  - fall
+  growth_days: 28
+  regrow_days: 7
+  sell_price: 550
+  seed:
+    names:
+      en: Ancient Seeds
+      de: Uralte Samen
+      es: Semillas milenarias
+      fr: Graines anciennes
+      hu: Ősi magvak
+      it: Semi antichi
+      ja: 古代のタネ
+      ko: 고대 씨앗
+      pt: Sementes antigas
+      ru: Древние семена
+      tr: Eski Tohumlar
+      zh: 上古种子
+    prices: {}
+- names:
+    en: Blue Jazz
+    de: Blaue Jazz
+    es: Allium azul
+    fr: Zinnia bleue
+    hu: Kék jazz
+    it: Jazz blu
+    ja: ブルージャズ
+    ko: 푸른 재즈
+    pt: Jasmim-Azul
+    ru: Синий яркоцвет
+    tr: Maviruh
+    zh: 蓝爵
+  seasons:
+  - spring
+  growth_days: 7
+  sell_price: 50
+  seed:
+    names:
+      en: Jazz Seeds
+      de: Zierlauch-Saat
+      es: Semillas de allium
+      fr: Graines de zinnia
+      hu: Jazz magvak
+      it: Semi di jazz
+      ja: ジャズのタネ
+      ko: 재즈 씨앗
+      pt: Sementes de Jasmim-azul
+      ru: Семена яркоцвета
+      tr: Maviruh Tohumu
+      zh: 蓝爵士种子
+    prices:
+      pierre: 30
+      joja: 37
+      traveling_cart: 15
+- names:
+    en: Carrot
+    de: Karotte
+    es: Zanahoria
+    fr: Carotte
+    hu: Répa
+    it: Carota
+    ja: ニンジン
+    ko: 당근
+    pt: Cenoura
+    ru: Морковь
+    tr: Havuç
+    zh: 胡萝卜
+  seasons:
+  - spring
+  growth_days: 3
+  sell_price: 35
+  seed:
+    names:
+      en: Carrot Seeds
+      de: Karottensamen
+      es: Semillas de zanahoria
+      fr: Graines de carotte
+      hu: Répa magvak
+      it: Semi di carota
+      ja: ニンジンのタネ
+      ko: 당근 씨앗
+      pt: Sementes de Cenoura
+      ru: Семена моркови
+      tr: Havuç Tohumu
+      zh: 胡萝卜种子
+    prices: {}
+- names:
+    en: Cauliflower
+    de: Blumenkohl
+    es: Coliflor
+    fr: Chou-fleur
+    hu: Karfiol
+    it: Cavolfiore
+    ja: カリフラワー
+    ko: 콜리플라워
+    pt: Couve-flor
+    ru: Цветная капуста
+    tr: Karnabahar
+    zh: 花椰菜
+  seasons:
+  - spring
+  growth_days: 12
+  sell_price: 175
+  seed:
+    names:
+      en: Cauliflower Seeds
+      de: Blumenkohl-Saat
+      es: Semillas de coliflor
+      fr: Graines de chou-fleur
+      hu: Karfiol magvak
+      it: Semi di cavolfiore
+      ja: カリフラワーのタネ
+      ko: 콜리플라워 씨앗
+      pt: Sementes de Couve-flor
+      ru: Семена цветной капусты
+      tr: Karnabahar Tohumu
+      zh: 花椰菜种子
+    prices:
+      pierre: 80
+      joja: 100
+      traveling_cart: 40
+- names:
+    en: Coffee Bean
+    de: Kaffeebohne
+    es: Grano de café
+    fr: Grain de café
+    hu: Kávébab
+    it: Chicco di caffè
+    ja: コーヒー豆
+    ko: 커피콩
+    pt: Grão de café
+    ru: Кофейное зерно
+    tr: Kahve Çekirdeği
+    zh: 咖啡豆
+  seasons:
+  - spring
+  - summer
+  growth_days: 10
+  regrow_days: 2
+  sell_price: 15
+  seed:
+    names:
+      en: Coffee Bean
+      de: Kaffeebohne
+      es: Grano de café
+      fr: Grain de café
+      hu: Kávébab
+      it: Chicco di caffè
+      ja: コーヒー豆
+      ko: 커피콩
+      pt: Grão de café
+      ru: Кофейное зерно
+      tr: Kahve Çekirdeği
+      zh: 咖啡豆
+    prices: {}
+- names:
+    en: Garlic
+    de: Knoblauch
+    es: Ajo
+    fr: Ail
+    hu: Fokhagyma
+    it: Aglio
+    ja: ニンニク
+    ko: 마늘
+    pt: Alho
+    ru: Чеснок
+    tr: Sarımsak
+    zh: 蒜
+  seasons:
+  - spring
+  growth_days: 4
+  sell_price: 60
+  seed:
+    names:
+      en: Garlic Seeds
+      de: Knoblauch-Saat
+      es: Semillas de ajo
+      fr: Graines d'ail
+      hu: Fokhagyma magvak
+      it: Semi d'aglio
+      ja: ニンニクのタネ
+      ko: 마늘 씨앗
+      pt: Sementes de alho
+      ru: Семена чеснока
+      tr: Sarımsak Tohumu
+      zh: 大蒜种子
+    prices:
+      pierre: 40
+      traveling_cart: 20
+- names:
+    en: Green Bean
+    de: Grüne Bohne
+    es: Judía verde
+    fr: Haricot vert
+    hu: Zöldbab
+    it: Fagiolo verde
+    ja: サヤエンドウ
+    ko: 완두콩
+    pt: Vagem
+    ru: Зеленая фасоль
+    tr: Yeşil Fasulye
+    zh: 青豆
+  seasons:
+  - spring
+  growth_days: 10
+  regrow_days: 3
+  trellis: true
+  sell_price: 40
+  seed:
+    names:
+      en: Bean Starter
+      de: Bohnen-Setzling
+      es: Kit de judías
+      fr: Graines d'haricot
+      hu: Bab ültetvény
+      it: Avvia-fagioli
+      ja: サヤエンドウ栽培セット
+      ko: 콩 종자
+      pt: Mudas de Vagem
+      ru: Рассада зеленой фасоли
+      tr: Fasulye Yetiştirici
+      zh: 青豆种子
+    prices:
+      pierre: 60
+      joja: 75
+      traveling_cart: 30
+- names:
+    en: Kale
+    de: Grünkohl
+    es: Col rizada
+    fr: Chou frisé
+    hu: Vadkáposzta
+    it: Cavolo verde
+    ja: ケール
+    ko: 케일
+    pt: Couve
+    ru: Кудрявая капуста
+    tr: Lahana
+    zh: 甘蓝菜
+  seasons:
+  - spring
+  growth_days: 6
+  sell_price: 110
+  seed:
+    names:
+      en: Kale Seeds
+      de: Grünkohl-Saat
+      es: Semillas de col rizada
+      fr: Graines de chou frisé
+      hu: Vadkáposzta magvak
+      it: Semi di cavolo verde
+      ja: ケールのタネ
+      ko: 케일 씨앗
+      pt: Sementes de couve
+      ru: Семена кудрявой капусты
+      tr: Lahana Tohumu
+      zh: 甘蓝种子
+    prices:
+      pierre: 70
+      joja: 87
+      traveling_cart: 35
+- names:
+    en: Parsnip
+    de: Pastinake
+    es: Chirivía
+    fr: Panais
+    hu: Paszternák
+    it: Pastinaca
+    ja: パースニップ
+    ko: 파스닙
+    pt: Chirívia
+    ru: Пастернак
+    tr: Yaban Havucu
+    zh: 防风草
+  seasons:
+  - spring
+  growth_days: 4
+  sell_price: 35
+  seed:
+    names:
+      en: Parsnip Seeds
+      de: Pastinaken-Saat
+      es: Semillas de chirivía
+      fr: Graines de panais
+      hu: Paszternák magvak
+      it: Semi di pastinaca
+      ja: パースニップのタネ
+      ko: 파스닙 씨앗
+      pt: Sementes de chirívia
+      ru: Семена пастернака
+      tr: Yaban Havucu Tohumu
+      zh: 防风草种子
+    prices:
+      pierre: 20
+      joja: 25
+      traveling_cart: 10
+- names:
+    en: Potato
+    de: Kartoffel
+    es: Patata
+    fr: Pomme de terre
+    hu: Krumpli
+    it: Patata
+    ja: ジャガイモ
+    ko: 감자
+    pt: Batata
+    ru: Картофель
+    tr: Patates
+    zh: 土豆
+  seasons:
+  - spring
+  growth_days: 6
+  sell_price: 80
+  seed:
+    names:
+      en: Potato Seeds
+      de: Kartoffel-Saat
+      es: Brote de patata
+      fr: Graines de pomme de terre
+      hu: Krumpli magvak
+      it: Semi di patata
+      ja: ジャガイモのタネいも
+      ko: 감자 씨앗
+      pt: Sementes de batata
+      ru: Семена картофеля
+      tr: Patates Tohumu
+      zh: 土豆种子
+    prices:
+      pierre: 50
+      joja: 62
+      traveling_cart: 25
+- names:
+    en: Rhubarb
+    de: Rhabarber
+    es: Ruibarbo
+    fr: Rhubarbe
+    hu: Rebarbara
+    it: Rabarbaro
+    ja: ルバーブ
+    ko: 대황
+    pt: Ruibarbo
+    ru: Ревень
+    tr: Uşkun
+    zh: 大黄
+  seasons:
+  - spring
+  growth_days: 13
+  sell_price: 220
+  seed:
+    names:
+      en: Rhubarb Seeds
+      de: Rhabarber-Saat
+      es: Brote de ruibarbo
+      fr: Graines de rhubarbe
+      hu: Rebarbara magvak
+      it: Semi di rabarbaro
+      ja: ルバーブのタネ
+      ko: 대황 씨앗
+      pt: Sementes de ruibarbo
+      ru: Семена ревеня
+      tr: Uşkun Tohumu
+      zh: 大黄种子
+    prices:
+      oasis: 100
+      traveling_cart: 50
+- names:
+    en: Strawberry
+    de: Erdbeere
+    es: Fresa
+    fr: Fraise
+    hu: Eper
+    it: Fragola
+    ja: イチゴ
+    ko: 딸기
+    pt: Morango
+    ru: Клубника
+    tr: Çilek
+    zh: 草莓
+  seasons:
+  - spring
+  growth_days: 8
+  regrow_days: 4
+  sell_price: 120
+  seed:
+    names:
+      en: Strawberry Seeds
+      de: Erdbeer-Saat
+      es: Semillas de fresa
+      fr: Graines de fraise
+      hu: Eper magvak
+      it: Semi di fragola
+      ja: イチゴのタネ
+      ko: 딸기 씨앗
+      pt: Sementes de morango
+      ru: Семена клубники
+      tr: Çilek Tohumu
+      zh: 草莓种子
+    prices:
+      egg_festival: 100
+- names:
+    en: Tulip
+    de: Tulpe
+    es: Tulipán
+    fr: Tulipe
+    hu: Tulipán
+    it: Tulipano
+    ja: チューリップ
+    ko: 튤립
+    pt: Tulipa
+    ru: Тюльпан
+    tr: Lale
+    zh: 郁金香
+  seasons:
+  - spring
+  growth_days: 6
+  sell_price: 30
+  seed:
+    names:
+      en: Tulip Bulb
+      de: Tulpenzwiebel
+      es: Bulbo de tulipán
+      fr: Bulbe de tulipe
+      hu: Tulipán gumó
+      it: Bulbo di tulipano
+      ja: チューリップの球根
+      ko: 튤립 구근
+      pt: Bulbo de Tulipa
+      ru: Луковица тюльпана
+      tr: Lale Soğanı
+      zh: 郁金香球茎
+    prices:
+      pierre: 20
+      joja: 25
+      traveling_cart: 10
+- names:
+    en: Unmilled Rice
+    de: Ungemahlener Reis
+    es: Arroz sin moler
+    fr: Riz non moulu
+    hu: Hántolatlan rizs
+    it: Riso non macinato
+    ja: 玄米
+    ko: 가공되지 않은 쌀
+    pt: Arroz não moído
+    ru: Неочищенный рис
+    tr: Öğütülmemiş Pirinç
+    zh: 未碾米
+  seasons:
+  - spring
+  growth_days: 8
+  growth_days_irrigated: 6
+  sell_price: 30
+  seed:
+    names:
+      en: Rice Shoot
+      de: Reis Sprießen
+      es: Brote de arroz
+      fr: Germez de riz
+      hu: Rizs hajtás
+      it: Germoglio di riso
+      ja: 稲芽
+      ko: 쌀 새싹
+      pt: Broto de arroz
+      ru: Росток риса
+      tr: Pirinç Filizi
+      zh: 稻苗
+    prices:
+      pierre: 40
+      traveling_cart: 10
+- names:
+    en: Blueberry
+    de: Blaubeere
+    es: Arándano
+    fr: Myrtille
+    hu: Kék áfonya
+    it: Mirtillo
+    ja: ブルーベリー
+    ko: 블루베리
+    pt: Mirtilo
+    ru: Черника
+    tr: Yaban Mersini
+    zh: 蓝莓
+  seasons:
+  - summer
+  growth_days: 13
+  regrow_days: 4
+  sell_price: 50
+  seed:
+    names:
+      en: Blueberry Seeds
+      de: Blaubeeren-Saat
+      es: Semillas de arándano
+      fr: Graines de myrtille
+      hu: Kék áfonya magvak
+      it: Semi di mirtillo
+      ja: ブルーベリーのタネ
+      ko: 블루베리 씨앗
+      pt: Sementes de mirtilo
+      ru: Семена черники
+      tr: Yaban Mersini Tohumu
+      zh: 蓝莓种子
+    prices:
+      pierre: 80
+      traveling_cart: 40
+- names:
+    en: Corn
+    de: Mais
+    es: Maíz
+    fr: Maïs
+    hu: Kukorica
+    it: Mais
+    ja: トウモロコシ
+    ko: 옥수수
+    pt: Milho
+    ru: Кукуруза
+    tr: Mısır
+    zh: 玉米
+  seasons:
+  - summer
+  - fall
+  growth_days: 14
+  regrow_days: 4
+  sell_price: 50
+  seed:
+    names:
+      en: Corn Seeds
+      de: Mais-Saat
+      es: Semillas de maíz
+      fr: Graines de maïs
+      hu: Kukorica magvak
+      it: Semi di mais
+      ja: トウモロコシのタネ
+      ko: 옥수수 씨앗
+      pt: Sementes de milho
+      ru: Семена кукурузы
+      tr: Mısır Tohumu
+      zh: 玉米种子
+    prices:
+      pierre: 150
+      joja: 187
+      traveling_cart: 75
+- names:
+    en: Hops
+    de: Hopfen
+    es: Lúpulo
+    fr: Houblon
+    hu: Komló
+    it: Luppolo
+    ja: ホップ
+    ko: 홉
+    pt: Lúpulo
+    ru: Хмель
+    tr: Şerbetçi Otu
+    zh: 啤酒花
+  seasons:
+  - summer
+  growth_days: 11
+  regrow_days: 1
+  trellis: true
+  sell_price: 25
+  seed:
+    names:
+      en: Hops Starter
+      de: Hopfen-Setzling
+      es: Kit de lúpulos
+      fr: Graine de houblon
+      hu: Komlómagvak
+      it: Avvia-luppolo
+      ja: ホップ栽培キット
+      ko: 홉 종자
+      pt: Mudas de lúpulo
+      ru: Рассада хмеля
+      tr: Şerbetçi Otu Yetiştirici
+      zh: 啤酒花种子
+    prices:
+      pierre: 60
+      joja: 75
+      traveling_cart: 30
+- names:
+    en: Hot Pepper
+    de: Peperoni
+    es: Chile
+    fr: Piment fort
+    hu: Erős paprika
+    it: Peperoncino
+    ja: トウガラシ
+    ko: 매운 고추
+    pt: Pimenta Picante
+    ru: Жгучий перец
+    tr: Acı Biber
+    zh: 辣椒
+  seasons:
+  - summer
+  growth_days: 5
+  regrow_days: 3
+  sell_price: 40
+  seed:
+    names:
+      en: Pepper Seeds
+      de: Peperoni-Saat
+      es: Semillas de chile
+      fr: Graines de poivron
+      hu: Paprika magvak
+      it: Semi di peperoncino
+      ja: トウガラシのタネ
+      ko: 고추 씨앗
+      pt: Sementes de pimenta
+      ru: Семена перца
+      tr: Biber Tohumu
+      zh: 辣椒种子
+    prices:
+      pierre: 40
+      joja: 50
+      traveling_cart: 20
+- names:
+    en: Melon
+    de: Melone
+    es: Melón
+    fr: Melon
+    hu: Dinnye
+    it: Melone
+    ja: メロン
+    ko: 멜론
+    pt: Melão
+    ru: Дыня
+    tr: Kavun
+    zh: 甜瓜
+  seasons:
+  - summer
+  growth_days: 12
+  sell_price: 250
+  seed:
+    names:
+      en: Melon Seeds
+      de: Melonen-Saat
+      es: Semillas de melón
+      fr: Graines de melon
+      hu: Dinnye magvak
+      it: Semi di melone
+      ja: メロンのタネ
+      ko: 멜론 씨앗
+      pt: Sementes de Melão
+      ru: Семена дыни
+      tr: Kavun Tohumu
+      zh: 甜瓜种子
+    prices:
+      pierre: 80
+      joja: 100
+      traveling_cart: 40
+- names:
+    en: Pineapple
+    de: Ananas
+    es: Piña
+    fr: Ananas
+    hu: Ananász
+    it: Ananas
+    ja: パイナップル
+    ko: 파인애플
+    pt: Abacaxi
+    ru: Ананас
+    tr: Ananas
+    zh: 菠萝
+  seasons:
+  - summer
+  growth_days: 14
+  ginger_island_all_year: true
+  regrow_days: 7
+  sell_price: 300
+  seed:
+    names:
+      en: Pineapple Seeds
+      de: Ananassamen
+      es: Semillas de piña
+      fr: Graines d'ananas
+      hu: Ananász magvak
+      it: Semi di ananas
+      ja: パイナップルのタネ
+      ko: 파인애플 씨앗
+      pt: Sementes de Abacaxi
+      ru: Семена ананаса
+      tr: Ananas Tohumu
+      zh: 菠萝种子
+    prices: {}
+- names:
+    en: Poppy
+    de: Mohn
+    es: Amapola
+    fr: Pavot
+    hu: Mák
+    it: Papavero
+    ja: ポピー
+    ko: 양귀비
+    pt: Papoula
+    ru: Мак
+    tr: Haşhaş
+    zh: 虞美人花
+  seasons:
+  - summer
+  growth_days: 7
+  sell_price: 140
+  seed:
+    names:
+      en: Poppy Seeds
+      de: Mohn-Saat
+      es: Semillas de amapola
+      fr: Graines de pavot
+      hu: Mák magvak
+      it: Semi di papavero
+      ja: ポピーシード
+      ko: 양귀비 씨앗
+      pt: Sementes de papoula
+      ru: Семена мака
+      tr: Haşhaş Tohumu
+      zh: 虞美人种子
+    prices:
+      pierre: 100
+      joja: 125
+      traveling_cart: 50
+- names:
+    en: Radish
+    de: Radieschen
+    es: Rábano
+    fr: Radis
+    hu: Retek
+    it: Ravanello
+    ja: ラディッシュ
+    ko: 무
+    pt: Rabanete
+    ru: Редис
+    tr: Turp
+    zh: 萝卜
+  seasons:
+  - summer
+  growth_days: 6
+  sell_price: 90
+  seed:
+    names:
+      en: Radish Seeds
+      de: Radieschen-Saat
+      es: Semillas de rábano
+      fr: Graines de radis
+      hu: Retek magvak
+      it: Semi di ravanello
+      ja: ラディッシュのタネ
+      ko: 무 씨앗
+      pt: Sementes de rabanete
+      ru: Семена редиса
+      tr: Turp Tohumu
+      zh: 萝卜种子
+    prices:
+      pierre: 40
+      joja: 50
+      traveling_cart: 20
+- names:
+    en: Red Cabbage
+    de: Rotkohl
+    es: Lombarda
+    fr: Chou rouge
+    hu: Vörös káposzta
+    it: Cavolo rosso
+    ja: 赤キャベツ
+    ko: 붉은 양배추
+    pt: Repolho roxo
+    ru: Красная капуста
+    tr: Kırmızı Lahana
+    zh: 红叶卷心菜
+  seasons:
+  - summer
+  growth_days: 9
+  sell_price: 260
+  seed:
+    names:
+      en: Red Cabbage Seeds
+      de: Rotkohl-Saat
+      es: Semillas de lombarda
+      fr: Graines de chou rouge
+      hu: Vörös káposzta magvak
+      it: Semi di cavolo rosso
+      ja: 赤キャベツのタネ
+      ko: 붉은 양배추 씨앗
+      pt: Sementes de repolho vermelho
+      ru: Семена красной капусты
+      tr: Kırmızı Lahana Tohumu
+      zh: 红叶卷心菜种子
+    prices:
+      pierre: 100
+      traveling_cart: 50
+- names:
+    en: Starfruit
+    de: Sternfrucht
+    es: Carambola
+    fr: Carambole
+    hu: Csillaggyümölcs
+    it: Carambola
+    ja: スターフルーツ
+    ko: 스타프루트
+    pt: Carambola
+    ru: Карамбола
+    tr: Yıldızmeyvesi
+    zh: 杨桃
+  seasons:
+  - summer
+  growth_days: 13
+  sell_price: 750
+  seed:
+    names:
+      en: Starfruit Seeds
+      de: Sternfrucht-Saat
+      es: Semillas de carambola
+      fr: Graines de carambole
+      hu: Csillaggyümölcs magvak
+      it: Semi di carambola
+      ja: スターフルーツのタネ
+      ko: 스타프루트 씨앗
+      pt: Sementes de carambola
+      ru: Семена карамболы
+      tr: Yıldızmeyvesi Tohumu
+      zh: 杨桃种子
+    prices:
+      oasis: 400
+      traveling_cart: 200
+- names:
+    en: Summer Spangle
+    de: Sommerschmuck
+    es: Lentejuela de verano
+    fr: Fleur tropicale d'été
+    hu: Nyári tölgyfagubacs
+    it: Lustrino d'estate
+    ja: サマースパングル
+    ko: 여름별꽃
+    pt: Flor-Miçanga
+    ru: Летний блестник
+    tr: Yazpulu
+    zh: 夏季亮片
+  seasons:
+  - summer
+  growth_days: 8
+  sell_price: 90
+  seed:
+    names:
+      en: Spangle Seeds
+      de: Sommerschmuck-Saat
+      es: Semillas de lentejuela
+      fr: Graines de fleur tropicale
+      hu: Tölgyfagubacs magvak
+      it: Semi di lustrino
+      ja: スパングルのタネ
+      ko: 여름별꽃 씨앗
+      pt: Sementes de Miçanga
+      ru: Семена блестника
+      tr: Yazpulu Tohumu
+      zh: 夏季亮片种子
+    prices:
+      pierre: 50
+      joja: 62
+      traveling_cart: 25
+- names:
+    en: Summer Squash
+    de: Sommerkürbis
+    es: Calabaza amarilla
+    fr: Courge d'été
+    hu: Zsenge tök
+    it: Zucca estiva
+    ja: サマースクワッシュ
+    ko: 여름호박
+    pt: Abobrinha de Verão
+    ru: Сквош
+    tr: Yaz Kabağı
+    zh: 金皮西葫芦
+  seasons:
+  - summer
+  growth_days: 6
+  regrow_days: 3
+  sell_price: 45
+  seed:
+    names:
+      en: Summer Squash Seeds
+      de: Sommerkürbis-Samen
+      es: Semillas de calabaza amarilla
+      fr: Graines de courge d'été
+      hu: Zsenge tök magvak
+      it: Semi di zucca estiva
+    prices: {}
+- names:
+    en: Sunflower
+    de: Sonnenblume
+    es: Girasol
+    fr: Tournesol
+    hu: Napraforgó
+    it: Girasole
+    ja: ヒマワリ
+    ko: 해바라기
+    pt: Girassol
+    ru: Подсолнух
+    tr: Ayçiçeği
+    zh: 向日葵
+  seasons:
+  - summer
+  - fall
+  growth_days: 8
+  sell_price: 80
+  seed:
+    names:
+      en: Sunflower Seeds
+      de: Sonnenblumen-Saat
+      es: Semillas de girasol
+      fr: Graines de tournesol
+      hu: Napraforgó magvak
+      it: Semi di girasole
+      ja: ヒマワリのタネ
+      ko: 해바라기 씨앗
+      pt: Sementes de Girassol
+      ru: Семена подсолнуха
+      tr: Ayçiçeği Tohumu
+      zh: 向日葵种子
+    prices:
+      pierre: 200
+      joja: 125
+      traveling_cart: 20
+- names:
+    en: Taro Root
+    de: Taro-Wurzel
+    es: Raíz de taro
+    fr: Racine de taro
+    hu: Tarógyökér
+    it: Radice di taro
+    ja: タロイモの根
+    ko: 토란
+    pt: Inhame-coco
+    ru: Корень таро
+    tr: Gölevez Kökü
+    zh: 芋头
+  seasons:
+  - summer
+  growth_days: 10
+  growth_days_irrigated: 7
+  ginger_island_all_year: true
+  sell_price: 100
+  seed:
+    names:
+      en: Taro Tuber
+      de: Taro-Knollen
+      es: Fruto de taro
+      fr: Tubercule de taro
+      hu: Taró gumó
+      it: Tubero di taro
+      ja: タロイモのタネいも
+      ko: 토란 줄기
+      pt: Tubérculo de Inhame-coco
+      ru: Клубень Таро
+      tr: Gölevez Yumrusu
+      zh: 芋头块茎
+    prices: {}
+- names:
+    en: Tomato
+    de: Tomate
+    es: Tomate
+    fr: Tomate
+    hu: Paradicsom
+    it: Pomodoro
+    ja: トマト
+    ko: 토마토
+    pt: Tomate
+    ru: Помидор
+    tr: Domates
+    zh: 西红柿
+  seasons:
+  - summer
+  growth_days: 11
+  regrow_days: 4
+  sell_price: 60
+  seed:
+    names:
+      en: Tomato Seeds
+      de: Tomaten-Saat
+      es: Semillas de tomate
+      fr: Graines de tomate
+      hu: Paradicsom magvak
+      it: Semi di pomodoro
+      ja: トマトのタネ
+      ko: 토마토 씨앗
+      pt: Sementes de Tomate
+      ru: Семена помидора
+      tr: Domates Tohumu
+      zh: 西红柿种子
+    prices:
+      pierre: 50
+      joja: 62
+      traveling_cart: 25
+- names:
+    en: Wheat
+    de: Weizen
+    es: Trigo
+    fr: Blé
+    hu: Búza
+    it: Grano
+    ja: コムギ
+    ko: 밀
+    pt: Trigo
+    ru: Пшеница
+    tr: Buğday
+    zh: 小麦
+  seasons:
+  - summer
+  - fall
+  growth_days: 4
+  sell_price: 25
+  seed:
+    names:
+      en: Wheat Seeds
+      de: Weizen-Saat
+      es: Semillas de trigo
+      fr: Graines de blé
+      hu: Búza magvak
+      it: Semi di grano
+      ja: コムギのタネ
+      ko: 밀 씨앗
+      pt: Sementes de trigo
+      ru: Семена пшеницы
+      tr: Buğday Tohumu
+      zh: 小麦种子
+    prices:
+      pierre: 10
+      joja: 12
+      traveling_cart: 5
+- names:
+    en: Amaranth
+    de: Amarant
+    es: Amaranto
+    fr: Amarante
+    hu: Amaránt
+    it: Amaranto
+    ja: アマランサス
+    ko: 아마란스
+    pt: Amaranto
+    ru: Амарант
+    tr: Horozibiği
+    zh: 苋菜
+  seasons:
+  - fall
+  growth_days: 7
+  sell_price: 150
+  seed:
+    names:
+      en: Amaranth Seeds
+      de: Amarant-Saat
+      es: Semillas de amaranto
+      fr: Graines d'amarante
+      hu: Amaránt magvak
+      it: Semi di amaranto
+      ja: アマランサスのタネ
+      ko: 아마란스 씨앗
+      pt: Sementes de amaranto
+      ru: Семена амаранта
+      tr: Horozibiği Tohumu
+      zh: 苋菜种子
+    prices:
+      pierre: 70
+      joja: 87
+      traveling_cart: 35
+- names:
+    en: Artichoke
+    de: Artischocke
+    es: Alcachofa
+    fr: Artichaut
+    hu: Articsóka
+    it: Carciofo
+    ja: アーティチョーク
+    ko: 아티초크
+    pt: Alcachofra
+    ru: Артишок
+    tr: Enginar
+    zh: 洋蓟
+  seasons:
+  - fall
+  growth_days: 8
+  sell_price: 160
+  seed:
+    names:
+      en: Artichoke Seeds
+      de: Artischocken-Saat
+      es: Semillas de alcachofa
+      fr: Graines d'artichaut
+      hu: Articsóka magvak
+      it: Semi di carciofo
+      ja: アーティチョークのタネ
+      ko: 아티초크 씨앗
+      pt: Sementes de alcachofra
+      ru: Семена артишока
+      tr: Enginar Tohumu
+      zh: 洋蓟种子
+    prices:
+      pierre: 30
+      traveling_cart: 15
+- names:
+    en: Beet
+    de: Rübe
+    es: Remolacha
+    fr: Betterave
+    hu: Cékla
+    it: Barbabietola
+    ja: ビーツ
+    ko: 사탕무
+    pt: Beterraba
+    ru: Свекла
+    tr: Pancar
+    zh: 甜菜
+  seasons:
+  - fall
+  growth_days: 6
+  sell_price: 100
+  seed:
+    names:
+      en: Beet Seeds
+      de: Rote-Beete-Saat
+      es: Semillas de remolacha
+      fr: Graines de betterave
+      hu: Cékla magvak
+      it: Semi di barbabietola
+      ja: ビーツのタネ
+      ko: 사탕무 씨앗
+      pt: Sementes de beterraba
+      ru: Семена свеклы
+      tr: Pancar Tohumu
+      zh: 甜菜种子
+    prices:
+      oasis: 20
+      traveling_cart: 10
+- names:
+    en: Bok Choy
+    de: Senfkohl
+    es: Col china
+    fr: Chou chinois
+    hu: Bordáskel
+    it: Bok Choy
+    ja: チンゲンサイ
+    ko: 청경채
+    pt: Acelga Chinesa
+    ru: Бок-чой
+    tr: Çin Lahanası
+    zh: 小白菜
+  seasons:
+  - fall
+  growth_days: 4
+  sell_price: 80
+  seed:
+    names:
+      en: Bok Choy Seeds
+      de: Senfkohl-Saat
+      es: Semillas de col china
+      fr: Graines de chou chinois
+      hu: Bok Choy magvak
+      it: Semi di Bok Choy
+      ja: チンゲンサイのタネ
+      ko: 청경채 씨앗
+      pt: Sementes de Acelga Chinesa
+      ru: Семена бок-чой
+      tr: Çin Lahanası Tohumu
+      zh: 小白菜种子
+    prices:
+      pierre: 50
+      joja: 62
+      traveling_cart: 25
+- names:
+    en: Broccoli
+  seasons:
+  - fall
+  growth_days: 8
+  regrow_days: 4
+  sell_price: 70
+  seed:
+    names:
+      en: Broccoli Seeds
+      de: Brokkoli-Samen
+      es: Semillas de brócoli
+      fr: Graines de brocoli
+      hu: Brokkoli magvak
+      it: Semi di broccoli
+      ja: ブロッコリーのタネ
+      ko: 브로콜리 씨앗
+      pt: Sementes de Brócolis
+      ru: Семена брокколи
+      tr: Brokoli Tohumu
+      zh: 西蓝花种子
+    prices: {}
+- names:
+    en: Cranberries
+    de: Preiselbeere
+    es: Grosella
+    fr: Canneberges
+    hu: Vörös áfonya
+    it: Mirtilli rossi
+    ja: クランベリー
+    ko: 크랜베리
+    pt: Oxicoco
+    ru: Клюква
+    tr: Kızılcık
+    zh: 蔓越莓
+  seasons:
+  - fall
+  growth_days: 7
+  regrow_days: 5
+  sell_price: 75
+  seed:
+    names:
+      en: Cranberry Seeds
+      de: Preiselbeer-Saat
+      es: Semillas de grosella
+      fr: Graines de canneberge
+      hu: Vörös áfonya magvak
+      it: Semi di mirtillo rosso
+      ja: クランベリーのタネ
+      ko: 크랜베리 씨앗
+      pt: Sementes de oxicoco
+      ru: Семена клюквы
+      tr: Kızılcık Tohumu
+      zh: 蔓越莓种子
+    prices:
+      pierre: 240
+      joja: 300
+      traveling_cart: 120
+- names:
+    en: Eggplant
+    de: Aubergine
+    es: Berenjena
+    fr: Aubergine
+    hu: Padlizsán
+    it: Melanzana
+    ja: ナス
+    ko: 가지
+    pt: Berinjela
+    ru: Баклажан
+    tr: Patlıcan
+    zh: 茄子
+  seasons:
+  - fall
+  growth_days: 5
+  regrow_days: 5
+  sell_price: 60
+  seed:
+    names:
+      en: Eggplant Seeds
+      de: Auberginen-Saat
+      es: Semillas de berenjena
+      fr: Graines d'aubergine
+      hu: Padlizsán magvak
+      it: Semi di melanzana
+      ja: ナスのタネ
+      ko: 가지 씨앗
+      pt: Sementes de berinjela
+      ru: Семена баклажана
+      tr: Patlıcan Tohumu
+      zh: 茄子种子
+    prices:
+      pierre: 20
+      joja: 25
+      traveling_cart: 10
+- names:
+    en: Fairy Rose
+    de: Feenrose
+    es: Rosa hada
+    fr: Rose Féerie
+    hu: Tündér rózsa
+    it: Rosa fatata
+    ja: フェアリーローズ
+    ko: 요정장미
+    pt: Rosa-de-fada
+    ru: Сказочная роза
+    tr: Perigülü
+    zh: 玫瑰仙子
+  seasons:
+  - fall
+  growth_days: 12
+  sell_price: 290
+  seed:
+    names:
+      en: Fairy Seeds
+      de: Feen-Saat
+      es: Semillas de hada
+      fr: Graines de rose Féerie
+      hu: Tündér magvak
+      it: Semi fatati
+      ja: フェアリーシード
+      ko: 요정장미 씨앗
+      pt: Sementes de fada
+      ru: Сказочные семена
+      tr: Perigülü Tohumu
+      zh: 玫瑰仙子种子
+    prices:
+      pierre: 200
+      joja: 250
+      traveling_cart: 100
+- names:
+    en: Grape
+    de: Weintraube
+    es: Uva
+    fr: Raisin
+    hu: Szőlő
+    it: Uva
+    ja: ブドウ
+    ko: 포도
+    pt: Uva
+    ru: Виноград
+    tr: Üzüm
+    zh: 葡萄
+  seasons:
+  - fall
+  growth_days: 10
+  regrow_days: 3
+  trellis: true
+  sell_price: 80
+  seed:
+    names:
+      en: Grape Starter
+      de: Weintrauben-Setzling
+      es: Kit de uvas
+      fr: Graine de raisins
+      hu: Szőlőmagvak
+      it: Avvia-uva
+      ja: ブドウ栽培キット
+      ko: 포도 종자
+      pt: Mudas de uva
+      ru: Виноградные черенки
+      tr: Üzüm Yetiştirici
+      zh: 葡萄种子
+    prices:
+      pierre: 60
+      joja: 75
+      traveling_cart: 30
+- names:
+    en: Pumpkin
+    de: Kürbis
+    es: Calabaza
+    fr: Citrouille
+    hu: Tök
+    it: Zucca
+    ja: カボチャ
+    ko: 호박
+    pt: Abóbora
+    ru: Тыква
+    tr: Bal Kabağı
+    zh: 南瓜
+  seasons:
+  - fall
+  growth_days: 13
+  sell_price: 320
+  seed:
+    names:
+      en: Pumpkin Seeds
+      de: Kürbis-Saat
+      es: Semillas de calabaza
+      fr: Graines de citrouille
+      hu: Tök magvak
+      it: Semi di zucca
+      ja: カボチャのタネ
+      ko: 호박 씨앗
+      pt: Sementes de abóbora
+      ru: Семена тыквы
+      tr: Bal Kabağı Tohumu
+      zh: 南瓜种子
+    prices:
+      pierre: 100
+      joja: 125
+      traveling_cart: 50
+- names:
+    en: Sweet Gem Berry
+    de: Süße Edelsteinbeere
+    es: Baya de gema dulce
+    fr: Baie gemme sucrée
+    hu: Édes drágakőbogyó
+    it: Baccagemma dolce
+    ja: スイートジェムベリー
+    ko: 달콤보석베리
+    pt: Cereja de Joia Doce
+    ru: Сладкая самоцветинка
+    tr: Tatlıtaş Meyvesi
+    zh: 宝石甜莓
+  seasons:
+  - fall
+  growth_days: 24
+  sell_price: 3000
+  seed:
+    names:
+      en: Rare Seed
+      de: Seltene Saat
+      es: Semilla rara
+      fr: Graine rare
+      hu: Ritka magvak
+      it: Seme raro
+      ja: 珍しいタネ
+      ko: 희귀한 씨앗
+      pt: Semente rara
+      ru: Редкое семечко
+      tr: Ender Tohum
+      zh: 稀有种子
+    prices:
+      traveling_cart: 1000
+- names:
+    en: Yam
+    de: Süßkartoffel
+    es: Ñame
+    fr: Igname
+    hu: Jamgyökér
+    it: Patata dolce
+    ja: サツマイモ
+    ko: 참마
+    pt: Inhame
+    ru: Батат
+    tr: Tatlı Patates
+    zh: 山药
+  seasons:
+  - fall
+  growth_days: 10
+  sell_price: 160
+  seed:
+    names:
+      en: Yam Seeds
+      de: Süßkartoffel-Saat
+      es: Semillas de ñame
+      fr: Graines d'Igname
+      hu: Jamgyökér magvak
+      it: Semi di patata dolce
+      ja: サツマイモのタネいも
+      ko: 참마 씨앗
+      pt: Sementes de inhame
+      ru: Семена батата
+      tr: Tatlı Patates Tohumu
+      zh: 山药种子
+    prices:
+      pierre: 60
+      joja: 75
+      traveling_cart: 30
+- names:
+    en: Powdermelon
+    de: Pulvermelone
+    es: Melón de polvo
+    fr: Poudremelon
+    hu: Púderdinnye
+    it: Melone incipriato
+  seasons:
+  - winter
+  growth_days: 7
+  sell_price: 60
+  seed:
+    names:
+      en: Powdermelon Seeds
+    prices: {}

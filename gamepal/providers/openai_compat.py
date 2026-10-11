@@ -24,7 +24,16 @@ from typing import Any, ClassVar
 
 import httpx
 
-from gamepal.providers.base import OUT_OF_ROOM, Capabilities, ChatResult, Message, ModelTraits, ProviderError, Usage
+from gamepal.providers.base import (
+    OUT_OF_ROOM,
+    AnswerCutShort,
+    Capabilities,
+    ChatResult,
+    Message,
+    ModelTraits,
+    ProviderError,
+    Usage,
+)
 from gamepal.security import validate_local_endpoint, validate_remote_endpoint
 
 MAX_RESPONSE_CHARS = 200_000
@@ -369,6 +378,8 @@ class OpenAICompatibleProvider:
                 continue
             self._learn(traits, outcome, bool(extra))
             if not self._starved(outcome):
+                if outcome.finish == "length":
+                    raise AnswerCutShort(f"{self.name}: respuesta cortada al llegar al límite de {limit} tokens")
                 return
             if attempt == 2:
                 break

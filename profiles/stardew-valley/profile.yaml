@@ -99,7 +99,22 @@ knowledge:
     - url: https://stardewvalleywiki.com/Stardew_Valley_Wiki
       depth: 1
       include: ["/*"]
+      # Historiales de versiones y páginas de modding: mucho texto que no ayuda a jugar.
+      exclude: ["/*Version_History*", "/Modding*", "/Category:*", "/File:*", "/Template:*", "/User:*"]
   refresh: monthly
+  # Ficha de lo que se ve o se pregunta, buscada al momento por su nombre exacto en el idioma del juego.
+  lookup:
+    - api: https://es.stardewvalleywiki.com/mediawiki/api.php
+      language: es
+    - api: https://stardewvalleywiki.com/mediawiki/api.php
+      language: en
+
+# Datos exactos (generados desde la wiki con scripts/stardew_reference.py): el asistente no los recuerda.
+reference: [reference/crops.yaml]
+calendar:
+  seasons: [spring, summer, fall, winter]
+  days_per_season: 28
+  events: reference/festivals.yaml
 
 prompts:
   advisor: prompts/advisor.md
