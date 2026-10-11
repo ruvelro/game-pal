@@ -52,9 +52,9 @@ game-pal es un compañero de juego con IA que mira la pantalla, escucha al jugad
 
 | Sistema | Captura | Overlay | Audio | Secretos | Aceleración |
 | --- | --- | --- | --- | --- | --- |
-| Windows x64 / ARM64 | Windows.Graphics.Capture (DXGI) | Ventana topmost click-through excluida de captura | WASAPI | Credential Manager | CUDA, Vulkan, DirectML, CPU |
+| Windows x64 / ARM64 | Windows.Graphics.Capture (DXGI); en M1, Win32 + BitBlt del área cliente | Ventana topmost click-through excluida de captura | WASAPI | Credential Manager | CUDA, Vulkan, DirectML, CPU |
 | macOS ARM | ScreenCaptureKit | NSPanel flotante sin foco, nivel por encima del juego | CoreAudio | Keychain | Metal (llama.cpp / MLX) |
-| Linux x64 | PipeWire/portal (Wayland), X11 fallback | Capa wlr-layer-shell o ventana override-redirect en X11 | PipeWire/PulseAudio | Secret Service | CUDA, Vulkan, ROCm, CPU |
+| Linux x64 | PipeWire/portal (Wayland), X11 fallback; en M1, solo X11 y XWayland | Capa wlr-layer-shell o ventana override-redirect en X11 | PipeWire/PulseAudio | Secret Service | CUDA, Vulkan, ROCm, CPU |
 
 Requisito de captura: el juego debe ir en **ventana sin bordes o ventana**. La pantalla completa exclusiva impide dibujar encima en los tres sistemas; la GUI lo avisa y propone voz, panel en segundo monitor o panel remoto.
 
@@ -371,7 +371,7 @@ game-pal/
 
 | Hito | Contenido |
 | --- | --- |
-| M1 · Esqueleto | Daemon, bus, GUI básica, captura en los tres sistemas, OCR, hash perceptual, perfil genérico, proveedor local |
+| M1 · Esqueleto ✅ | Daemon, bus, GUI básica, captura en los tres sistemas, OCR, hash perceptual, perfil genérico, proveedor local |
 | M2 · Entender | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
 | M3 · Hablar | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
 | M4 · Saber | Ingesta por URL y ficheros, índice híbrido, citas, actualización |

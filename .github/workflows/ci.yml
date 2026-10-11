@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python · ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    # Windows ARM64 es nuevo en los runners y algunas ruedas aún pueden faltar: no bloquea mientras tanto.
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: Linux x64, experimental: false }
+          - { os: macos-latest, label: macOS ARM, experimental: false }
+          - { os: windows-latest, label: Windows x64, experimental: false }
+          - { os: windows-11-arm, label: Windows ARM64, experimental: true }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Instalar dependencias
+        run: uv sync --locked --python 3.12
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Tipos
+        run: uv run mypy
+      - name: Tests
+        run: uv run pytest -q
+
+  ui:
+    name: GUI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npm run build

@@ -1,0 +1,88 @@
+[project]
+name = "game-pal"
+version = "0.1.0.dev0"
+description = "Compañero de juego con IA: mira la pantalla, te escucha y te aconseja. Local, privado y para cualquier juego."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.14"
+authors = [{ name = "ruvelro" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Games/Entertainment",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "websockets>=13.0",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "httpx>=0.28",
+    "numpy>=2.0",
+    "pillow>=11.0",
+    "mss>=10.0",
+    "platformdirs>=4.3",
+    "rapidocr>=3.4",
+    "onnxruntime>=1.20",
+    "pyobjc-framework-Quartz>=11.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=11.0; sys_platform == 'darwin'",
+    "pyobjc-framework-ScreenCaptureKit>=11.0; sys_platform == 'darwin'",
+    "python-xlib>=0.33; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+macos-vision = ["pyobjc-framework-Vision>=11.0; sys_platform == 'darwin'"]
+
+[project.scripts]
+game-pal = "gamepal.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gamepal"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"profiles" = "gamepal/_bundled_profiles"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "ASYNC", "PT"]
+ignore = ["S101", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PT011"]
+"scripts/**" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["gamepal"]
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["ocr: tests que cargan el motor OCR real (más lentos)"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

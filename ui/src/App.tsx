@@ -1,0 +1,72 @@
+import { useState } from "react";
+import { api, token } from "./api";
+import { t, type Key } from "./i18n";
+import { Game } from "./pages/Game";
+import { Home } from "./pages/Home";
+import { Models } from "./pages/Models";
+import { Settings } from "./pages/Settings";
+import { useLive, useStatus } from "./store";
+
+type Page = "home" | "game" | "models" | "settings";
+
+const NAV: Array<[Page, Key, string]> = [
+  ["home", "nav.home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
+  ["game", "nav.game", "M6 9h4M8 7v4M15 10h.01M18 8h.01M7 5h10a5 5 0 0 1 5 5v1a5 5 0 0 1-8.6 3.5L12 13l-1.4 1.5A5 5 0 0 1 2 11v-1a5 5 0 0 1 5-5z"],
+  ["models", "nav.models", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"],
+  ["settings", "nav.settings", "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4"],
+];
+
+export function App() {
+  if (!token) {
+    return (
+      <main className="center">
+        <img src="./icon.png" alt="" width={64} height={64} />
+        <p>{t("error.notoken")}</p>
+      </main>
+    );
+  }
+  return <Shell />;
+}
+
+function Shell() {
+  const [page, setPage] = useState<Page>("home");
+  const live = useLive();
+  const { status, refresh } = useStatus();
+
+  const toggle = async () => {
+    await api.post(status?.paused ? "/api/watcher/resume" : "/api/watcher/pause");
+    await refresh();
+  };
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <img src="./icon.png" alt="" width={36} height={36} />
+          <span>game-pal</span>
+        </div>
+        <nav>
+          {NAV.map(([id, label, path]) => (
+            <button key={id} className={page === id ? "nav active" : "nav"} onClick={() => setPage(id)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={path} />
+              </svg>
+              {t(label)}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <span className={`dot ${live.connected ? "ok" : "warn"}`} aria-hidden="true" />
+          <span className="small">{live.connected ? t("status.connected") : t("status.disconnected")}</span>
+          <span className="small muted">v{status?.version ?? "…"}</span>
+        </div>
+      </aside>
+      <main className="content">
+        {page === "home" && <Home live={live} status={status} onToggle={() => void toggle()} />}
+        {page === "game" && <Game />}
+        {page === "models" && <Models />}
+        {page === "settings" && <Settings />}
+      </main>
+    </div>
+  );
+}
