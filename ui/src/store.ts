@@ -5,6 +5,7 @@ import {
   type AppConfig,
   type BusMessage,
   type Component,
+  type EvidenceSnapshot,
   type FrameCaptured,
   type KnowledgeProgress,
   type AnswerUpdate,
@@ -27,6 +28,7 @@ export interface LiveState {
   speaking: boolean;
   answers: AnswerUpdate[];
   knowledge: Record<number, KnowledgeProgress>;
+  evidence: EvidenceSnapshot | null;
 }
 
 const initial: LiveState = {
@@ -40,6 +42,7 @@ const initial: LiveState = {
   speaking: false,
   answers: [],
   knowledge: {},
+  evidence: null,
 };
 
 const MAX_ANSWERS = 6;
@@ -64,6 +67,8 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
       const progress = message.data as KnowledgeProgress;
       return { ...state, knowledge: { ...state.knowledge, [progress.source_id]: progress } };
     }
+    case "evidence":
+      return { ...state, evidence: (message.data as { snapshot: EvidenceSnapshot }).snapshot };
     case "voice.state":
       return { ...state, voice: message.data as VoiceStateEvent };
     case "voice.speaking":

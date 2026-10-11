@@ -14,7 +14,9 @@ from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
+from gamepal.evidence.service import EvidenceService
 from gamepal.knowledge import KnowledgeService
+from gamepal.memory import MemoryService
 from gamepal.overlay.process import OverlayProcess
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.perception.ocr import OcrEngine, create_engine
@@ -72,6 +74,10 @@ class Daemon:
             config=lambda: self.config,
             provider=lambda: self.c.provider,
         )
+        self.evidence = EvidenceService(self.bus, config=lambda: self.config, vocabulary=lambda: self.c.vocabulary)
+        self.memory = MemoryService(
+            self.bus, paths.data_dir / "memory.sqlite", config=lambda: self.config, provider=lambda: self.c.provider
+        )
         self.assistant = Assistant(
             self.bus,
             config=lambda: self.config,
@@ -81,6 +87,7 @@ class Daemon:
             read=lambda: self.last_read,
             retrieve=self.knowledge.search,
             has_knowledge=lambda: self.knowledge.store is not None and self.knowledge.store.stats()["chunks"] > 0,
+            state=self._state_context,
         )
         self._assistant_task: asyncio.Task[None] | None = None
         self.voice = VoiceService(
@@ -91,6 +98,9 @@ class Daemon:
         )
         self.overlay: OverlayProcess | None = None
         self._voice_started = False
+
+    def _state_context(self) -> str:
+        return "\n\n".join(part for part in (self.evidence.ledger.prompt(), self.memory.context()) if part)
 
     def attach_gui(self, port: int, token: str) -> None:
         """El overlay se conecta a la misma API que la GUI."""
@@ -114,6 +124,8 @@ class Daemon:
             await self.overlay.stop()
         await self.voice.stop()
         await self.knowledge.close()
+        await self.evidence.close()
+        await self.memory.close()
         await self.assistant.aclose()
         if self._assistant_task is not None:
             self._assistant_task.cancel()
@@ -157,6 +169,14 @@ class Daemon:
                 or config.game_language != previous.game_language
             ):
                 await self._load_vocabulary()
+            if (
+                profile_changed
+                or config.save_dirs != previous.save_dirs
+                or config.trusted_plugins != previous.trusted_plugins
+            ):
+                await self.evidence.open(self.c.profile)
+            if profile_changed or config.memory.enabled != previous.memory.enabled:
+                await self.memory.open(self.c.profile.profile.id if self.c.profile else None)
             if first or config.ocr != previous.ocr or config.game_language != previous.game_language:
                 await self._create_ocr()
             if first or config.provider != previous.provider:

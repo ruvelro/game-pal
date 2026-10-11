@@ -127,6 +127,13 @@ Un registro por sesión de hechos con origen y rango:
 
 Reglas: una oferta nunca implica posesión; un hecho de rango superior supersede a los inferiores; los hechos caducan al cambiar de partida; todo hecho guarda hora, origen y la evidencia textual.
 
+Implementación (M5):
+- **Guardado (rango 1)**: el lector del perfil se ejecuta cada vez que el fichero cambia (sondeo cada 2 s). Si la suma de comprobación no cuadra, se asume que el juego está escribiendo y se reintenta. Cada lectura sustituye por completo los hechos del guardado anteriores.
+- **Jugador (rango 2)**: una frase que no es pregunta ni negación y nombra exactamente una de las opciones ofrecidas en pantalla («he cogido el Latigazo») se registra como elección. Si nombra varias o ninguna, no se adivina.
+- **Visto (rango 3)**: pantallas declaradas con `evidence: owned` (inventarios, listas de lo que se tiene), ya confirmadas por dos lecturas.
+- **Ofrecido (rango 4)**: pantallas con `evidence: offered`; se guardan aparte y el modelo las recibe marcadas como «todavía no lo tiene».
+- El modelo recibe el estado con el origen de cada dato y la instrucción de que el guardado manda.
+
 Los lectores de guardado son plugins del perfil. Son de solo lectura, abren el fichero en modo compartido, verifican integridad y nunca ejecutan código del juego (los guardados en Lua se decodifican, no se evalúan).
 
 ### 4.4 Razonamiento y enrutador de modelos
@@ -189,7 +196,7 @@ El jugador elige por tipo de evento qué salidas se usan.
 
 ### 4.8 Memoria
 
-- Desactivada por defecto. Al activarla, cada sesión guarda su registro de evidencia, las preguntas y respuestas, y un resumen generado al cerrar.
+- Desactivada por defecto. Al activarla, cada sesión (desde que arranca game-pal o se cambia de perfil) guarda sus preguntas y respuestas y un resumen generado al cerrar. Las sesiones sin conversación se descartan.
 - Memoria entre sesiones opcional: lecciones que el jugador pide guardar ("recuerda que…") y el resumen de las últimas N sesiones, inyectados como datos.
 - Todo en SQLite local, exportable y borrable desde la GUI con un botón.
 
@@ -271,7 +278,7 @@ Una pantalla se confirma con dos lecturas coincidentes, o con una sola si la pun
 
 ### 5.3 Plugins
 
-`plugin.py` expone clases que implementan interfaces pequeñas: `SaveReader.read(path) -> dict`, `ScreenHook.after_classify(screen, evidence)`, `KnowledgeHook.vocabulary()`. Se ejecutan en el mismo proceso pero con permisos explícitos declarados en el perfil (lectura de rutas concretas). Un perfil sin plugin funciona íntegramente con el YAML.
+`plugin.py` expone clases que implementan interfaces pequeñas. En M5 existe `SaveReader` (`find(carpeta)` y `read(ruta) -> SaveSnapshot`); `ScreenHook` y `KnowledgeHook` quedan para más adelante. Un plugin es código que se ejecuta dentro de game-pal: los de perfiles incluidos son de confianza y los del usuario solo se cargan si este confía expresamente en ese fichero, identificado por su SHA-256; si cambia, se vuelve a preguntar. Un perfil sin plugin funciona íntegramente con el YAML.
 
 ### 5.4 Perfiles incluidos en v0.1
 
@@ -367,7 +374,7 @@ game-pal/
 | M2 · Entender ✅ | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
 | M3 · Hablar ✅ | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
 | M4 · Saber ✅ | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
-| M5 · Recordar | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
+| M5 · Recordar ✅ | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
 | M6 · Abrir | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
 | M7 · Pulir | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |
 

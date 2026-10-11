@@ -97,3 +97,12 @@ sets:
     - { id: eris, names: { en: Strife Incarnate } }
     - { id: prometheus, names: { en: Titan of Foresight } }
     - { id: typhon, names: { en: Father of All Monsters } }
+
+  # Armas (identificadores del guardado). Nombres en inglés; los del resto de idiomas vendrán del juego.
+  weapons:
+    - { id: WeaponStaffSwing, names: { en: Witch's Staff } }
+    - { id: WeaponDagger, names: { en: Sister Blades } }
+    - { id: WeaponTorch, names: { en: Umbral Flames } }
+    - { id: WeaponAxe, names: { en: Moonstone Axe } }
+    - { id: WeaponLob, names: { en: Argent Skull } }
+    - { id: WeaponSuit, names: { en: Black Coat } }

@@ -4,18 +4,20 @@ import { t, type Key } from "./i18n";
 import { Game } from "./pages/Game";
 import { Home } from "./pages/Home";
 import { Knowledge } from "./pages/Knowledge";
+import { Memory } from "./pages/Memory";
 import { Models } from "./pages/Models";
 import { Output } from "./pages/Output";
 import { Settings } from "./pages/Settings";
 import { Voice } from "./pages/Voice";
 import { useLive, useStatus } from "./store";
 
-type Page = "home" | "game" | "knowledge" | "voice" | "output" | "models" | "settings";
+type Page = "home" | "game" | "knowledge" | "memory" | "voice" | "output" | "models" | "settings";
 
 const NAV: Array<[Page, Key, string]> = [
   ["home", "nav.home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
   ["game", "nav.game", "M6 9h4M8 7v4M15 10h.01M18 8h.01M7 5h10a5 5 0 0 1 5 5v1a5 5 0 0 1-8.6 3.5L12 13l-1.4 1.5A5 5 0 0 1 2 11v-1a5 5 0 0 1 5-5z"],
   ["knowledge", "nav.knowledge", "M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2zM4 5v16M8 7h6M8 11h6"],
+  ["memory", "nav.memory", "M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.4 3 5.6V19h8v-3.4c1.6-1.2 3-3 3-5.6a7 7 0 0 0-7-7zM9 21h6"],
   ["voice", "nav.voice", "M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3"],
   ["output", "nav.output", "M4 5h16v11H4zM8 20h8M12 16v4"],
   ["models", "nav.models", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"],
@@ -71,6 +73,7 @@ function Shell() {
         {page === "home" && <Home live={live} status={status} onToggle={() => void toggle()} />}
         {page === "game" && <Game />}
         {page === "knowledge" && <Knowledge live={live} />}
+        {page === "memory" && <Memory />}
         {page === "voice" && <Voice />}
         {page === "output" && <Output />}
         {page === "models" && <Models />}

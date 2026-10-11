@@ -93,7 +93,9 @@ class ScreenDetected(Event):
 
 class StatusChanged(Event):
     topic: ClassVar[str] = "status"
-    component: Literal["capture", "ocr", "provider", "profile", "daemon", "voice", "overlay", "hotkeys"]
+    component: Literal[
+        "capture", "ocr", "provider", "profile", "daemon", "voice", "overlay", "hotkeys", "save", "memory"
+    ]
     state: Literal["idle", "starting", "running", "paused", "waiting", "error", "ready"]
     detail: str = ""
 
@@ -149,6 +151,13 @@ class KnowledgeProgress(Event):
     state: Literal["queued", "running", "ready", "error"]
     pages: int = 0
     message: str = ""
+
+
+class EvidenceChanged(Event):
+    """Estado de la partida tal y como lo conoce game-pal, con el origen de cada dato."""
+
+    topic: ClassVar[str] = "evidence"
+    snapshot: dict[str, Any]
 
 
 class LogMessage(Event):

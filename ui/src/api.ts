@@ -63,6 +63,49 @@ export const api = {
   },
 };
 
+export interface EvidenceFact {
+  key: string;
+  kind: string;
+  subject: string;
+  label: string;
+  value: string | null;
+  rank: number;
+  origin: "save" | "player" | "screen" | "offer";
+  details: Record<string, string | number | boolean | null>;
+  evidence: string;
+}
+
+export interface EvidenceSnapshot {
+  run: string | null;
+  facts: EvidenceFact[];
+  offers: EvidenceFact[];
+  save: {
+    at: number | null;
+    path: string | null;
+    folder?: string | null;
+    error?: string;
+    reader?: boolean;
+    declared?: boolean;
+    untrusted?: { profile: string; digest: string } | null;
+    summary: { choices?: Array<{ chosen: string | null; label: string | null; rarity: string | null }>; choices_belong_to?: string; in_run?: boolean; map?: string };
+  };
+}
+
+export interface MemorySession {
+  id: number;
+  started_at: number;
+  ended_at: number | null;
+  summary: string | null;
+  turns: number;
+}
+
+export interface MemoryInfo {
+  enabled: boolean;
+  current: number | null;
+  sessions: MemorySession[];
+  lessons: Array<{ id: number; text: string; created_at: number }>;
+}
+
 export interface KnowledgeSource {
   id: number;
   kind: "url" | "file";
@@ -102,7 +145,17 @@ export interface SearchHit {
   score: number;
 }
 
-export type Component = "capture" | "ocr" | "provider" | "profile" | "daemon" | "voice" | "overlay" | "hotkeys";
+export type Component =
+  | "capture"
+  | "ocr"
+  | "provider"
+  | "profile"
+  | "daemon"
+  | "voice"
+  | "overlay"
+  | "hotkeys"
+  | "save"
+  | "memory";
 export type State = "idle" | "starting" | "running" | "paused" | "waiting" | "error" | "ready";
 
 export interface StatusEvent {
@@ -197,6 +250,9 @@ export interface AppConfig {
   profile: string;
   window_title: string | null;
   game_dirs: Record<string, string>;
+  save_dirs: Record<string, string>;
+  trusted_plugins: Record<string, string>;
+  memory: { enabled: boolean; sessions_in_context: number };
   game_language: string;
   output_language: string;
   capture: {

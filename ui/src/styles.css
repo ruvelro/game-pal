@@ -749,3 +749,96 @@ button.corner.active::after {
   padding: 1px 0;
   border-radius: 0;
 }
+
+/* Estado de la partida y memoria --------------------------------------------------------- */
+
+.state-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 20px;
+  margin: 8px 0;
+}
+
+.state-groups h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 8px 0 4px;
+}
+
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.facts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.9rem;
+}
+
+.origin {
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+  align-self: center;
+}
+
+.origin.o-save { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 45%, transparent); }
+.origin.o-player { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+
+.notice {
+  border: 1px solid var(--warn);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  color: var(--mint);
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.lessons,
+.sessions {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lessons li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+
+.sessions li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}

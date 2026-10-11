@@ -65,6 +65,7 @@ screens:
             name: { source: same_row, vocabulary: boons }
             effect: { source: below, max_lines: 3 }
     vision: on_uncertain
+    evidence: offered
     proactive: { enabled: true, cooldown_seconds: 6, task: compare_options }
     outputs: [overlay, voice]
 
@@ -142,6 +143,17 @@ screens:
       text_matches: { vocabulary: reading_menus, region: top }
     vision: never
     outputs: [text]
+
+evidence:
+  save_reader: plugin:HadesSaveReader
+  save_paths:
+    windows: ["%USERPROFILE%/Saved Games/Hades II"]
+    macos:
+      - "~/Library/Application Support/Supergiant Games/Hades II"
+      - "~/Library/Containers/com.supergiantgames.hades2/Data/Library/Application Support/Supergiant Games/Hades II"
+    linux:
+      - "~/.local/share/Steam/steamapps/compatdata/1145350/pfx/drive_c/users/steamuser/Saved Games/Hades II"
+      - "~/.steam/steam/steamapps/compatdata/1145350/pfx/drive_c/users/steamuser/Saved Games/Hades II"
 
 knowledge:
   sources:

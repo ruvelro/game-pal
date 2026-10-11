@@ -82,6 +82,10 @@ class RefreshRequest(BaseModel):
     source_id: int | None = None
 
 
+class LessonRequest(BaseModel):
+    text: str = Field(min_length=2, max_length=600)
+
+
 class MuteRequest(BaseModel):
     muted: bool
 
@@ -380,6 +384,96 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             {"title": h.title, "heading": h.heading, "text": h.text[:600], "url": h.url, "score": round(h.score, 4)}
             for h in hits
         ]
+
+    # Evidencia y memoria -----------------------------------------------------------------------
+
+    @app.get("/api/evidence", dependencies=auth)
+    async def evidence() -> dict[str, Any]:
+        service = daemon.evidence
+        snapshot = service.ledger.snapshot()
+        untrusted = service.untrusted
+        snapshot["save"].update(
+            {
+                "folder": str(service.folder) if service.folder else None,
+                "error": service.error,
+                "reader": service.reader is not None,
+                "declared": bool(service.profile and service.profile.profile.evidence.save_reader),
+                "untrusted": {"profile": untrusted.profile_id, "digest": untrusted.digest} if untrusted else None,
+            }
+        )
+        return snapshot
+
+    @app.post("/api/evidence/reload", dependencies=auth)
+    async def evidence_reload() -> dict[str, bool]:
+        reader = daemon.evidence.reader
+        if reader is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, daemon.evidence.error or "Este perfil no lee guardados")
+        daemon.evidence.forget_save()
+        return {"read": await daemon.evidence.check_save(reader)}
+
+    @app.post("/api/profile/trust", dependencies=auth)
+    async def profile_trust() -> dict[str, bool]:
+        untrusted = daemon.evidence.untrusted
+        if untrusted is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "No hay ningún plugin pendiente de confianza")
+        trusted = {**daemon.config.trusted_plugins, untrusted.profile_id: untrusted.digest}
+        await daemon.apply(daemon.config.model_copy(update={"trusted_plugins": trusted}))
+        return {"trusted": True}
+
+    def _profile_id() -> str:
+        if daemon.c.profile is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "No hay ningún perfil activo")
+        return daemon.c.profile.profile.id
+
+    @app.get("/api/memory", dependencies=auth)
+    async def memory_info() -> dict[str, Any]:
+        profile = _profile_id()
+        sessions, lessons = await asyncio.to_thread(
+            daemon.memory.use, lambda store: (store.sessions(profile), store.lessons(profile))
+        )
+        return {
+            "enabled": daemon.config.memory.enabled,
+            "current": daemon.memory.session,
+            "sessions": sessions,
+            "lessons": lessons,
+        }
+
+    @app.get("/api/memory/sessions/{session_id}", dependencies=auth)
+    async def memory_session(session_id: int) -> list[dict[str, Any]]:
+        turns: list[dict[str, Any]] = await asyncio.to_thread(daemon.memory.use, lambda s: s.turns(session_id))
+        return turns
+
+    @app.delete("/api/memory/sessions/{session_id}", dependencies=auth)
+    async def memory_delete_session(session_id: int) -> dict[str, bool]:
+        await asyncio.to_thread(daemon.memory.use, lambda s: s.delete_session(session_id))
+        return {"deleted": True}
+
+    @app.post("/api/memory/lessons", dependencies=auth)
+    async def memory_add_lesson(body: LessonRequest) -> dict[str, int]:
+        profile = _profile_id()
+        lesson_id: int = await asyncio.to_thread(daemon.memory.use, lambda s: s.add_lesson(profile, body.text))
+        return {"id": lesson_id}
+
+    @app.delete("/api/memory/lessons/{lesson_id}", dependencies=auth)
+    async def memory_delete_lesson(lesson_id: int) -> dict[str, bool]:
+        await asyncio.to_thread(daemon.memory.use, lambda s: s.delete_lesson(lesson_id))
+        return {"deleted": True}
+
+    @app.delete("/api/memory", dependencies=auth)
+    async def memory_wipe() -> dict[str, bool]:
+        profile = _profile_id()
+        await asyncio.to_thread(daemon.memory.use, lambda s: s.wipe(profile))
+        return {"deleted": True}
+
+    @app.get("/api/memory/export", dependencies=auth)
+    async def memory_export() -> Response:
+        _profile_id()
+        body = await asyncio.to_thread(daemon.memory.dumps)
+        return Response(
+            body,
+            media_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="game-pal-memoria.json"'},
+        )
 
     # Asistente y voz --------------------------------------------------------------------------
 
