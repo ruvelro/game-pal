@@ -57,7 +57,92 @@ class ProviderConfig(_Model):
     model: str = ""
     # Modelo con visión para pantallas dudosas. Vacío: la visión queda desactivada.
     vision_model: str = ""
+    # Modelo pequeño y rápido para decidir cómo responder y para respuestas breves. Vacío: no se usa.
+    fast_model: str = ""
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+
+
+class WakeConfig(_Model):
+    enabled: bool = True
+    # Frases en cualquier idioma. Se reconocen transcribiendo fragmentos cortos de voz.
+    phrases: list[str] = Field(default_factory=lambda: ["oye compañero", "hey pal"], max_length=10)
+    # Tras la frase clave, segundos de espera para la pregunta si no se dijo seguida.
+    listen_seconds: float = Field(default=7.0, ge=2, le=30)
+
+
+class PushToTalkConfig(_Model):
+    enabled: bool = True
+    # Combinación con la sintaxis de pynput: "<ctrl>+<alt>+p", "<f9>"…
+    key: str = "<ctrl>+<alt>+p"
+    # Botón de mando con nombres de SDL: "back", "leftstick", "rightshoulder"… Vacío: sin mando.
+    gamepad_button: str = ""
+    mode: Literal["hold", "toggle"] = "hold"
+
+
+class SttConfig(_Model):
+    backend: Literal["faster-whisper", "local-openai"] = "faster-whisper"
+    # Modelo de Whisper para las preguntas: tiny, base, small, medium, large-v3-turbo…
+    model: str = "base"
+    # Modelo para detectar la frase clave. Vacío: el mismo que para las preguntas (ahorra memoria).
+    wake_model: str = ""
+    # Solo para backend local-openai: servidor compatible con /audio/transcriptions.
+    base_url: str = "http://127.0.0.1:8000/v1"
+
+
+class TtsConfig(_Model):
+    backend: Literal["piper", "system", "none"] = "piper"
+    # Voz de Piper: id del catálogo (p. ej. es_ES-davefx-medium). Vacío: la recomendada para el idioma.
+    voice: str = ""
+    volume: float = Field(default=0.9, ge=0, le=1)
+    rate: float = Field(default=1.0, ge=0.5, le=2.0)
+
+
+class VoiceConfig(_Model):
+    enabled: bool = False
+    input_device: str = ""
+    # Idioma en que habla el jugador. Vacío: el idioma de las respuestas.
+    language: str = ""
+    wake: WakeConfig = Field(default_factory=WakeConfig)
+    push_to_talk: PushToTalkConfig = Field(default_factory=PushToTalkConfig)
+    stt: SttConfig = Field(default_factory=SttConfig)
+    tts: TtsConfig = Field(default_factory=TtsConfig)
+    # Frases que cortan la respuesta hablada.
+    stop_phrases: list[str] = Field(default_factory=lambda: ["gracias", "para", "silencio", "thanks", "stop"])
+    # Sensibilidad del detector de voz (probabilidad mínima de habla).
+    vad_threshold: float = Field(default=0.5, ge=0.1, le=0.95)
+
+
+Output = Literal["overlay", "text", "voice"]
+Corner = Literal["top-left", "top-right", "bottom-left", "bottom-right"]
+
+
+def _answer_outputs() -> list[Output]:
+    # La voz se activa a mano: evita descargar modelos de voz sin que el usuario lo pida.
+    return ["overlay", "text"]
+
+
+class OverlayConfig(_Model):
+    enabled: bool = True
+    corner: Corner = "top-right"
+    width: int = Field(default=420, ge=240, le=900)
+    opacity: float = Field(default=0.92, ge=0.3, le=1)
+    font_scale: float = Field(default=1.0, ge=0.7, le=2)
+    # Segundos que sigue visible una tarjeta tras terminar.
+    linger_seconds: float = Field(default=12, ge=2, le=120)
+
+
+class ProactiveConfig(_Model):
+    enabled: bool = True
+    # Atajo para silenciar o reactivar los avisos proactivos.
+    mute_key: str = "<ctrl>+<alt>+m"
+    # Mínimo de segundos entre dos avisos, sea cual sea la pantalla.
+    min_interval_seconds: float = Field(default=5, ge=0, le=600)
+
+
+class OutputConfig(_Model):
+    answers: list[Output] = Field(default_factory=_answer_outputs)
+    overlay: OverlayConfig = Field(default_factory=OverlayConfig)
+    proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
 
 
 class GuiConfig(_Model):
@@ -77,6 +162,8 @@ class AppConfig(_Model):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
     gui: GuiConfig = Field(default_factory=GuiConfig)
 
 

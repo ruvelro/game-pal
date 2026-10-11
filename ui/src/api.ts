@@ -52,7 +52,7 @@ export const api = {
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
 };
 
-export type Component = "capture" | "ocr" | "provider" | "profile" | "daemon";
+export type Component = "capture" | "ocr" | "provider" | "profile" | "daemon" | "voice" | "overlay" | "hotkeys";
 export type State = "idle" | "starting" | "running" | "paused" | "waiting" | "error" | "ready";
 
 export interface StatusEvent {
@@ -163,9 +163,68 @@ export interface AppConfig {
     base_url: string;
     model: string;
     vision_model: string;
+    fast_model: string;
     timeout_seconds: number;
   };
+  voice: VoiceConfig;
+  output: OutputConfig;
   gui: { port: number; open_browser: boolean };
+}
+
+export type OutputKind = "overlay" | "text" | "voice";
+
+export interface VoiceConfig {
+  enabled: boolean;
+  input_device: string;
+  language: string;
+  wake: { enabled: boolean; phrases: string[]; listen_seconds: number };
+  push_to_talk: { enabled: boolean; key: string; gamepad_button: string; mode: "hold" | "toggle" };
+  stt: { backend: "faster-whisper" | "local-openai"; model: string; wake_model: string; base_url: string };
+  tts: { backend: "piper" | "system" | "none"; voice: string; volume: number; rate: number };
+  stop_phrases: string[];
+  vad_threshold: number;
+}
+
+export interface OutputConfig {
+  answers: OutputKind[];
+  overlay: {
+    enabled: boolean;
+    corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    width: number;
+    opacity: number;
+    font_scale: number;
+    linger_seconds: number;
+  };
+  proactive: { enabled: boolean; mute_key: string; min_interval_seconds: number };
+}
+
+export interface VoiceStateEvent {
+  state: "off" | "idle" | "armed" | "recording" | "transcribing" | "error";
+  detail: string;
+}
+
+export interface AnswerUpdate {
+  id: string;
+  kind: "question" | "proactive";
+  title: string;
+  delta: string;
+  text: string;
+  done: boolean;
+  error: string;
+  outputs: OutputKind[];
+  route: "quick" | "reasoned" | "task";
+  model: string;
+}
+
+export interface Devices {
+  inputs: string[];
+  outputs: string[];
+  gamepads: string[];
+  last_button: string | null;
+  gamepad_error: string | null;
+  voices: Record<string, string>;
+  proactive_muted: boolean;
+  error?: string;
 }
 
 export interface Status {

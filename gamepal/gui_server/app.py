@@ -24,11 +24,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from gamepal import __version__
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
+from gamepal.events import AnswerUpdate, SpeechStopped
 from gamepal.perception.classifier import classify
 from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+from gamepal.voice.audio import list_devices
+from gamepal.voice.models import PIPER_DEFAULT_VOICES
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +60,18 @@ class SecurityHeaders(BaseHTTPMiddleware):
         return response
 
 
+class TextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class PttRequest(BaseModel):
+    down: bool
+
+
+class MuteRequest(BaseModel):
+    muted: bool
+
+
 class AskRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
     include_screen: bool = False
@@ -66,6 +81,7 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # El daemon vive en el mismo bucle de eventos que el servidor.
+        daemon.attach_gui(port, token)
         await daemon.start()
         try:
             yield
@@ -278,6 +294,69 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             "elapsed_ms": round(result.elapsed_ms),
             "usage": {"input": result.usage.input_tokens, "output": result.usage.output_tokens},
         }
+
+    # Asistente y voz --------------------------------------------------------------------------
+
+    @app.post("/api/assistant/ask", dependencies=auth)
+    async def assistant_ask(body: TextRequest) -> dict[str, str]:
+        return {"id": daemon.assistant.ask(body.text)}
+
+    @app.post("/api/assistant/stop", dependencies=auth)
+    async def assistant_stop() -> dict[str, bool]:
+        daemon.assistant.cancel()
+        daemon.bus.publish(SpeechStopped(reason="gui"))
+        return {"stopped": True}
+
+    @app.post("/api/proactive", dependencies=auth)
+    async def proactive(body: MuteRequest) -> dict[str, bool]:
+        daemon.assistant.proactive_muted = body.muted
+        return {"muted": daemon.assistant.proactive_muted}
+
+    @app.post("/api/voice/ptt", dependencies=auth)
+    async def voice_ptt(body: PttRequest) -> dict[str, bool]:
+        controller = daemon.voice.controller
+        if controller is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "La entrada de voz está desactivada")
+        if body.down:
+            controller.ptt_press()
+        else:
+            controller.ptt_release()
+        return {"down": body.down}
+
+    @app.post("/api/voice/say", dependencies=auth)
+    async def voice_say(body: TextRequest) -> dict[str, bool]:
+        speech = daemon.voice.speech
+        if speech is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "La voz de salida está desactivada")
+        speech.say(body.text)
+        return {"ok": True}
+
+    @app.get("/api/voice/devices", dependencies=auth)
+    async def voice_devices() -> dict[str, Any]:
+        devices: dict[str, Any]
+        try:
+            devices = dict(await asyncio.to_thread(list_devices))
+        except Exception as exc:
+            devices = {"inputs": [], "outputs": [], "error": str(exc)}
+        gamepad = daemon.voice.gamepad
+        return {
+            **devices,
+            "gamepads": gamepad.connected if gamepad else [],
+            "last_button": gamepad.last_button if gamepad else None,
+            "gamepad_error": gamepad.error if gamepad else None,
+            "voices": PIPER_DEFAULT_VOICES,
+            "proactive_muted": daemon.assistant.proactive_muted,
+        }
+
+    @app.post("/api/overlay/test", dependencies=auth)
+    async def overlay_test() -> dict[str, bool]:
+        sample = "Así se verán los consejos sobre el juego. Puedes cambiar la esquina, el tamaño y la opacidad."
+        daemon.bus.publish(
+            AnswerUpdate(
+                id="overlay-test", kind="proactive", title="game-pal", text=sample, done=True, outputs=["overlay"]
+            )
+        )
+        return {"ok": True}
 
     @app.websocket("/api/events")
     async def events(socket: WebSocket) -> None:

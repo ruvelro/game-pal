@@ -148,6 +148,7 @@ class ScreenWatcher:
                 WindowSeen(
                     title=window.title, process=window.process, width=window.width,
                     height=window.height, foreground=False,
+                    left=window.left, top=window.top,
                 )
             )  # fmt: skip
             self._status("waiting", "El juego no está en primer plano")
@@ -189,6 +190,7 @@ class ScreenWatcher:
             WindowSeen(
                 title=window.title, process=window.process, width=window.width,
                 height=window.height, foreground=is_front,
+                left=window.left, top=window.top,
             )
         )  # fmt: skip
         self._bus.publish(

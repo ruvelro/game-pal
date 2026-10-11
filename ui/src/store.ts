@@ -6,10 +6,12 @@ import {
   type BusMessage,
   type Component,
   type FrameCaptured,
+  type AnswerUpdate,
   type ScreenDetected,
   type ScreenRead,
   type Status,
   type StatusEvent,
+  type VoiceStateEvent,
   type WindowSeen,
 } from "./api";
 
@@ -20,9 +22,24 @@ export interface LiveState {
   frame: FrameCaptured | null;
   read: ScreenRead | null;
   screen: ScreenDetected | null;
+  voice: VoiceStateEvent | null;
+  speaking: boolean;
+  answers: AnswerUpdate[];
 }
 
-const initial: LiveState = { connected: false, statuses: {}, window: null, frame: null, read: null, screen: null };
+const initial: LiveState = {
+  connected: false,
+  statuses: {},
+  window: null,
+  frame: null,
+  read: null,
+  screen: null,
+  voice: null,
+  speaking: false,
+  answers: [],
+};
+
+const MAX_ANSWERS = 6;
 
 function reduce(state: LiveState, message: BusMessage): LiveState {
   switch (message.topic) {
@@ -39,6 +56,15 @@ function reduce(state: LiveState, message: BusMessage): LiveState {
     case "perception.screen": {
       const screen = message.data as ScreenDetected;
       return { ...state, screen: screen.screen_id ? screen : null };
+    }
+    case "voice.state":
+      return { ...state, voice: message.data as VoiceStateEvent };
+    case "voice.speaking":
+      return { ...state, speaking: Boolean((message.data as { speaking: boolean }).speaking) };
+    case "assistant.answer": {
+      const update = message.data as AnswerUpdate;
+      const others = state.answers.filter((a) => a.id !== update.id);
+      return { ...state, answers: [update, ...others].slice(0, MAX_ANSWERS) };
     }
     default:
       return state;

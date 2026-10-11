@@ -611,3 +611,89 @@ input[type="checkbox"] {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* Voz y conversación ---------------------------------------------------------------------- */
+
+.voice-row {
+  margin: 12px 0 4px;
+}
+
+button.talk {
+  border-color: var(--gold);
+  user-select: none;
+  touch-action: none;
+}
+
+button.talk.active {
+  background: var(--gold);
+  color: #241a05;
+  font-weight: 600;
+}
+
+.answers {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.answers li {
+  padding: 12px 14px;
+  border-left: 3px solid var(--mint);
+  background: var(--panel-2);
+  border-radius: 0 10px 10px 0;
+}
+
+.answers li.proactive {
+  border-left-color: var(--gold);
+}
+
+.answers p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+
+.big-check {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.block {
+  display: block;
+}
+
+.corners {
+  display: grid;
+  grid-template-columns: repeat(2, 56px);
+  gap: 6px;
+}
+
+button.corner {
+  height: 34px;
+  padding: 0;
+  position: relative;
+}
+
+button.corner::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+button.corner:nth-child(1)::after { top: 5px; left: 5px; }
+button.corner:nth-child(2)::after { top: 5px; right: 5px; }
+button.corner:nth-child(3)::after { bottom: 5px; left: 5px; }
+button.corner:nth-child(4)::after { bottom: 5px; right: 5px; }
+
+button.corner.active {
+  border-color: var(--mint);
+}
+
+button.corner.active::after {
+  background: var(--mint);
+}
