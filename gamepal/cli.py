@@ -114,7 +114,8 @@ def cmd_ocr(args: argparse.Namespace, paths: AppPaths) -> int:
     from gamepal.config import OcrConfig
     from gamepal.perception.ocr import create_engine
 
-    engine = create_engine(OcrConfig(backend=args.backend), [args.lang])
+    config = OcrConfig(backend=args.backend) if args.backend else OcrConfig()
+    engine = create_engine(config, [args.lang])
     image = np.asarray(Image.open(args.image).convert("RGB"))
     started = time.perf_counter()
     lines = engine.read(image)
@@ -177,7 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ocr = sub.add_parser("ocr", help="lee el texto de una imagen")
     ocr.add_argument("image")
-    ocr.add_argument("--backend", choices=["rapidocr", "apple-vision"], default="rapidocr")
+    ocr.add_argument("--backend", choices=["rapidocr", "apple-vision", "windows-ocr"], default=None)
     ocr.add_argument("--lang", default="en")
     ocr.add_argument("--json", action="store_true")
     ocr.set_defaults(func=cmd_ocr)

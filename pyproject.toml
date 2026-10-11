@@ -25,12 +25,21 @@ dependencies = [
     "pillow>=11.0",
     "mss>=10.0",
     "platformdirs>=4.3",
-    "rapidocr>=3.4",
-    "onnxruntime>=1.20",
+    # RapidOCR depende de opencv-python-headless, que no publica ruedas para Windows ARM64:
+    # allí se usa Windows OCR, que viene con el sistema.
+    "rapidocr>=3.4; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "onnxruntime>=1.20; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pyobjc-framework-Quartz>=11.0; sys_platform == 'darwin'",
     "pyobjc-framework-Cocoa>=11.0; sys_platform == 'darwin'",
     "pyobjc-framework-ScreenCaptureKit>=11.0; sys_platform == 'darwin'",
     "python-xlib>=0.33; sys_platform == 'linux'",
+    "winrt-runtime>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Globalization>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
     "rapidfuzz>=3.9",
 ]
 
@@ -81,9 +90,18 @@ warn_unused_ignores = false
 module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*"]
 ignore_missing_imports = true
 
+# pywinrt solo se instala en Windows; el motor lo usa como Any para que los tipos no dependan del sistema.
+[[tool.mypy.overrides]]
+module = ["winrt.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-markers = ["ocr: tests que cargan el motor OCR real (más lentos)"]
+markers = [
+    "ocr: tests que cargan el motor OCR real (más lentos)",
+    "windows_ocr: tests que usan Windows OCR (solo Windows)",
+]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
