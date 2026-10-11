@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 
 from gamepal.capture import WindowInfo, match_window
-from gamepal.checks import Probe, discover_servers, probe_local, server_name
+from gamepal.checks import Probe, discover_servers, identify, probe_local, server_name
 from gamepal.config import AppConfig
 from gamepal.profiles import LoadedProfile
 from gamepal.providers import ProviderError
@@ -64,7 +64,8 @@ async def choose_local_model(
     probe = probe or probe_local
     url = config.provider.base_url
     try:
-        servers = [(server_name(url), url, await probe(url))]
+        models = await probe(url)
+        servers = [(await identify(url) if probe is probe_local else server_name(url), url, models)]
     except (ProviderError, ValueError):
         servers = await discover_servers(probe, skip=url)
     for name, server_url, models in servers:

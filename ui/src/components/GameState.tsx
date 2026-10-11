@@ -1,4 +1,5 @@
-import type { EvidenceFact, EvidenceSnapshot } from "../api";
+import { useEffect, useState } from "react";
+import { api, type EvidenceFact, type EvidenceSnapshot } from "../api";
 import { Card } from "./ui";
 import { t, type Key } from "../i18n";
 
@@ -46,7 +47,7 @@ function Origin({ origin }: { origin: EvidenceFact["origin"] }) {
   return <span className={`origin o-${origin}`}>{t(`state.origin.${origin}` as Key)}</span>;
 }
 
-function label(fact: EvidenceFact, spouse: string | undefined): string {
+function label(fact: EvidenceFact, spouse: string | undefined, names: Record<string, string>): string {
   switch (fact.kind) {
     case "stat": {
       const key = STAT_KEYS[fact.subject] as Key | undefined;
@@ -63,7 +64,8 @@ function label(fact: EvidenceFact, spouse: string | undefined): string {
       return `${fact.label} · ${fact.value ?? ""}${fact.subject === spouse ? ` · ${t("state.spouse")}` : ""}`;
     case "item": {
       const stack = Number(fact.details.Stack ?? 1);
-      return stack > 1 ? `${fact.label} ×${stack}` : fact.label;
+      const name = names[fact.label] ?? fact.label;
+      return stack > 1 ? `${name} ×${stack}` : name;
     }
   }
   const rarity = fact.details.Rarity ? ` · ${fact.details.Rarity}` : "";
@@ -88,7 +90,22 @@ function savedAt(seconds: number): string {
     : `${t("state.saved.on")} ${date.toLocaleString()}`;
 }
 
+/** El guardado nombra los objetos en inglés: se piden traducidos al idioma del juego. */
+function useLocalNames(evidence: EvidenceSnapshot | null): Record<string, string> {
+  const [names, setNames] = useState<Record<string, string>>({});
+  const items = evidence?.facts.filter((f) => f.kind === "item").map((f) => f.label).join("|") ?? "";
+  useEffect(() => {
+    if (!items) return;
+    api
+      .get<{ names: Record<string, string> }>("/api/evidence/names")
+      .then((data) => setNames(data.names))
+      .catch(() => undefined);
+  }, [items]);
+  return names;
+}
+
 export function GameState({ evidence }: { evidence: EvidenceSnapshot | null }) {
+  const names = useLocalNames(evidence);
   if (!evidence || (!evidence.facts.length && !evidence.offers.length && !evidence.save.declared)) return null;
   const summary = evidence.save.summary ?? {};
   const choices = (summary.choices ?? []).filter((c) => c.chosen);
@@ -115,7 +132,7 @@ export function GameState({ evidence }: { evidence: EvidenceSnapshot | null }) {
               <ul className="facts">
                 {facts.map((fact) => (
                   <li key={fact.key}>
-                    <span>{label(fact, spouse)}</span>
+                    <span>{label(fact, spouse, names)}</span>
                     <Origin origin={fact.origin} />
                   </li>
                 ))}

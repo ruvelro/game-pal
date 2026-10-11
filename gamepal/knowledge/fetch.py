@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json
 import logging
 import socket
 import time
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
@@ -26,6 +28,7 @@ USER_AGENT = f"game-pal/{__version__} (+https://github.com/ruvelro/game-pal)"
 MAX_REDIRECTS = 5
 MAX_HTML_BYTES = 5 * 1024 * 1024
 MAX_PDF_BYTES = 40 * 1024 * 1024
+MAX_JSON_BYTES = 2 * 1024 * 1024
 ALLOWED_TYPES = ("text/html", "application/xhtml+xml", "text/plain", "text/markdown", "application/pdf",
                  "application/xml", "text/xml")  # fmt: skip
 
@@ -140,6 +143,16 @@ class Fetcher:
         if last_modified:
             headers["If-Modified-Since"] = last_modified
         return await self._get(url, headers=headers)
+
+    async def get_json(self, url: str, max_bytes: int = MAX_JSON_BYTES) -> Any:
+        """Una respuesta JSON (la API de una wiki), con las mismas protecciones que una página."""
+        if not await self.allowed(url):
+            raise FetchError(f"robots.txt no permite descargar {url}")
+        page = await self._get(url, max_bytes=max_bytes, accept_any=True)
+        try:
+            return json.loads(page.body)
+        except ValueError as exc:
+            raise FetchError(f"Respuesta no válida de {url}") from exc
 
     async def _get(
         self, url: str, *, headers: dict[str, str] | None = None, max_bytes: int | None = None, accept_any: bool = False

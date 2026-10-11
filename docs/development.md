@@ -77,6 +77,14 @@ uv run game-pal new-profile mi-juego --name "Mi Juego"   # esqueleto de un perfi
 uv run game-pal schema --out profile.schema.json
 ```
 
+## Datos de los perfiles
+
+```bash
+uv run python scripts/stardew_reference.py   # regenera las tablas de profiles/stardew-valley/reference/ desde la wiki
+```
+
+Ver «Datos exactos» en [profiles.md](profiles.md).
+
 ## Calidad
 
 ```bash

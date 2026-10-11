@@ -17,7 +17,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from gamepal.providers.base import Capabilities, ChatResult, Message, ProviderError, Usage
+from gamepal.providers.base import AnswerCutShort, Capabilities, ChatResult, Message, ProviderError, Usage
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_FAST_MODEL = "claude-haiku-5-5"
@@ -181,6 +181,8 @@ class AnthropicProvider:
             on_usage(self._usage(final))
         if getattr(final, "stop_reason", None) == "refusal":
             raise ProviderError("Claude ha declinado responder a esta petición")
+        if getattr(final, "stop_reason", None) == "max_tokens":
+            raise AnswerCutShort("Anthropic: respuesta cortada al llegar al límite de tokens")
 
     async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         raise ProviderError("Anthropic no ofrece embeddings; usa el modelo local o el servidor de modelos")

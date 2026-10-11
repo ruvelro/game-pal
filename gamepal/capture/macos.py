@@ -14,6 +14,22 @@ _TIMEOUT_S = 5.0
 _CONTENT_TTL_S = 2.0
 
 
+# Lo que se usa de Quartz. PyObjC resuelve cada nombre la primera vez que se pide, y esa carga no es segura
+# entre hilos: dos hilos a la vez (captura y detección del juego) daban KeyError. Se resuelven todos al crear
+# la captura, en un solo hilo.
+_QUARTZ_NAMES = (
+    "CGWindowListCopyWindowInfo", "kCGWindowListOptionOnScreenOnly", "kCGWindowListExcludeDesktopElements",
+    "kCGNullWindowID", "CGImageGetWidth", "CGImageGetHeight", "CGImageGetBytesPerRow", "CGDataProviderCopyData",
+    "CGImageGetDataProvider",
+)  # fmt: skip
+
+
+class _Quartz:
+    def __init__(self, module: Any) -> None:
+        for name in _QUARTZ_NAMES:
+            setattr(self, name, getattr(module, name))
+
+
 class MacCapture:
     name = "screencapturekit"
 
@@ -26,7 +42,7 @@ class MacCapture:
             raise CaptureUnavailableError("Falta pyobjc-framework-ScreenCaptureKit") from exc
         # ScreenCaptureKit necesita una sesión de CoreGraphics inicializada.
         AppKit.NSApplication.sharedApplication()
-        self._quartz: Any = Quartz
+        self._quartz: Any = _Quartz(Quartz)
         self._sck: Any = ScreenCaptureKit
         self._lock = threading.Lock()
         self._content: Any = None

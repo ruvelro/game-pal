@@ -31,10 +31,14 @@ class LoadedProfile:
         relative = self.profile.prompts.get(role)
         if relative is None:
             return None
+        return self.path(relative, f"El prompt '{role}'").read_text(encoding="utf-8")
+
+    def path(self, relative: str, what: str = "El fichero") -> Path:
+        """Un fichero del perfil, sin dejar que salga de su carpeta."""
         path = (self.root / relative).resolve()
         if not path.is_relative_to(self.root.resolve()):
-            raise ProfileError(f"El prompt '{role}' sale de la carpeta del perfil")
-        return path.read_text(encoding="utf-8")
+            raise ProfileError(f"{what} sale de la carpeta del perfil")
+        return path
 
 
 def load_profile(folder: Path, bundled: bool = False) -> LoadedProfile:

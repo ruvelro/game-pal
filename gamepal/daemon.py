@@ -21,6 +21,7 @@ from gamepal.evidence.service import EvidenceService
 from gamepal.hardware import HardwareInfo, detect
 from gamepal.keystore import SecretStore
 from gamepal.knowledge import KnowledgeService
+from gamepal.knowledge.lookup import WikiLookup, WikiPage
 from gamepal.memory import MemoryService
 from gamepal.overlay.process import OverlayProcess
 from gamepal.paths import AppPaths, bundled_profiles_dir
@@ -33,6 +34,7 @@ from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
+from gamepal.reference import Reference, Today
 from gamepal.runtime.catalog import bundled_catalog
 from gamepal.runtime.service import EngineService
 from gamepal.system import total_memory_gb
@@ -101,6 +103,9 @@ class Daemon:
         )
         self.profiles = ProfileStore(bundled_dir or bundled_profiles_dir(), paths.user_profiles_dir)
         self.c = Components()
+        # Datos exactos del perfil (tablas y calendario) y búsqueda de fichas en su wiki.
+        self.reference: Reference | None = None
+        self.wiki: WikiLookup | None = None
         self.last_read: ScreenRead | None = None
         self.current_screen: ScreenDetected | None = None
         self._lock = asyncio.Lock()
@@ -130,6 +135,9 @@ class Daemon:
             fast=lambda: self.hub.route("fast"),
             fast_model=lambda: None,
             fast_enabled=self._fast_enabled,
+            reference=lambda: self.reference,
+            today=self._today,
+            lookup=self._lookup,
         )
         self._assistant_task: asyncio.Task[None] | None = None
         self.voice = VoiceService(
@@ -193,6 +201,8 @@ class Daemon:
             await self.overlay.stop()
         await self.voice.stop()
         await self.knowledge.close()
+        if self.wiki is not None:
+            await self.wiki.aclose()
         await self.evidence.close()
         await self.memory.close()
         await self.assistant.aclose()
@@ -286,6 +296,7 @@ class Daemon:
             profile_changed = first or config.profile != previous.profile or self.c.profile is None
             if profile_changed:
                 self._load_profile()
+                await self._load_reference()
                 await self.knowledge.open(self.c.profile)
             vocabulary_changed = (
                 profile_changed
@@ -354,6 +365,38 @@ class Daemon:
             self.c.profile = None
             self.c.errors["profile"] = str(exc)
             self.bus.publish(StatusChanged(component="profile", state="error", detail=str(exc)))
+
+    async def _load_reference(self) -> None:
+        """Tablas de datos exactos y wikis donde buscar fichas, del perfil activo."""
+        if self.wiki is not None:
+            await self.wiki.aclose()
+        self.reference, self.wiki = None, None
+        loaded = self.c.profile
+        if loaded is None:
+            return
+        try:
+            self.reference = await asyncio.to_thread(Reference.from_profile, loaded)
+        except (ProfileError, OSError, ValueError) as exc:
+            log.warning("No se pudieron cargar los datos del perfil: %s", exc)
+        wikis = [(wiki.language, str(wiki.api)) for wiki in loaded.profile.knowledge.lookup]
+        if wikis:
+            try:
+                self.wiki = WikiLookup(wikis)
+            except ValueError as exc:
+                log.warning("Wiki del perfil no válida: %s", exc)
+
+    def _today(self) -> Today | None:
+        """El día de la partida según el guardado (hecho «day» con estación, día y año)."""
+        for fact in self.evidence.ledger.facts():
+            if fact.key == "day":
+                season, day = fact.details.get("season"), fact.details.get("day")
+                if isinstance(season, str) and isinstance(day, int):
+                    year = fact.details.get("year")
+                    return Today(season, day, year if isinstance(year, int) else None)
+        return None
+
+    async def _lookup(self, names: list[str], language: str) -> list[WikiPage]:
+        return await self.wiki.find(names, language) if self.wiki is not None and names else []
 
     async def _apply_overlay(self, previous: AppConfig, first: bool) -> None:
         if self._gui is None:

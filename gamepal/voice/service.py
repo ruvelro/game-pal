@@ -19,7 +19,7 @@ from gamepal.voice.inputs import Gamepad, HotkeyError, Hotkeys, bind_loop
 from gamepal.voice.models import PIPER_DEFAULT_VOICES, SILERO_VAD, ModelStore, piper_artifacts
 from gamepal.voice.speech import SpeechOutput
 from gamepal.voice.stt import LocalServerStt, Stt, WhisperStt
-from gamepal.voice.tts import PiperTts, SystemTts, Tts
+from gamepal.voice.tts import PiperTts, SystemTts, Tts, espeak_data_dir, piper_works
 from gamepal.voice.vad import EnergyVad, SileroVad, Vad
 
 log = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ class VoiceService:
         toggle_proactive: Callable[[], bool],
     ) -> None:
         self._bus = bus
+        self._cache_dir = cache_dir
         self._store = ModelStore(cache_dir / "models")
         self._whisper_dir = cache_dir / "whisper"
         self._vocabulary = vocabulary
@@ -67,13 +68,18 @@ class VoiceService:
         language = config.output_language
         if tts.backend == "none":
             return None
+        data_dir = espeak_data_dir() if tts.backend == "piper" else None
+        if tts.backend == "piper" and not piper_works(self._cache_dir, data_dir):
+            # Mejor la voz del sistema que una aplicación que se cierra al hablar.
+            self._status("starting", "La voz de Piper no funciona en este equipo: se usa la del sistema")
+            return SystemTts(language, tts.rate)
         if tts.backend == "piper":
             voice = tts.voice or PIPER_DEFAULT_VOICES.get(language) or PIPER_DEFAULT_VOICES["en"]
             model, meta = piper_artifacts(voice)
             self._status("starting", f"Preparando la voz {voice}…")
             self._store.ensure(meta, self._progress)
             path = self._store.ensure(model, self._progress)
-            return PiperTts(path, tts.rate)
+            return PiperTts(path, tts.rate, data_dir)
         return SystemTts(language, tts.rate)
 
     def _build_vad(self) -> Vad:

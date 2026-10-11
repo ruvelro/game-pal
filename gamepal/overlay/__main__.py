@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import os
 import sys
 import threading
+import time
 from typing import Protocol
 
 from gamepal.overlay.client import OverlayClient
@@ -40,6 +42,36 @@ def create_backend() -> Backend:
     return TkOverlay()
 
 
+PARENT_CHECK_S = 2.0
+
+
+def _alive_windows(pid: int) -> bool:
+    synchronize, wait_object_0 = 0x00100000, 0
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    handle = kernel32.OpenProcess(synchronize, False, pid)
+    if not handle:
+        return False
+    try:
+        return bool(kernel32.WaitForSingleObject(handle, 0) != wait_object_0)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def watch_parent(pid: int, interval: float = PARENT_CHECK_S) -> None:
+    """Cierra el overlay si game-pal ya no existe: si se cayó de golpe, no debe quedar una ventana huérfana."""
+    original = os.getppid()
+    while True:
+        time.sleep(interval)
+        if sys.platform == "win32":
+            alive = _alive_windows(pid)
+        else:
+            # Al morir el padre, el proceso pasa a depender de otro (launchd, init): cambia su padre.
+            alive = os.getppid() == original
+        if not alive:
+            log.info("game-pal ya no está en marcha; se cierra el overlay")
+            os._exit(0)
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s overlay %(levelname)s: %(message)s")
     http_url = os.environ.get("GAMEPAL_HTTP", "")
@@ -61,6 +93,9 @@ def main() -> int:
     client = OverlayClient(http_url, ws_url, token, backend.render, screen)
     worker = threading.Thread(target=client.run, name="overlay-client", daemon=True)
     worker.start()
+    parent = os.environ.get("GAMEPAL_PARENT_PID", "")
+    if parent.isdigit():
+        threading.Thread(target=watch_parent, args=(int(parent),), name="overlay-parent", daemon=True).start()
     try:
         backend.run()
     except KeyboardInterrupt:

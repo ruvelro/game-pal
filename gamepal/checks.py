@@ -12,9 +12,10 @@ import importlib.util
 import os
 import sys
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit
 
+import httpx
 from pydantic import BaseModel, ValidationError
 
 from gamepal import ui_build
@@ -23,6 +24,7 @@ from gamepal.config import AppConfig, OcrBackendName, load_config, rapidocr_avai
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import LocalOpenAIProvider, ProviderError
+from gamepal.security import validate_local_endpoint
 from gamepal.system import can_open_settings
 from gamepal.voice.audio import list_devices
 
@@ -206,6 +208,18 @@ def check_game(
     if windows is None:
         return Check(id="game", title=title, state="off", required=False, detail=f"Perfil {name}")
     window = match_window(windows, processes, wanted, foreground)
+    if window is None and processes and _running(processes):
+        return Check(
+            id="game",
+            title=title,
+            state="warn",
+            required=False,
+            detail=f"{name} está abierto, pero no a la vista",
+            fix=(
+                "Ponlo delante. Si está a pantalla completa, game-pal solo lo ve mientras su escritorio está en "
+                "primer plano; en ventana sin bordes lo ve siempre."
+            ),
+        )
     if window is None:
         return Check(
             id="game",
@@ -217,6 +231,20 @@ def check_game(
         )
     label = window.title or window.process
     return Check(id="game", title=title, state="ok", detail=f"{name}: «{label}» ({window.width}×{window.height})")
+
+
+def _running(processes: list[str]) -> bool:
+    """Si alguno de esos programas está abierto, aunque su ventana no se vea (macOS)."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        from AppKit import NSWorkspace
+
+        apps = NSWorkspace.sharedWorkspace().runningApplications()
+        names = {str(app.localizedName() or "").casefold() for app in apps}
+    except Exception:
+        return False
+    return any(process.casefold() in names for process in processes)
 
 
 def ocr_problem(backend: OcrBackendName) -> str | None:
@@ -264,6 +292,42 @@ def server_name(url: str) -> str:
     return "el servidor local"
 
 
+def _answers(key: str) -> Callable[[Any], bool]:
+    return lambda data: isinstance(data, dict) and key in data
+
+
+def _lm_studio(data: Any) -> bool:
+    items = data.get("data", []) if isinstance(data, dict) else []
+    return any(isinstance(item, dict) and "state" in item for item in items)
+
+
+# Cada servidor tiene una ruta propia que lo delata; el puerto solo no basta (otro programa puede usarlo).
+IDENTITIES: tuple[tuple[str, str, Callable[[Any], bool]], ...] = (
+    ("Ollama", "/api/version", _answers("version")),
+    ("LM Studio", "/api/v0/models", _lm_studio),
+    ("llama.cpp", "/props", _answers("default_generation_settings")),
+)
+
+
+async def identify(url: str, transport: httpx.AsyncBaseTransport | None = None) -> str:
+    """Qué programa responde en esa dirección local, preguntándoselo."""
+    try:
+        validate_local_endpoint(url)
+    except ValueError:
+        return server_name(url)
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    async with httpx.AsyncClient(timeout=2.0, trust_env=False, follow_redirects=False, transport=transport) as client:
+        for name, path, matches in IDENTITIES:
+            try:
+                response = await client.get(origin + path)
+                if response.status_code == 200 and matches(response.json()):
+                    return name
+            except (httpx.HTTPError, ValueError):
+                continue
+    return f"el servidor del puerto {parts.port}"
+
+
 async def probe_local(url: str) -> tuple[str, ...]:
     """Los modelos que ofrece un servidor local compatible con OpenAI."""
     provider = LocalOpenAIProvider(url, timeout=PROBE_TIMEOUT_S)
@@ -293,7 +357,12 @@ async def discover_servers(
             return None
 
     found = await asyncio.gather(*(one(url) for _, url in candidates))
-    return [(name, url, models) for (name, url), models in zip(candidates, found, strict=True) if models is not None]
+    servers = [(name, url, models) for (name, url), models in zip(candidates, found, strict=True) if models is not None]
+    if probe is probe_local:
+        # Con servidores de verdad, se les pregunta qué son: en el puerto de LM Studio puede haber otro programa.
+        names = await asyncio.gather(*(identify(url) for _, url, _ in servers))
+        servers = [(name, url, models) for name, (_, url, models) in zip(names, servers, strict=True)]
+    return servers
 
 
 async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe: Probe | None = None) -> Check:
@@ -328,6 +397,8 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
     name = server_name(url)
     try:
         models = await probe(url)
+        if probe is probe_local:
+            name = await identify(url)
     except (ProviderError, ValueError) as exc:
         others = await discover_servers(probe, skip=url)
         if others:
