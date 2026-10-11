@@ -38,6 +38,10 @@ KNOWN_SERVERS: tuple[tuple[str, str], ...] = (
 )
 CLOUD_NAMES = {"openai": "OpenAI", "anthropic": "Anthropic (Claude)", "openrouter": "OpenRouter"}
 STARTER_MODEL = "qwen3:4b"
+AUTO_PICK = (
+    "game-pal elegirá uno solo al arrancar (o en unos segundos, si ya está en marcha). "
+    "También puedes elegirlo tú en la página Modelos."
+)
 PROBE_TIMEOUT_S = 3.0
 
 Probe = Callable[[str], Awaitable[tuple[str, ...]]]
@@ -265,12 +269,17 @@ async def probe_local(url: str) -> tuple[str, ...]:
 
 
 async def discover_servers(
-    probe: Probe | None = None, skip: str | None = None
+    probe: Probe | None = None, *, skip: str | None = None, include: str | None = None
 ) -> list[tuple[str, str, tuple[str, ...]]]:
-    """Servidores de modelos conocidos que responden en este equipo: (nombre, url, modelos)."""
+    """Servidores de modelos que responden en este equipo: (nombre, url, modelos).
+
+    Prueba los conocidos y, con `include`, también una dirección propia del jugador.
+    """
     probe = probe or probe_local
     skip_port = urlsplit(skip).port if skip else None
     candidates = [(name, url) for name, url in KNOWN_SERVERS if urlsplit(url).port != skip_port]
+    if include and all(urlsplit(url).port != urlsplit(include).port for _, url in KNOWN_SERVERS):
+        candidates.insert(0, (server_name(include), include))
 
     async def one(url: str) -> tuple[str, ...] | None:
         try:
@@ -323,7 +332,8 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
                 title=title,
                 state="error",
                 detail=f"{name} no responde en {url}",
-                fix=f"Hay otro servidor en marcha: {names}. Elígelo en la página Modelos.",
+                fix=f"Hay otro servidor en marcha: {names}. "
+                + (AUTO_PICK if not config.provider.model else "Elígelo en la página Modelos."),
             )
         if name == "Ollama":
             return Check(
@@ -364,7 +374,7 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
             title=title,
             state="error",
             detail=f"{name} tiene {len(models)} modelos, pero no has elegido ninguno",
-            fix=f"Elige uno en la página Modelos: {listed}.",
+            fix=f"{AUTO_PICK} Modelos disponibles: {listed}.",
         )
     if chosen not in models:
         return Check(
@@ -500,6 +510,7 @@ async def doctor_checks(paths: AppPaths, *, probe: Probe | None = None) -> list[
 async def daemon_checks(daemon: Daemon, *, probe: Probe | None = None) -> list[Check]:
     """Con el daemon en marcha: el estado real de cada componente."""
     c, config = daemon.c, daemon.config
+    probe = probe or daemon.probe
     windows, foreground, list_error = await _windows(c.backend)
     checks = [
         check_capture(c.backend, c.errors.get("capture") or list_error, windows),

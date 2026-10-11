@@ -248,6 +248,7 @@ export interface BusMessage {
 export interface AppConfig {
   version: number;
   profile: string;
+  auto_detect_game: boolean;
   window_title: string | null;
   game_dirs: Record<string, string>;
   save_dirs: Record<string, string>;

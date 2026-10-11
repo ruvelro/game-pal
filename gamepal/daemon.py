@@ -11,8 +11,10 @@ from pathlib import Path
 
 from gamepal.activity import ActivityStore
 from gamepal.assistant import Assistant
+from gamepal.autodetect import choose_local_model, game_is_open, next_profile
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
+from gamepal.checks import Probe, probe_local
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.evidence.service import EvidenceService
@@ -30,9 +32,14 @@ from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
+from gamepal.system import total_memory_gb
 from gamepal.voice.service import VoiceService
 
 log = logging.getLogger(__name__)
+
+# Cada cuánto se mira qué juego está abierto y, mientras falte, si ya hay un modelo local.
+AUTODETECT_INTERVAL_S = 5.0
+MODEL_RETRY_TICKS = 6
 
 
 @dataclass
@@ -59,9 +66,15 @@ class Daemon:
         backend_factory: Callable[[], CaptureBackend] = create_backend,
         bundled_dir: Path | None = None,
         secrets: SecretStore | None = None,
+        probe: Probe | None = None,
     ) -> None:
         self.paths = paths
         self._backend_factory = backend_factory
+        # Cómo se pregunta a un servidor local por sus modelos (los tests usan uno falso).
+        self.probe = probe or probe_local
+        # Lo que game-pal ha decidido por su cuenta en esta sesión, para contárselo al jugador.
+        self.notes: list[str] = []
+        self._autodetect: asyncio.Task[None] | None = None
         self.bus = bus or EventBus()
         self.config: AppConfig = load_config(paths.config_file)
         self.secrets = secrets or SecretStore()
@@ -148,9 +161,15 @@ class Daemon:
         self._listener = asyncio.create_task(self._remember_reads())
         self._assistant_task = asyncio.create_task(self.assistant.run(), name="assistant")
         await self.apply(self.config, persist=False)
+        await self._autodetect_once()
+        self._autodetect = asyncio.create_task(self._autodetect_loop(), name="autodetect")
         self.bus.publish(StatusChanged(component="daemon", state="running"))
 
     async def stop(self) -> None:
+        if self._autodetect is not None:
+            self._autodetect.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._autodetect
         if self.overlay is not None:
             await self.overlay.stop()
         await self.voice.stop()
@@ -178,6 +197,60 @@ class Daemon:
                     self.last_read = event
                 elif isinstance(event, ScreenDetected):
                     self.current_screen = event if event.screen_id else None
+
+    # Detección automática -------------------------------------------------------------------
+
+    def _note(self, text: str) -> str:
+        log.info(text)
+        self.notes = [*self.notes[-9:], text]
+        return text
+
+    async def autodetect_model(self) -> str | None:
+        """Si no hay modelo local elegido, elige servidor y modelo entre los que estén en marcha."""
+        choice = await choose_local_model(self.config, total_memory_gb(), self.probe)
+        if choice is None:
+            return None
+        provider = self.config.provider.model_copy(update={"base_url": choice.url, "model": choice.model})
+        await self.apply(self.config.model_copy(update={"provider": provider}))
+        return self._note(f"Modelo elegido automáticamente: {choice.model} en {choice.server}")
+
+    async def autodetect_game(self) -> str | None:
+        """Si el juego abierto tiene perfil y no es el activo, cambia a ese perfil."""
+        backend, config = self.c.backend, self.config
+        if backend is None or not config.auto_detect_game or config.window_title:
+            return None
+        windows = await asyncio.to_thread(backend.list_windows)
+        foreground = await asyncio.to_thread(backend.foreground_pid)
+        if self.c.profile is not None and game_is_open(self.c.profile, windows, foreground):
+            return None
+        profiles, _ = await asyncio.to_thread(self.profiles.discover)
+        target = next_profile(config, self.c.profile, profiles, windows, foreground)
+        if target is None:
+            return None
+        await self.apply(self.config.model_copy(update={"profile": target}))
+        return self._note(f"Juego detectado: {profiles[target].profile.name}")
+
+    async def autodetect(self) -> list[str]:
+        changes = [await self.autodetect_game(), await self.autodetect_model()]
+        return [change for change in changes if change]
+
+    async def _autodetect_once(self) -> None:
+        try:
+            await self.autodetect()
+        except Exception:
+            log.warning("Falló la detección automática", exc_info=True)
+
+    async def _autodetect_loop(self) -> None:
+        ticks = 0
+        while True:
+            await asyncio.sleep(AUTODETECT_INTERVAL_S)
+            ticks += 1
+            try:
+                await self.autodetect_game()
+                if not self.config.provider.model and ticks % MODEL_RETRY_TICKS == 0:
+                    await self.autodetect_model()
+            except Exception:
+                log.debug("Falló la detección automática", exc_info=True)
 
     # Configuración --------------------------------------------------------------------------
 

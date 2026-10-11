@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from gamepal import __version__
-from gamepal.checks import blocking, daemon_checks
+from gamepal.autodetect import pick_model
+from gamepal.checks import blocking, daemon_checks, discover_servers
 from gamepal.config import AppConfig
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
@@ -34,6 +35,7 @@ from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+from gamepal.system import total_memory_gb
 from gamepal.ui_build import STATIC_DIR
 from gamepal.voice.audio import list_devices
 from gamepal.voice.models import PIPER_DEFAULT_VOICES
@@ -143,7 +145,12 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
     async def setup() -> dict[str, Any]:
         """Qué funciona, qué falta y cómo arreglarlo. `ready` es falso si algo impide aconsejar."""
         checks = await daemon_checks(daemon)
-        return {"ready": not blocking(checks), "checks": [c.model_dump() for c in checks]}
+        return {"ready": not blocking(checks), "checks": [c.model_dump() for c in checks], "notes": daemon.notes}
+
+    @app.post("/api/setup/autodetect", dependencies=auth)
+    async def setup_autodetect() -> dict[str, list[str]]:
+        """Busca ya el juego abierto y, si falta, un modelo local. Devuelve lo que ha cambiado."""
+        return {"changes": await daemon.autodetect()}
 
     @app.get("/api/config", dependencies=auth)
     async def get_config() -> dict[str, Any]:
@@ -427,6 +434,17 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
         await asyncio.to_thread(daemon.secrets.delete, name)  # type: ignore[arg-type]
         await daemon.refresh_providers()
         return {"configured": False}
+
+    @app.get("/api/providers/local/discover", dependencies=auth)
+    async def provider_discover() -> dict[str, Any]:
+        """Servidores de modelos en marcha en este equipo, con el modelo que game-pal recomienda en cada uno."""
+        found = await discover_servers(daemon.probe, include=daemon.config.provider.base_url)
+        memory = total_memory_gb()
+        servers = [
+            {"name": name, "url": url, "models": list(models), "recommended": pick_model(models, memory)}
+            for name, url, models in found
+        ]
+        return {"servers": servers}
 
     @app.get("/api/providers/{name}/models", dependencies=auth)
     async def provider_list_models(name: str) -> dict[str, Any]:

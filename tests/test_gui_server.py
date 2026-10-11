@@ -20,6 +20,10 @@ HOST = {"host": f"127.0.0.1:{PORT}"}
 AUTH = {**HOST, "authorization": f"Bearer {TOKEN}"}
 
 
+async def no_server(url: str) -> tuple[str, ...]:
+    raise ProviderError(f"No se pudo contactar con {url}")
+
+
 @pytest.fixture
 def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
     # Sin voz ni overlay: los tests no descargan modelos ni abren ventanas.
@@ -29,7 +33,9 @@ def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
         update={"knowledge": KnowledgeConfig(embeddings="none")}
     )
     save_config(config, app_paths.config_file)
-    daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore())
+    daemon = Daemon(
+        app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore(), probe=no_server
+    )
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
         yield test_client
 
@@ -74,10 +80,6 @@ def test_config_update_validates_and_persists(client: TestClient, app_paths: App
 
 
 def test_setup_explains_what_is_missing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def no_server(url: str) -> tuple[str, ...]:
-        raise ProviderError(f"No se pudo contactar con {url}")
-
-    monkeypatch.setattr("gamepal.checks.probe_local", no_server)
     # Los permisos de macOS dependen de la máquina que ejecuta los tests.
     monkeypatch.setattr("gamepal.checks.screen_capture_allowed", lambda: None)
     assert client.get("/api/setup", headers=HOST).status_code == 401
