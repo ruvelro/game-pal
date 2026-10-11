@@ -48,7 +48,7 @@ PLACE_NAMES = {
 TEXT = {
     "es": {
         "days": "días", "day": "día", "regrow": "vuelve a dar cada {n} {days}",
-        "trellis": "con espaldera (no se pasa por encima)",
+        "trellis": "la planta forma su propia espaldera: no se puede pasar por encima",
         "irrigated": "{n} días si está junto al agua", "island": "en la isla Jengibre, todo el año",
         "sells": "la cosecha se vende por {n} g", "seed": "semilla", "where": "dónde", "buy": "se compra en",
         "when_today": "plantada hoy (día {d})", "when_tomorrow": "plantada mañana (día {d})",
@@ -67,6 +67,9 @@ TEXT = {
         "next_season": "Después empieza {season}.",
         "year": ", año {n}",
         "not_sold": "ahora no se vende en ninguna tienda", "never_sold": "no se vende en tiendas",
+        "best": "Más beneficio por semilla {when}, sin abono y vendiendo la cosecha sin procesar: {list}.",
+        "best_item": "{name} {profit} g ({count} × {sell} g − semilla {cost} g)",
+        "best_today": "plantada hoy (día {d})", "best_tomorrow": "plantada mañana (día {d})",
         "festivals": "Fiestas de {season}: {list}.",
         "no_festivals": "{season} no tiene fiestas.",
         "festival_day": "día {d}", "festival_days": "días {first} a {last}",
@@ -75,7 +78,7 @@ TEXT = {
     },
     "en": {
         "days": "days", "day": "day", "regrow": "produces again every {n} {days}",
-        "trellis": "trellis (can't walk through)",
+        "trellis": "the plant grows its own trellis: you can't walk through it",
         "irrigated": "{n} days when irrigated", "island": "all year on Ginger Island",
         "sells": "the crop sells for {n}g", "seed": "seed", "where": "where", "buy": "bought at",
         "when_today": "planted today (day {d})", "when_tomorrow": "planted tomorrow (day {d})",
@@ -91,6 +94,9 @@ TEXT = {
         "next_season": "Then {season} starts.",
         "year": ", year {n}",
         "not_sold": "no shop sells it right now", "never_sold": "not sold in shops",
+        "best": "Most profit per seed {when}, without fertilizer and selling the raw crop: {list}.",
+        "best_item": "{name} {profit}g ({count} × {sell}g − seed {cost}g)",
+        "best_today": "planted today (day {d})", "best_tomorrow": "planted tomorrow (day {d})",
         "festivals": "{season} festivals: {list}.",
         "no_festivals": "{season} has no festivals.",
         "festival_day": "day {d}", "festival_days": "days {first} to {last}",
@@ -352,6 +358,7 @@ class Reference:
             if any("growth_days" in entry for entry in entries):
                 lines.append(TEXT.get(language, TEXT["en"])["base"])
             lines += [self._row(table, entry, today, language) for entry in entries]
+            lines += self._best(table, entries, today, language)
             lines.append("</datos_del_juego>")
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
@@ -365,6 +372,13 @@ class Reference:
         if season not in self.seasons:
             return None
         return (self.seasons.index(today.season), today.day) > (self.seasons.index(season), day)
+
+    def _open_today(self, table: Table, place: str, today: Today) -> bool:
+        """Las tiendas abren cualquier día; un festival, solo el suyo."""
+        event = table.events.get(place)
+        if event is None:
+            return True
+        return str(event.get("season")) == today.season and int(event.get("day", 0)) == today.day
 
     def _event_note(self, table: Table, place: str, today: Today | None, language: str) -> str:
         """Si la tienda es un festival: cuándo es, o que ya pasó este año."""
@@ -419,6 +433,58 @@ class Reference:
         if timing:
             parts.append(timing)
         return "- " + " · ".join(p for p in parts if p)
+
+    def _harvests(self, entry: dict[str, Any], start: int) -> int | None:
+        """Cosechas antes de que acabe la estación plantando el día `start`; None si sigue en la siguiente."""
+        growth, total = entry.get("growth_days"), self.days_per_season
+        if not growth or not total:
+            return None
+        seasons = entry.get("seasons") or []
+        if len(seasons) > 1:
+            return None  # sigue creciendo en otra estación: no se compara con los de una sola
+        harvest = start + int(growth)
+        if harvest > total:
+            return 0
+        regrow = entry.get("regrow_days")
+        return 1 + (total - harvest) // int(regrow) if regrow else 1
+
+    def _seed_cost(self, table: Table, entry: dict[str, Any], today: Today) -> int | None:
+        """Lo más barato que cuesta hoy la semilla en una tienda fija (el carrito ambulante, si no hay otra)."""
+        prices = (entry.get("seed") or {}).get("prices") or {}
+        open_now = {k: int(v) for k, v in prices.items() if self._open_today(table, k, today)}
+        fixed = {k: v for k, v in open_now.items() if k != "traveling_cart"} or open_now
+        return min(fixed.values()) if fixed else None
+
+    def _best(self, table: Table, entries: list[dict[str, Any]], today: Today | None, language: str) -> list[str]:
+        """Los cultivos que más dejan, ya calculado: comparar filas es donde el modelo se equivoca."""
+        if today is None or len(entries) < 2:
+            return []
+        text = TEXT.get(language, TEXT["en"])
+        lines: list[str] = []
+        for key, start in (("best_today", today.day), ("best_tomorrow", today.day + 1)):
+            if start > self.days_per_season:
+                continue
+            ranked: list[tuple[int, str]] = []
+            for entry in entries:
+                if today.season not in (entry.get("seasons") or []):
+                    continue
+                count, cost, sell = (
+                    self._harvests(entry, start),
+                    self._seed_cost(table, entry, today),
+                    entry.get("sell_price"),
+                )
+                if not count or cost is None or not sell:
+                    continue
+                profit = count * int(sell) - cost
+                if profit > 0:
+                    name = entry["names"].get(language) or entry["names"].get("en", "")
+                    item = text["best_item"].format(name=name, profit=profit, count=count, sell=sell, cost=cost)
+                    ranked.append((profit, item))
+            ranked.sort(key=lambda pair: -pair[0])
+            names = [item for _, item in ranked[:3]]
+            if names:
+                lines.append(text["best"].format(when=text[key].format(d=start), list="; ".join(names)))
+        return lines
 
     def _timing(self, entry: dict[str, Any], today: Today | None, language: str) -> str:
         """Qué pasa si se planta hoy y si se planta mañana: cuándo se cosecha y cuántas veces, o si ya no llega."""

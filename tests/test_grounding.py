@@ -97,6 +97,17 @@ def test_seeds_sold_only_at_a_past_festival_are_flagged(reference: Reference) ->
     assert "ahora no se vende" not in early
 
 
+def test_the_most_profitable_crops_come_already_ranked(reference: Reference) -> None:
+    text = reference.render("¿Qué planto hoy?", SPRING_18, "es")
+    assert (
+        "Más beneficio por semilla plantada hoy (día 18), sin abono y vendiendo la cosecha sin procesar: "
+        "Col rizada 40 g (1 × 110 g − semilla 70 g); Patata 30 g (1 × 80 g − semilla 50 g)"
+    ) in text
+    # Las fresas solo se compran el día del festival: antes no entran en la cuenta, ese día sí.
+    assert "Fresa" not in reference.render("¿Qué planto?", Today("spring", 1, 1), "es").split("Más beneficio")[1]
+    assert "Fresa 140 g (2 × 120 g − semilla 100 g)" in reference.render("¿Qué planto?", Today("spring", 13, 1), "es")
+
+
 def test_rows_carry_the_dates_already_counted(reference: Reference) -> None:
     text = reference.render("chirivía coliflor judía verde maíz fresa", SPRING_18, "es")
     lines = {line.split(" · ")[0]: line for line in text.splitlines() if line.startswith("- ")}
