@@ -50,7 +50,57 @@ export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
+  del: <T>(path: string) => request<T>("DELETE", path),
+  upload: async <T>(path: string, files: FileList): Promise<T> => {
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append("files", file));
+    const response = await fetch(path, { method: "POST", headers: { Authorization: `Bearer ${token ?? ""}` }, body: form });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new ApiError(response.status, data.detail ?? response.statusText);
+    }
+    return (await response.json()) as T;
+  },
 };
+
+export interface KnowledgeSource {
+  id: number;
+  kind: "url" | "file";
+  location: string;
+  origin: "profile" | "user";
+  options: { depth?: number; max_pages?: number | null };
+  status: "pending" | "queued" | "running" | "ready" | "error";
+  error: string;
+  updated_at: number | null;
+  pages: number;
+  chunks: number;
+}
+
+export interface KnowledgeInfo {
+  sources: KnowledgeSource[];
+  stats: { pages: number; chunks: number };
+  embeddings: "local" | "provider" | "none";
+  embedder_error: string;
+  refresh: string;
+  current: number | null;
+}
+
+export interface KnowledgeProgress {
+  profile: string;
+  source_id: number;
+  location: string;
+  state: "queued" | "running" | "ready" | "error";
+  pages: number;
+  message: string;
+}
+
+export interface SearchHit {
+  title: string;
+  heading: string;
+  text: string;
+  url: string;
+  score: number;
+}
 
 export type Component = "capture" | "ocr" | "provider" | "profile" | "daemon" | "voice" | "overlay" | "hotkeys";
 export type State = "idle" | "starting" | "running" | "paused" | "waiting" | "error" | "ready";
@@ -168,6 +218,15 @@ export interface AppConfig {
   };
   voice: VoiceConfig;
   output: OutputConfig;
+  knowledge: {
+    embeddings: "local" | "provider" | "none";
+    provider_model: string;
+    max_pages: number;
+    rate_per_second: number;
+    top_k: number;
+    auto_refresh: boolean;
+    rewrite_queries: boolean;
+  };
   gui: { port: number; open_browser: boolean };
 }
 
@@ -214,6 +273,7 @@ export interface AnswerUpdate {
   outputs: OutputKind[];
   route: "quick" | "reasoned" | "task";
   model: string;
+  sources: Array<{ n: string; title: string; url: string }>;
 }
 
 export interface Devices {

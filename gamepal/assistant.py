@@ -13,13 +13,14 @@ import logging
 import time
 import uuid
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig, Output
 from gamepal.events import AnswerUpdate, QuestionAsked, ScreenDetected, ScreenRead, SpeechStopped
+from gamepal.knowledge.store import Hit
 from gamepal.profiles import LoadedProfile
 from gamepal.providers import Message, Provider, ProviderError
 
@@ -64,6 +65,21 @@ ROUTER_PROMPT = (
 )
 
 
+KEYWORDS_SCHEMA = {
+    "type": "object",
+    "properties": {"terms": {"type": "array", "items": {"type": "string"}, "maxItems": 8}},
+    "required": ["terms"],
+    "additionalProperties": False,
+}
+KEYWORDS_PROMPT = (
+    "Write search keywords to look up the player's request in game wikis and guides about {game}. "
+    "Sources are often in English: include the English names of items, characters and mechanics, plus the "
+    "original names. Only nouns and short phrases, no explanations. Answer with JSON only."
+)
+MAX_KNOWLEDGE_CHARS = 1100
+Retriever = Callable[[str], Awaitable[list[Hit]]]
+
+
 @dataclass
 class Turn:
     question: str
@@ -80,6 +96,8 @@ class Assistant:
         profile: Callable[[], LoadedProfile | None],
         screen: Callable[[], ScreenDetected | None],
         read: Callable[[], ScreenRead | None],
+        retrieve: Retriever | None = None,
+        has_knowledge: Callable[[], bool] = lambda: False,
     ) -> None:
         self._bus = bus
         self._config = config
@@ -87,6 +105,8 @@ class Assistant:
         self._profile = profile
         self._screen = screen
         self._read = read
+        self._retrieve = retrieve
+        self._has_knowledge = has_knowledge
         self._task: asyncio.Task[None] | None = None
         self._history: deque[Turn] = deque(maxlen=HISTORY_TURNS)
         self._last_proactive = 0.0
@@ -171,6 +191,80 @@ class Assistant:
             parts.append(f"<texto_en_pantalla>\n{text}\n</texto_en_pantalla>")
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _entities(screen: ScreenDetected | None) -> list[str]:
+        """Nombres de lo que hay en pantalla, para afinar la búsqueda."""
+        if screen is None:
+            return []
+        names: list[str] = []
+
+        def visit(value: Any) -> None:
+            if isinstance(value, dict):
+                if "name" in value and isinstance(value["name"], str):
+                    names.append(value["name"])
+                    if isinstance(value.get("seen"), str) and value["seen"] != value["name"]:
+                        names.append(value["seen"])
+                else:
+                    for item in value.values():
+                        visit(item)
+            elif isinstance(value, list):
+                for item in value:
+                    visit(item)
+
+        visit(screen.data)
+        return list(dict.fromkeys(names))[:12]
+
+    async def _keywords(self, provider: Provider, text: str) -> list[str]:
+        config = self._config()
+        if not config.knowledge.rewrite_queries:
+            return []
+        loaded = self._profile()
+        game = loaded.profile.name if loaded else "the game"
+        try:
+            result = await asyncio.wait_for(
+                provider.chat(
+                    [Message("system", KEYWORDS_PROMPT.format(game=game)), Message("user", text)],
+                    model=config.provider.fast_model or None,
+                    max_tokens=80,
+                    temperature=0,
+                    json_schema=KEYWORDS_SCHEMA,
+                ),
+                timeout=8,
+            )
+            terms = json.loads(result.text).get("terms", [])
+        except (ProviderError, ValueError, TimeoutError, AttributeError):
+            return []
+        return [str(t)[:60] for t in terms if isinstance(t, str)][:8]
+
+    async def _knowledge(self, provider: Provider, text: str, screen: ScreenDetected | None) -> list[Hit]:
+        if self._retrieve is None or not self._has_knowledge():
+            return []
+        entities = self._entities(screen)
+        keywords = await self._keywords(provider, " ".join([text, *entities]))
+        query = " ".join([text, *entities, *keywords])
+        try:
+            return await self._retrieve(query)
+        except Exception:
+            log.exception("La búsqueda de conocimiento falló")
+            return []
+
+    @staticmethod
+    def _knowledge_block(hits: list[Hit]) -> tuple[str, list[dict[str, str]]]:
+        if not hits:
+            return "", []
+        lines = ["<conocimiento>"]
+        sources: list[dict[str, str]] = []
+        for n, hit in enumerate(hits, start=1):
+            head = f"{hit.title} › {hit.heading}" if hit.heading else hit.title
+            lines.append(f"[{n}] {head}\n{hit.text[:MAX_KNOWLEDGE_CHARS]}")
+            sources.append({"n": str(n), "title": head, "url": hit.url})
+        lines.append("</conocimiento>")
+        lines.append(
+            "Usa el conocimiento solo si responde a lo que se pregunta y cita la fuente con su número, "
+            "por ejemplo [1]. Si no lo cubre, responde con lo que sepas y dilo."
+        )
+        return "\n\n".join(lines), sources
+
     async def _route(self, provider: Provider, text: str) -> Literal["quick", "reasoned"]:
         fast = self._config().provider.fast_model
         if not fast:
@@ -207,12 +301,18 @@ class Assistant:
             model = config.provider.fast_model or None
             messages.append(Message("user", question.text))
             max_tokens = 120
+            sources: list[dict[str, str]] = []
         else:
             model = None
-            context = self._context(self._screen(), self._read())
+            screen = self._screen()
+            hits = await self._knowledge(provider, question.text, screen)
+            knowledge, sources = self._knowledge_block(hits)
+            context = "\n\n".join(part for part in (self._context(screen, self._read()), knowledge) if part)
             messages.append(Message("user", f"{context}\n\n{question.text}" if context else question.text))
             max_tokens = 500
-        answer = await self._stream(question.id, "question", question.text, outputs, messages, model, max_tokens, route)
+        answer = await self._stream(
+            question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources
+        )
         if answer:
             self._history.append(Turn(question.text, answer))
 
@@ -222,9 +322,13 @@ class Assistant:
             return
         loaded = self._profile()
         instruction = (loaded.read_prompt(f"task_{task}") if loaded and task else None) or TASKS.get(task, GENERIC_TASK)
-        context = self._context(screen, self._read())
+        hits = await self._knowledge(provider, f"{screen.name} {instruction}", screen)
+        knowledge, sources = self._knowledge_block(hits)
+        context = "\n\n".join(part for part in (self._context(screen, self._read()), knowledge) if part)
         messages = [Message("system", self._system()), Message("user", f"{context}\n\n{instruction}")]
-        await self._stream(uuid.uuid4().hex[:12], "proactive", screen.name, outputs, messages, None, 300, "task")
+        await self._stream(
+            uuid.uuid4().hex[:12], "proactive", screen.name, outputs, messages, None, 300, "task", sources
+        )
 
     async def _stream(
         self,
@@ -236,6 +340,7 @@ class Assistant:
         model: str | None,
         max_tokens: int,
         route: Literal["quick", "reasoned", "task"],
+        sources: list[dict[str, str]] | None = None,
     ) -> str:
         provider = self._provider()
         assert provider is not None
@@ -244,8 +349,9 @@ class Assistant:
 
         def update(**fields: Any) -> AnswerUpdate:
             return AnswerUpdate(
-                id=answer_id, kind=kind, title=title, outputs=outputs, route=route, model=chosen, **fields
-            )
+                id=answer_id, kind=kind, title=title, outputs=outputs, route=route, model=chosen,
+                sources=sources or [], **fields,
+            )  # fmt: skip
 
         self._bus.publish(update())
         try:

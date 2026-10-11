@@ -158,11 +158,14 @@ Presupuesto de contexto: las instrucciones del sistema se componen por bloques c
 
 ### 4.5 Conocimiento
 
-- **Fuentes**: URLs (páginas, secciones de wiki, sitemaps), ficheros locales (Markdown, PDF, TXT, HTML) y ficheros de texto del propio juego cuando el perfil sabe dónde están.
-- **Ingesta**: rastreo respetando `robots.txt`, profundidad y dominio configurables, extracción de contenido principal (tablas incluidas), limpieza, troceado por secciones, embeddings locales, índice vectorial en SQLite (sqlite-vec) más índice léxico (FTS5). Búsqueda híbrida con re-ranking ligero.
-- **Actualización**: cada fuente guarda fecha, hash y versión del juego declarada. Botón "Actualizar conocimiento" por perfil y comprobación programada opcional.
-- **Atribución**: cada respuesta puede citar la fuente; en voz no se leen URLs.
-- **Vocabulario**: de las fuentes se extrae automáticamente un vocabulario de entidades (nombres de objetos, personajes, habilidades) que alimenta la corrección difusa del OCR y limita lo que el modelo puede nombrar. El perfil puede ampliarlo a mano.
+- **Fuentes**: URLs (páginas, wikis enteras con profundidad configurable, sitemaps), ficheros locales (Markdown, TXT, HTML, PDF) y los ficheros de texto del propio juego cuando el perfil sabe dónde están (vocabulario, M2).
+- **Descarga segura**: solo http(s) hacia direcciones públicas (también tras cada redirección, para que un enlace no pueda apuntar a la red local), respeto de `robots.txt`, una petición por segundo y servidor por defecto, límite de tamaño por página y tipos de contenido permitidos. Ruido típico de wikis (páginas especiales, historiales, usuarios, ficheros) excluido por defecto.
+- **Ingesta**: extracción del contenido principal con trafilatura (conserva tablas y títulos), limpieza de navegación, troceado por secciones a unos 900 caracteres, embeddings locales y SQLite con FTS5. Los vectores se guardan junto a cada fragmento y se buscan por fuerza bruta con numpy: con miles de fragmentos por juego tarda milisegundos y evita extensiones nativas de SQLite.
+- **Embeddings**: multilingual-e5-small cuantizado en ONNX (118 MB, revisión fijada), el servidor de modelos del usuario o ninguno (solo palabras).
+- **Búsqueda**: híbrida por fusión de rangos (BM25 con más peso al título, y vectores con umbral propio de cada modelo). Antes de buscar, el modelo propone palabras clave, incluidos los nombres en el idioma de las fuentes: así «¿cuánto tardan las chirivías?» encuentra la página «Parsnip» aunque el modelo de embeddings pequeño no relacione ambos idiomas. A la consulta se añaden los nombres de lo que hay en pantalla.
+- **Actualización**: cada documento guarda hash, ETag y Last-Modified; al actualizar se usan peticiones condicionales y solo se reprocesa lo que cambió. Botón «Actualizar» por fuente y global; comprobación periódica según el perfil (`refresh`), pero solo de fuentes que el usuario ya descargó alguna vez: nada se descarga sin pedirlo.
+- **Atribución**: el contexto va numerado y el modelo cita con [n]; la GUI muestra las fuentes enlazadas y la voz no lee ni números de cita ni URLs.
+- **Vocabulario**: los títulos de las páginas descargadas se añaden al vocabulario del perfil y ayudan a corregir el OCR.
 - Las fuentes son datos no fiables: el contenido se envuelve como información y nunca como instrucciones para el modelo.
 
 ### 4.6 Interacción
@@ -317,8 +320,8 @@ Overlay y bandeja: la bandeja ofrece iniciar, pausar, silenciar proactivo, abrir
 | OCR | PaddleOCR en ONNX Runtime (CPU, CUDA, DirectML, CoreML); backends alternativos enchufables |
 | Hash perceptual | imagehash / implementación propia con numpy |
 | Modelos locales | llama.cpp (llama-server) gestionado o cualquier endpoint OpenAI-compatible; descarga desde Hugging Face con verificación de hash |
-| Embeddings | ONNX Runtime (bge-m3 / multilingual-e5-small) |
-| Índice | SQLite con sqlite-vec y FTS5 |
+| Embeddings | ONNX Runtime con multilingual-e5-small cuantizado, o el servidor de modelos |
+| Índice | SQLite con FTS5 y vectores en BLOB buscados con numpy |
 | STT | faster-whisper (CTranslate2) |
 | TTS | Piper (ONNX) y Kokoro (ONNX) |
 | Wake word | Silero VAD + Whisper con frases configurables; openWakeWord opcional en el futuro |
@@ -363,7 +366,7 @@ game-pal/
 | M1 · Esqueleto ✅ | Daemon, bus, GUI básica, captura en los tres sistemas, OCR, hash perceptual, perfil genérico, proveedor local |
 | M2 · Entender ✅ | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
 | M3 · Hablar ✅ | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
-| M4 · Saber | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
+| M4 · Saber ✅ | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
 | M5 · Recordar | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
 | M6 · Abrir | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
 | M7 · Pulir | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |

@@ -18,6 +18,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.32",
     "websockets>=13.0",
+    "python-multipart>=0.0.18",
     "pydantic>=2.9",
     "pyyaml>=6.0",
     "httpx>=0.28",
@@ -28,7 +29,7 @@ dependencies = [
     # RapidOCR depende de opencv-python-headless, que no publica ruedas para Windows ARM64:
     # allí se usa Windows OCR, que viene con el sistema.
     "rapidocr>=3.4; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "onnxruntime>=1.20; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "onnxruntime>=1.20",
     "pyobjc-framework-Quartz>=11.0; sys_platform == 'darwin'",
     "pyobjc-framework-Cocoa>=11.0; sys_platform == 'darwin'",
     "pyobjc-framework-ScreenCaptureKit>=11.0; sys_platform == 'darwin'",
@@ -41,6 +42,11 @@ dependencies = [
     "winrt-Windows.Media.Ocr>=3.2; sys_platform == 'win32'",
     "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
     "rapidfuzz>=3.9",
+    # Conocimiento
+    "trafilatura>=2.0",
+    "pypdf>=5.0",
+    "tokenizers>=0.20",
+    "huggingface-hub>=0.26",
     # Voz
     "sounddevice>=0.5",
     "faster-whisper>=1.1; sys_platform != 'win32' or platform_machine != 'ARM64'",
@@ -94,7 +100,7 @@ packages = ["gamepal"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*"]
+module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*", "trafilatura.*", "tokenizers.*", "huggingface_hub.*", "pypdf.*", "lxml.*"]
 ignore_missing_imports = true
 
 # pywinrt solo se instala en Windows; el motor lo usa como Any para que los tipos no dependan del sistema.

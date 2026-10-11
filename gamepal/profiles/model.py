@@ -123,6 +123,7 @@ class Evidence(_Model):
 class KnowledgeSource(_Model):
     url: HttpUrl
     depth: int = Field(default=1, ge=0, le=5)
+    max_pages: int | None = Field(default=None, ge=1, le=2000)
     include: list[str] = Field(default_factory=list)
     exclude: list[str] = Field(default_factory=list)
     language: str | None = None

@@ -127,6 +127,8 @@ class AnswerUpdate(Event):
     outputs: list[Literal["overlay", "text", "voice"]] = Field(default_factory=list)
     route: Literal["quick", "reasoned", "task"] = "reasoned"
     model: str = ""
+    # Fuentes de conocimiento citadas como [n] en el texto.
+    sources: list[dict[str, str]] = Field(default_factory=list)
 
 
 class SpeakingChanged(Event):
@@ -137,6 +139,16 @@ class SpeakingChanged(Event):
 class SpeechStopped(Event):
     topic: ClassVar[str] = "voice.stopped"
     reason: str = ""
+
+
+class KnowledgeProgress(Event):
+    topic: ClassVar[str] = "knowledge.progress"
+    profile: str
+    source_id: int
+    location: str
+    state: Literal["queued", "running", "ready", "error"]
+    pages: int = 0
+    message: str = ""
 
 
 class LogMessage(Event):

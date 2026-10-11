@@ -14,12 +14,14 @@ from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
+from gamepal.knowledge import KnowledgeService
 from gamepal.overlay.process import OverlayProcess
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.perception.ocr import OcrEngine, create_engine
 from gamepal.perception.screens import ScreenInterpreter
+from gamepal.perception.text import normalize
 from gamepal.perception.vision import VisionReader
-from gamepal.perception.vocabulary import Vocabulary, build_vocabulary, find_install_dir
+from gamepal.perception.vocabulary import Entry, Vocabulary, VocabularySource, build_vocabulary, find_install_dir
 from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
@@ -63,6 +65,13 @@ class Daemon:
         self._lock = asyncio.Lock()
         self._listener: asyncio.Task[None] | None = None
         self._gui: tuple[int, str] | None = None
+        self.knowledge = KnowledgeService(
+            self.bus,
+            paths.data_dir,
+            paths.cache_dir,
+            config=lambda: self.config,
+            provider=lambda: self.c.provider,
+        )
         self.assistant = Assistant(
             self.bus,
             config=lambda: self.config,
@@ -70,6 +79,8 @@ class Daemon:
             profile=lambda: self.c.profile,
             screen=lambda: self.current_screen,
             read=lambda: self.last_read,
+            retrieve=self.knowledge.search,
+            has_knowledge=lambda: self.knowledge.store is not None and self.knowledge.store.stats()["chunks"] > 0,
         )
         self._assistant_task: asyncio.Task[None] | None = None
         self.voice = VoiceService(
@@ -102,6 +113,7 @@ class Daemon:
         if self.overlay is not None:
             await self.overlay.stop()
         await self.voice.stop()
+        await self.knowledge.close()
         await self.assistant.aclose()
         if self._assistant_task is not None:
             self._assistant_task.cancel()
@@ -138,6 +150,7 @@ class Daemon:
             profile_changed = first or config.profile != previous.profile or self.c.profile is None
             if profile_changed:
                 self._load_profile()
+                await self.knowledge.open(self.c.profile)
             if (
                 profile_changed
                 or config.game_dirs.get(config.profile) != previous.game_dirs.get(config.profile)
@@ -204,10 +217,24 @@ class Daemon:
         except (OSError, ValueError) as exc:
             log.warning("No se pudo cargar el vocabulario: %s", exc)
             self.c.errors["vocabulary"] = str(exc)
+        self._add_knowledge_titles()
         sets = self.c.vocabulary.sets()
         if sets:
             summary = ", ".join(f"{name} ({count})" for name, count in sets.items())
             log.info("Vocabulario de %s: %s", profile.name, summary)
+
+    def _add_knowledge_titles(self) -> None:
+        """Los títulos de las páginas de las wikis son nombres del juego: ayudan a corregir el OCR."""
+        store = self.knowledge.store
+        if store is None:
+            return
+        titles = store.titles()
+        for title in titles:
+            key = normalize(title).replace(" ", "_")
+            if key and len(title) <= 60:
+                self.c.vocabulary.add(Entry(key, "knowledge", {"*": title}))
+        if titles:
+            self.c.vocabulary.sources.append(VocabularySource("knowledge", "fuentes de conocimiento", len(titles)))
 
     async def _create_ocr(self) -> None:
         self.bus.publish(StatusChanged(component="ocr", state="starting", detail="Cargando motor OCR…"))

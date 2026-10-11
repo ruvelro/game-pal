@@ -140,6 +140,22 @@ function Conversation({ live }: { live: LiveState }) {
               <p className={answer.error ? "error-text" : ""}>
                 {answer.text || (answer.error ? answer.error : answer.done ? "" : t("home.ask.thinking"))}
               </p>
+              {answer.sources.length > 0 && (
+                <ul className="sources">
+                  {answer.sources.map((source) => (
+                    <li key={source.n}>
+                      <span className="muted small">[{source.n}]</span>{" "}
+                      {source.url.startsWith("http") ? (
+                        <a href={source.url} target="_blank" rel="noreferrer noopener">
+                          {source.title}
+                        </a>
+                      ) : (
+                        <span>{source.title}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {answer.done && answer.model && (
                 <span className="muted small">
                   {answer.model} · {answer.route}
