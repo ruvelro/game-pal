@@ -89,6 +89,20 @@ export function Models() {
             />
           )}
         </Field>
+        <Field label={t("models.fast")} hint={t("models.fast.hint")}>
+          {models && models.length > 0 ? (
+            <select value={provider.fast_model} onChange={(e) => update({ fast_model: e.target.value })}>
+              <option value="">—</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input value={provider.fast_model} onChange={(e) => update({ fast_model: e.target.value })} spellCheck={false} />
+          )}
+        </Field>
         {models?.length === 0 && <p className="muted">{t("models.none")}</p>}
         {loadError && (
           <p className="error-text" role="alert">

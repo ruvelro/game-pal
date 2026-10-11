@@ -55,6 +55,8 @@ class WindowSeen(Event):
     width: int
     height: int
     foreground: bool
+    left: int = 0
+    top: int = 0
 
 
 class FrameCaptured(Event):
@@ -79,6 +81,7 @@ class ScreenDetected(Event):
 
     topic: ClassVar[str] = "perception.screen"
     screen_id: str | None
+    change: Literal["enter", "update", "leave"] = "enter"
     name: str = ""
     confidence: float = 0.0
     certain: bool = False
@@ -90,9 +93,50 @@ class ScreenDetected(Event):
 
 class StatusChanged(Event):
     topic: ClassVar[str] = "status"
-    component: Literal["capture", "ocr", "provider", "profile", "daemon"]
+    component: Literal["capture", "ocr", "provider", "profile", "daemon", "voice", "overlay", "hotkeys"]
     state: Literal["idle", "starting", "running", "paused", "waiting", "error", "ready"]
     detail: str = ""
+
+
+class VoiceState(Event):
+    """Qué está haciendo el micrófono, para la GUI y el overlay."""
+
+    topic: ClassVar[str] = "voice.state"
+    state: Literal["off", "idle", "armed", "recording", "transcribing", "error"]
+    detail: str = ""
+
+
+class QuestionAsked(Event):
+    topic: ClassVar[str] = "assistant.question"
+    id: str
+    text: str
+    source: Literal["voice", "text", "push_to_talk"]
+
+
+class AnswerUpdate(Event):
+    """Respuesta en curso. `delta` trae el texto nuevo; `done` marca el final."""
+
+    topic: ClassVar[str] = "assistant.answer"
+    id: str
+    kind: Literal["question", "proactive"]
+    title: str = ""
+    delta: str = ""
+    text: str = ""
+    done: bool = False
+    error: str = ""
+    outputs: list[Literal["overlay", "text", "voice"]] = Field(default_factory=list)
+    route: Literal["quick", "reasoned", "task"] = "reasoned"
+    model: str = ""
+
+
+class SpeakingChanged(Event):
+    topic: ClassVar[str] = "voice.speaking"
+    speaking: bool
+
+
+class SpeechStopped(Event):
+    topic: ClassVar[str] = "voice.stopped"
+    reason: str = ""
 
 
 class LogMessage(Event):

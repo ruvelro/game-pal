@@ -9,10 +9,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gamepal.assistant import Assistant
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
+from gamepal.overlay.process import OverlayProcess
 from gamepal.paths import AppPaths, bundled_profiles_dir
 from gamepal.perception.ocr import OcrEngine, create_engine
 from gamepal.perception.screens import ScreenInterpreter
@@ -21,6 +23,7 @@ from gamepal.perception.vocabulary import Vocabulary, build_vocabulary, find_ins
 from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
+from gamepal.voice.service import VoiceService
 
 log = logging.getLogger(__name__)
 
@@ -59,16 +62,51 @@ class Daemon:
         self.current_screen: ScreenDetected | None = None
         self._lock = asyncio.Lock()
         self._listener: asyncio.Task[None] | None = None
+        self._gui: tuple[int, str] | None = None
+        self.assistant = Assistant(
+            self.bus,
+            config=lambda: self.config,
+            provider=lambda: self.c.provider,
+            profile=lambda: self.c.profile,
+            screen=lambda: self.current_screen,
+            read=lambda: self.last_read,
+        )
+        self._assistant_task: asyncio.Task[None] | None = None
+        self.voice = VoiceService(
+            self.bus,
+            paths.cache_dir,
+            vocabulary=lambda: self.c.vocabulary,
+            toggle_proactive=self._toggle_proactive,
+        )
+        self.overlay: OverlayProcess | None = None
+        self._voice_started = False
+
+    def attach_gui(self, port: int, token: str) -> None:
+        """El overlay se conecta a la misma API que la GUI."""
+        self._gui = (port, token)
+
+    def _toggle_proactive(self) -> bool:
+        self.assistant.proactive_muted = not self.assistant.proactive_muted
+        return self.assistant.proactive_muted
 
     # Ciclo de vida -------------------------------------------------------------------------
 
     async def start(self) -> None:
         self.bus.publish(StatusChanged(component="daemon", state="starting"))
         self._listener = asyncio.create_task(self._remember_reads())
+        self._assistant_task = asyncio.create_task(self.assistant.run(), name="assistant")
         await self.apply(self.config, persist=False)
         self.bus.publish(StatusChanged(component="daemon", state="running"))
 
     async def stop(self) -> None:
+        if self.overlay is not None:
+            await self.overlay.stop()
+        await self.voice.stop()
+        await self.assistant.aclose()
+        if self._assistant_task is not None:
+            self._assistant_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._assistant_task
         await self._stop_interpreter()
         await self._stop_watcher()
         if self.c.provider is not None:
@@ -114,6 +152,17 @@ class Daemon:
                 self._create_backend()
             await self._restart_watcher()
             await self._restart_interpreter()
+            voice_changed = (
+                config.voice != previous.voice
+                or config.output.answers != previous.output.answers
+                or config.output.proactive != previous.output.proactive
+                or config.output_language != previous.output_language
+            )
+            if not self._voice_started or voice_changed:
+                await self.voice.stop()
+                await self.voice.start(config)
+                self._voice_started = True
+            await self._apply_overlay(previous, first)
 
     def _load_profile(self) -> None:
         try:
@@ -124,6 +173,21 @@ class Daemon:
             self.c.profile = None
             self.c.errors["profile"] = str(exc)
             self.bus.publish(StatusChanged(component="profile", state="error", detail=str(exc)))
+
+    async def _apply_overlay(self, previous: AppConfig, first: bool) -> None:
+        if self._gui is None:
+            return
+        wanted = self.config.output.overlay.enabled
+        changed = (
+            self.config.output.overlay != previous.output.overlay
+            or self.config.output_language != previous.output_language
+        )
+        if self.overlay is not None and (not wanted or changed):
+            await self.overlay.stop()
+            self.overlay = None
+        if wanted and self.overlay is None:
+            self.overlay = OverlayProcess(self.bus, *self._gui)
+            self.overlay.start()
 
     async def _load_vocabulary(self) -> None:
         self.c.vocabulary, self.c.install_dir = Vocabulary(), None

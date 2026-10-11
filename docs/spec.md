@@ -169,12 +169,12 @@ Presupuesto de contexto: las instrucciones del sistema se componen por bloques c
 
 Activadores, combinables:
 
-- **Palabra clave** (openWakeWord, offline, multiidioma mediante modelos entrenados; se incluyen varias por defecto y la GUI permite entrenar una nueva con pocas muestras).
-- **Push-to-talk** con tecla global o botón de mando (SDL2 para detectar mandos en los tres sistemas). Mantener para hablar o pulsar para alternar.
-- **Proactivo**: el perfil declara en qué pantallas game-pal puede hablar sin que se le pregunte y con qué frecuencia máxima. El jugador puede silenciar lo proactivo con una tecla.
-- **Texto** en la GUI y en el panel remoto.
+- **Palabra clave**: la voz se detecta con Silero VAD y cada fragmento corto se transcribe con Whisper, que busca la frase al principio con tolerancia a errores. Así el jugador elige cualquier frase en cualquier idioma («oye compañero», «hey pal») sin entrenar modelos, y puede decir la pregunta seguida. Las frases se pasan a Whisper como pista para que las escriba bien. openWakeWord queda como alternativa futura para equipos muy justos, porque solo transcribe cuando hay voz.
+- **Push-to-talk** con tecla global (pynput) o botón de mando (SDL2, también con el juego en primer plano). Mantener para hablar o pulsar para alternar. La GUI tiene además un botón «mantén para hablar».
+- **Proactivo**: el perfil declara en qué pantallas game-pal puede hablar sin que se le pregunte, con su enfriamiento y una vez por entrada en la pantalla. Un atajo global los silencia y reactiva.
+- **Texto** en la GUI y, en fase 2, en el panel remoto.
 
-Flujo de una pregunta por voz: tono de listo → grabación con VAD (Silero VAD, con estimación de ruido) → transcripción local → enrutado "rápido / razonado" por un clasificador del modelo `fast`, no por regex → respuesta en streaming → voz desde la primera frase → "gracias" o la palabra clave interrumpen.
+Flujo de una pregunta por voz: tono de listo → grabación hasta 0,7 s de silencio → transcripción local → enrutado «rápido / razonado» por un modelo pequeño opcional (sin modelo rápido, todo va razonado) → respuesta en streaming → voz desde la primera frase, mientras se sintetiza la siguiente → «gracias», «para» o la palabra clave interrumpen la voz y la generación.
 
 ### 4.7 Salida
 
@@ -321,11 +321,11 @@ Overlay y bandeja: la bandeja ofrece iniciar, pausar, silenciar proactivo, abrir
 | Índice | SQLite con sqlite-vec y FTS5 |
 | STT | faster-whisper (CTranslate2) |
 | TTS | Piper (ONNX) y Kokoro (ONNX) |
-| Wake word | openWakeWord (ONNX) |
+| Wake word | Silero VAD + Whisper con frases configurables; openWakeWord opcional en el futuro |
 | VAD | Silero VAD (ONNX) |
 | Audio | sounddevice (PortAudio) |
-| Mando y atajos | SDL2 (pysdl2) para mandos; pynput para teclas globales |
-| Overlay | Ventana nativa por plataforma mediante un módulo pequeño con pywebview y ajustes de ventana por plataforma (ctypes / PyObjC / GTK layer-shell) |
+| Mando y atajos | SDL2 (pysdl2 + pysdl2-dll) para mandos; pynput para teclas globales |
+| Overlay | Proceso aparte con ventana nativa: NSPanel (PyObjC) en macOS, Win32 por ctypes en Windows, Tk como respaldo en Linux |
 | GUI | React + TypeScript + Vite, estilos con tokens de diseño, servida por el daemon (FastAPI + WebSocket) y envuelta con pywebview |
 | Empaquetado | PyInstaller por plataforma; instaladores MSIX/MSI, DMG notarizado, AppImage y Flatpak; actualizador opcional con verificación de firma |
 | Tests | pytest, fixtures sintéticas de capturas y guardados, snapshot tests de prompts, tests de contrato por proveedor con grabaciones |
@@ -362,7 +362,7 @@ game-pal/
 | --- | --- |
 | M1 · Esqueleto ✅ | Daemon, bus, GUI básica, captura en los tres sistemas, OCR, hash perceptual, perfil genérico, proveedor local |
 | M2 · Entender ✅ | Señales declarativas, clasificador, vocabulario, VLM opcional, perfil Hades II sin guardado |
-| M3 · Hablar | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
+| M3 · Hablar ✅ | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
 | M4 · Saber | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
 | M5 · Recordar | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
 | M6 · Abrir | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |

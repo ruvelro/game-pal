@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, type AskResult, type Component, type Status } from "../api";
+import { api, type Component, type Status } from "../api";
 import { ScreenData } from "../components/ScreenData";
 import { Card, Dot, PageHeader } from "../components/ui";
 import { t } from "../i18n";
@@ -10,6 +10,8 @@ const CARDS: Array<[Component, Parameters<typeof t>[0]]> = [
   ["ocr", "card.ocr"],
   ["provider", "card.provider"],
   ["profile", "card.profile"],
+  ["voice", "card.voice"],
+  ["overlay", "card.overlay"],
 ];
 
 function Preview({ live, paused }: { live: LiveState; paused: boolean }) {
@@ -49,29 +51,46 @@ function Preview({ live, paused }: { live: LiveState; paused: boolean }) {
   );
 }
 
-function Ask() {
+function Conversation({ live }: { live: LiveState }) {
   const [prompt, setPrompt] = useState("");
-  const [screen, setScreen] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [answer, setAnswer] = useState<AskResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [talking, setTalking] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!prompt.trim() || busy) return;
-    setBusy(true);
+    if (!prompt.trim()) return;
     setError(null);
     try {
-      setAnswer(await api.post<AskResult>("/api/provider/ask", { prompt, include_screen: screen }));
+      await api.post("/api/assistant/ask", { text: prompt });
+      setPrompt("");
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setBusy(false);
     }
   };
 
+  const ptt = async (down: boolean) => {
+    if (down === talking) return;
+    setTalking(down);
+    try {
+      await api.post("/api/voice/ptt", { down });
+    } catch (e) {
+      setTalking(false);
+      setError((e as Error).message);
+    }
+  };
+
+  const toggleMute = async () => {
+    const next = !muted;
+    await api.post("/api/proactive", { muted: next }).catch(() => undefined);
+    setMuted(next);
+  };
+
+  const voiceState = live.voice?.state;
+  const busy = live.answers.some((a) => !a.done);
+
   return (
-    <Card title={t("home.ask")}>
+    <Card title={t("home.answers")}>
       <form className="ask" onSubmit={submit}>
         <input
           value={prompt}
@@ -79,26 +98,56 @@ function Ask() {
           placeholder={t("home.ask.placeholder")}
           maxLength={4000}
         />
-        <button className="primary" disabled={busy || !prompt.trim()}>
-          {busy ? t("home.ask.thinking") : t("home.ask.send")}
+        <button className="primary" disabled={!prompt.trim()}>
+          {t("home.ask.send")}
         </button>
       </form>
-      <label className="check">
-        <input type="checkbox" checked={screen} onChange={(e) => setScreen(e.target.checked)} />
-        {t("home.ask.screen")}
-      </label>
+      <div className="row wrap voice-row">
+        <button
+          className={talking ? "talk active" : "talk"}
+          onPointerDown={() => void ptt(true)}
+          onPointerUp={() => void ptt(false)}
+          onPointerLeave={() => void ptt(false)}
+        >
+          {talking ? t("home.talking") : t("home.talk")}
+        </button>
+        {(live.speaking || busy) && (
+          <button onClick={() => void api.post("/api/assistant/stop")}>{t("home.silence")}</button>
+        )}
+        <button onClick={() => void toggleMute()}>{muted ? t("home.unmute") : t("home.mute")}</button>
+        {voiceState && voiceState !== "off" && (
+          <span className={`chip-static ${voiceState === "error" ? "warn" : ""}`}>
+            <span className={`dot ${voiceState === "idle" ? "neutral" : "busy"}`} />
+            {t(`voice.state.${voiceState}` as Parameters<typeof t>[0])}
+          </span>
+        )}
+      </div>
       {error && (
         <p className="error-text" role="alert">
           {error}
         </p>
       )}
-      {answer && (
-        <div className="answer">
-          <p>{answer.text}</p>
-          <span className="muted small">
-            {answer.model} · {answer.elapsed_ms} ms
-          </span>
-        </div>
+      {live.answers.length === 0 ? (
+        <p className="muted">{t("home.answers.empty")}</p>
+      ) : (
+        <ol className="answers">
+          {live.answers.map((answer) => (
+            <li key={answer.id} className={answer.kind}>
+              <span className="muted small">
+                {answer.kind === "proactive" ? "💡 " : "❓ "}
+                {answer.title}
+              </span>
+              <p className={answer.error ? "error-text" : ""}>
+                {answer.text || (answer.error ? answer.error : answer.done ? "" : t("home.ask.thinking"))}
+              </p>
+              {answer.done && answer.model && (
+                <span className="muted small">
+                  {answer.model} · {answer.route}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
       )}
     </Card>
   );
@@ -171,7 +220,7 @@ export function Home({ live, status, onToggle }: { live: LiveState; status: Stat
           )}
         </Card>
       </div>
-      <Ask />
+      <Conversation live={live} />
     </>
   );
 }

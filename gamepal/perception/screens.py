@@ -71,12 +71,13 @@ class ScreenInterpreter:
             if transition.kind == "leave" and self.tracker.current is not None:
                 continue  # se anuncia directamente la pantalla nueva
             if transition.kind == "leave":
-                self._bus.publish(ScreenDetected(screen_id=None, frame_id=read.frame_id))
+                self._bus.publish(ScreenDetected(screen_id=None, change="leave", frame_id=read.frame_id))
             else:
                 c = transition.classification
                 self._bus.publish(
                     ScreenDetected(
                         screen_id=transition.screen.id,
+                        change="update" if transition.kind == "update" else "enter",
                         name=transition.screen.description or transition.screen.id,
                         confidence=round(c.confidence, 3),
                         certain=c.certain,

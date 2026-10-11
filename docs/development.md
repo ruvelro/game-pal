@@ -17,7 +17,15 @@ uv run game-pal
 
 game-pal abre la GUI en el navegador con un token de sesión en la dirección. Si cierras la pestaña, la dirección completa aparece en la terminal.
 
-En macOS, la primera vez el sistema pedirá permiso de **Grabación de pantalla** para la app desde la que lances game-pal (Terminal, iTerm, VS Code…). Concédelo y vuelve a arrancar.
+En macOS, la primera vez el sistema pedirá permisos para la app desde la que lances game-pal (Terminal, iTerm, VS Code…). Concédelos y vuelve a arrancar:
+
+- **Grabación de pantalla**, para ver la ventana del juego.
+- **Micrófono**, si activas la voz.
+- **Monitorización de entrada** o **Accesibilidad**, para los atajos de teclado globales.
+
+En Linux, la voz necesita PortAudio (`libportaudio2`) y los atajos globales solo funcionan en X11.
+
+La primera vez que actives la voz se descargan los modelos: Silero VAD (2 MB), Whisper (75 MB a 1,5 GB según el modelo) y la voz de Piper del idioma (unos 60 MB). Quedan en la caché de game-pal.
 
 ## Comandos útiles
 
@@ -37,7 +45,13 @@ uv run mypy
 uv run pytest
 ```
 
-Los tests usan imágenes sintéticas y un backend de captura falso: no capturan tu pantalla ni llaman a ningún modelo. Los marcados como `ocr` cargan el motor OCR real.
+Los tests usan imágenes sintéticas y un backend de captura falso: no capturan tu pantalla, no abren el micrófono ni llaman a ningún modelo. Los marcados como `ocr` cargan el motor OCR real.
+
+Las pruebas de voz con modelos reales generan habla con Piper y la pasan por el detector y Whisper, sin micrófono. Descargan modelos, así que van aparte:
+
+```bash
+uv run pytest -m voice
+```
 
 ## GUI en modo desarrollo
 
@@ -58,6 +72,9 @@ gamepal/
   perception/            hash perceptual, OCR enchufable y bucle de observación
   profiles/              esquema y carga de perfiles de juego
   providers/             interfaz de modelos y proveedor local OpenAI-compatible
+  voice/                 micrófono, detector de voz, Whisper, Piper, frases clave, atajos y mando
+  overlay/               proceso del overlay: lógica común y ventana nativa por sistema
+  assistant.py           preguntas, enrutado rápido/razonado y avisos proactivos
   gui_server/            API REST + WebSocket en loopback con token
   daemon.py, cli.py      orquestación y línea de comandos
 ui/                      GUI en React + TypeScript (Vite)

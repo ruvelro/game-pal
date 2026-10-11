@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from gamepal.config import AppConfig, OcrConfig, save_config
+from gamepal.config import AppConfig, OcrConfig, OutputConfig, OverlayConfig, save_config
 from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
 from gamepal.paths import AppPaths
@@ -19,7 +19,9 @@ AUTH = {**HOST, "authorization": f"Bearer {TOKEN}"}
 
 @pytest.fixture
 def client(app_paths: AppPaths, repo_profiles: Path) -> Iterator[TestClient]:
-    save_config(AppConfig(ocr=OcrConfig(backend="none")), app_paths.config_file)
+    # Sin voz ni overlay: los tests no descargan modelos ni abren ventanas.
+    quiet = OutputConfig(answers=["text"], overlay=OverlayConfig(enabled=False))
+    save_config(AppConfig(ocr=OcrConfig(backend="none"), output=quiet), app_paths.config_file)
     daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles)
     with TestClient(create_app(daemon, TOKEN, PORT), base_url=f"http://127.0.0.1:{PORT}") as test_client:
         yield test_client
@@ -118,3 +120,14 @@ def test_game_dir_must_exist(client: TestClient, tmp_path: Path) -> None:
     assert client.put("/api/config", headers=AUTH, json=config).status_code == 422
     config["game_dirs"] = {"hades-2": str(tmp_path)}
     assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
+
+
+def test_assistant_and_voice_endpoints(client: TestClient) -> None:
+    assert len(client.post("/api/assistant/ask", headers=AUTH, json={"text": "hola"}).json()["id"]) == 12
+    assert client.post("/api/assistant/ask", headers=AUTH, json={"text": ""}).status_code == 422
+    # Con la voz desactivada, push-to-talk y la prueba de voz lo explican.
+    assert client.post("/api/voice/ptt", headers=AUTH, json={"down": True}).status_code == 409
+    assert client.post("/api/voice/say", headers=AUTH, json={"text": "hola"}).status_code == 409
+    assert client.post("/api/proactive", headers=AUTH, json={"muted": True}).json() == {"muted": True}
+    assert client.post("/api/overlay/test", headers=AUTH).json() == {"ok": True}
+    assert "es" in client.get("/api/voice/devices", headers=AUTH).json()["voices"]
