@@ -22,6 +22,7 @@ export function Settings() {
             >
               <option value="rapidocr">{t("settings.ocr.rapidocr")}</option>
               <option value="apple-vision">{t("settings.ocr.vision")}</option>
+              <option value="windows-ocr">{t("settings.ocr.windows")}</option>
               <option value="none">{t("settings.ocr.none")}</option>
             </select>
           </Field>

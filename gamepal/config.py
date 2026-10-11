@@ -5,7 +5,9 @@ Nunca contiene secretos: las claves de API viven en el almacén de credenciales 
 
 from __future__ import annotations
 
+import importlib.util
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -13,7 +15,18 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-OcrBackendName = Literal["rapidocr", "apple-vision", "none"]
+OcrBackendName = Literal["rapidocr", "apple-vision", "windows-ocr", "none"]
+
+
+def rapidocr_available() -> bool:
+    """RapidOCR no se instala donde faltan sus ruedas (Windows ARM64)."""
+    return importlib.util.find_spec("rapidocr") is not None
+
+
+def default_ocr_backend() -> OcrBackendName:
+    if sys.platform == "win32" and not rapidocr_available():
+        return "windows-ocr"
+    return "rapidocr"
 
 
 class _Model(BaseModel):
@@ -34,7 +47,7 @@ class CaptureConfig(_Model):
 
 
 class OcrConfig(_Model):
-    backend: OcrBackendName = "rapidocr"
+    backend: OcrBackendName = Field(default_factory=default_ocr_backend)
     min_confidence: float = Field(default=0.5, ge=0, le=1)
 
 

@@ -27,6 +27,8 @@ En Linux, la voz necesita PortAudio (`libportaudio2`) y los atajos globales solo
 
 La primera vez que actives la voz se descargan los modelos: Silero VAD (2 MB), Whisper (75 MB a 1,5 GB según el modelo) y la voz de Piper del idioma (unos 60 MB). Quedan en la caché de game-pal.
 
+En Windows ARM64 no se instala RapidOCR (OpenCV no publica ruedas para esa arquitectura) y el OCR por defecto es **Windows OCR**, que viene con el sistema. Lee un solo idioma a la vez y necesita su paquete de idioma instalado (Configuración › Hora e idioma); si falta el del juego, usa los idiomas de tu cuenta. No da confianza por línea, así que el umbral de confianza no le afecta.
+
 ## Comandos útiles
 
 ```bash
@@ -45,7 +47,7 @@ uv run mypy
 uv run pytest
 ```
 
-Los tests usan imágenes sintéticas y un backend de captura falso: no capturan tu pantalla, no abren el micrófono ni llaman a ningún modelo. Los marcados como `ocr` cargan el motor OCR real.
+Los tests usan imágenes sintéticas y un backend de captura falso: no capturan tu pantalla, no abren el micrófono ni llaman a ningún modelo. Los marcados como `ocr` cargan RapidOCR real y se omiten donde no está instalado; los marcados como `windows_ocr` solo se ejecutan en Windows.
 
 Las pruebas de voz con modelos reales generan habla con Piper y la pasan por el detector y Whisper, sin micrófono. Descargan modelos, así que van aparte:
 
