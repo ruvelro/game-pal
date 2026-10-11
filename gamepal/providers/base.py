@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -44,6 +44,8 @@ class Message:
 class Usage:
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # Coste en dólares cuando el servicio lo informa (OpenRouter); si no, se estima aparte.
+    cost: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +68,11 @@ class Capabilities:
 class Provider(Protocol):
     name: str
 
+    @property
+    def local(self) -> bool:
+        """True si el proveedor corre en este equipo."""
+        ...
+
     async def capabilities(self) -> Capabilities: ...
 
     async def chat(
@@ -85,6 +92,7 @@ class Provider(Protocol):
         model: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AsyncIterator[str]: ...
 
     async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]: ...

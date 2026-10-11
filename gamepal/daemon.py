@@ -9,12 +9,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gamepal.activity import ActivityStore
 from gamepal.assistant import Assistant
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.evidence.service import EvidenceService
+from gamepal.keystore import SecretStore
 from gamepal.knowledge import KnowledgeService
 from gamepal.memory import MemoryService
 from gamepal.overlay.process import OverlayProcess
@@ -27,6 +29,7 @@ from gamepal.perception.vocabulary import Entry, Vocabulary, VocabularySource, b
 from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
+from gamepal.providers.hub import ProviderHub, model_for
 from gamepal.voice.service import VoiceService
 
 log = logging.getLogger(__name__)
@@ -55,11 +58,15 @@ class Daemon:
         *,
         backend_factory: Callable[[], CaptureBackend] = create_backend,
         bundled_dir: Path | None = None,
+        secrets: SecretStore | None = None,
     ) -> None:
         self.paths = paths
         self._backend_factory = backend_factory
         self.bus = bus or EventBus()
         self.config: AppConfig = load_config(paths.config_file)
+        self.secrets = secrets or SecretStore()
+        self.activity = ActivityStore(paths.data_dir / "activity.sqlite")
+        self.hub = ProviderHub(self.bus, config=lambda: self.config, secrets=self.secrets, activity=self.activity)
         self.profiles = ProfileStore(bundled_dir or bundled_profiles_dir(), paths.user_profiles_dir)
         self.c = Components()
         self.last_read: ScreenRead | None = None
@@ -72,7 +79,7 @@ class Daemon:
             paths.data_dir,
             paths.cache_dir,
             config=lambda: self.config,
-            provider=lambda: self.c.provider,
+            provider=self._local_provider,
         )
         self.evidence = EvidenceService(self.bus, config=lambda: self.config, vocabulary=lambda: self.c.vocabulary)
         self.memory = MemoryService(
@@ -88,6 +95,9 @@ class Daemon:
             retrieve=self.knowledge.search,
             has_knowledge=lambda: self.knowledge.store is not None and self.knowledge.store.stats()["chunks"] > 0,
             state=self._state_context,
+            fast=lambda: self.hub.route("fast"),
+            fast_model=lambda: None,
+            fast_enabled=self._fast_enabled,
         )
         self._assistant_task: asyncio.Task[None] | None = None
         self.voice = VoiceService(
@@ -98,6 +108,27 @@ class Daemon:
         )
         self.overlay: OverlayProcess | None = None
         self._voice_started = False
+
+    def _local_provider(self) -> Provider | None:
+        """Los embeddings de conocimiento siempre se calculan en local."""
+        try:
+            return self.hub.client("local")
+        except Exception:
+            return None
+
+    def _fast_enabled(self) -> bool:
+        """El enrutado rápido solo compensa si la tarea rápida usa otro modelo distinto del principal."""
+        routing = self.config.routing
+        fast = (routing.fast.provider, model_for(self.config, routing.fast.provider, "fast"))
+        main = (routing.reasoning.provider, model_for(self.config, routing.reasoning.provider, "reasoning"))
+        return bool(fast[1]) and fast != main
+
+    def vision_enabled(self) -> bool:
+        route = self.config.routing.vision
+        if not model_for(self.config, route.provider, "vision"):
+            return False
+        # Una captura de pantalla solo sale del equipo si el jugador lo ha permitido.
+        return route.provider == "local" or self.config.cloud.allow_images
 
     def _state_context(self) -> str:
         return "\n\n".join(part for part in (self.evidence.ledger.prompt(), self.memory.context()) if part)
@@ -133,8 +164,8 @@ class Daemon:
                 await self._assistant_task
         await self._stop_interpreter()
         await self._stop_watcher()
-        if self.c.provider is not None:
-            await self.c.provider.aclose()
+        await self.hub.aclose()
+        self.activity.close()
         if self._listener is not None:
             self._listener.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -179,7 +210,12 @@ class Daemon:
                 await self.memory.open(self.c.profile.profile.id if self.c.profile else None)
             if first or config.ocr != previous.ocr or config.game_language != previous.game_language:
                 await self._create_ocr()
-            if first or config.provider != previous.provider:
+            if (
+                first
+                or config.provider != previous.provider
+                or config.cloud != previous.cloud
+                or config.routing != previous.routing
+            ):
                 await self._create_provider()
             if first:
                 self._create_backend()
@@ -269,17 +305,33 @@ class Daemon:
             self.bus.publish(StatusChanged(component="ocr", state="error", detail=str(exc)))
 
     async def _create_provider(self) -> None:
-        if self.c.provider is not None:
-            await self.c.provider.aclose()
-            self.c.provider = None
+        await self.hub.reset()
         try:
-            self.c.provider = create_provider(self.config.provider)
+            create_provider(self.config.provider)  # valida la dirección del servidor local
+            self.c.provider = self.hub.route("reasoning")
             self.c.errors.pop("provider", None)
-            detail = self.config.provider.model or "sin modelo seleccionado"
-            self.bus.publish(StatusChanged(component="provider", state="idle", detail=detail))
+            self.bus.publish(StatusChanged(component="provider", state="idle", detail=self.routing_summary()))
         except Exception as exc:
+            self.c.provider = None
             self.c.errors["provider"] = str(exc)
             self.bus.publish(StatusChanged(component="provider", state="error", detail=str(exc)))
+
+    def routing_summary(self) -> str:
+        parts = []
+        for role, label in (("reasoning", "razonar"), ("fast", "rápido"), ("vision", "visión")):
+            route = getattr(self.config.routing, role)
+            model = model_for(self.config, route.provider, role) or "sin modelo"  # type: ignore[arg-type]
+            if role == "fast" and not self._fast_enabled():
+                continue
+            if role == "vision" and not self.vision_enabled():
+                continue
+            backup = f" → {route.fallback}" if route.fallback != "none" else ""
+            parts.append(f"{label}: {route.provider} ({model}){backup}")
+        return " · ".join(parts)
+
+    async def refresh_providers(self) -> None:
+        """Tras guardar o borrar una clave."""
+        await self._create_provider()
 
     def _create_backend(self) -> None:
         try:
@@ -321,8 +373,8 @@ class Daemon:
             self.c.interpreter = None
             return
         vision = None
-        if self.c.provider is not None and self.config.provider.vision_model:
-            vision = VisionReader(self.c.provider, self.config.provider.vision_model, loaded.profile, self.c.vocabulary)
+        if self.vision_enabled():
+            vision = VisionReader(self.hub.route("vision"), "", loaded.profile, self.c.vocabulary)
         self.c.interpreter = ScreenInterpreter(
             self.bus,
             loaded.profile,

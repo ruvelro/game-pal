@@ -1,116 +1,347 @@
-import { useState } from "react";
-import { api } from "../api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type AppConfig } from "../api";
 import { Card, Field, PageHeader, SaveBar } from "../components/ui";
-import { t } from "../i18n";
+import { t, type Key } from "../i18n";
 import { useConfig } from "../store";
 
-const PRESETS: Array<[string, string]> = [
+type Cloud = "openai" | "anthropic" | "openrouter";
+type ProviderName = "local" | Cloud;
+type Role = "reasoning" | "fast" | "vision";
+
+const CLOUDS: Array<[Cloud, string, string]> = [
+  ["openai", "OpenAI", "https://platform.openai.com/api-keys"],
+  ["anthropic", "Anthropic (Claude)", "https://platform.claude.com/settings/keys"],
+  ["openrouter", "OpenRouter", "https://openrouter.ai/keys"],
+];
+const PRESETS: Array<[string, Key]> = [
+  ["local", "models.preset.local"],
+  ["backup", "models.preset.backup"],
+  ["hybrid", "models.preset.hybrid"],
+  ["cloud", "models.preset.cloud"],
+];
+const ROLES: Array<[Role, Key, Key]> = [
+  ["reasoning", "models.role.reasoning", "models.role.reasoning.hint"],
+  ["fast", "models.role.fast", "models.role.fast.hint"],
+  ["vision", "models.role.vision", "models.role.vision.hint"],
+];
+const LOCAL_PRESETS: Array<[string, string]> = [
   ["Ollama", "http://127.0.0.1:11434/v1"],
   ["LM Studio", "http://127.0.0.1:1234/v1"],
   ["llama.cpp", "http://127.0.0.1:8080/v1"],
   ["MLX", "http://127.0.0.1:8081/v1"],
 ];
 
+function ModelPicker({
+  value,
+  models,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  models: string[] | undefined;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  if (models && models.length > 0) {
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{placeholder ?? "—"}</option>
+        {models.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
+}
+
+function CloudCard({
+  id,
+  label,
+  link,
+  configured,
+  config,
+  setConfig,
+  onKey,
+}: {
+  id: Cloud;
+  label: string;
+  link: string;
+  configured: boolean;
+  config: AppConfig;
+  setConfig: (c: AppConfig) => void;
+  onKey: () => void;
+}) {
+  const [key, setKey] = useState("");
+  const [models, setModels] = useState<string[]>();
+  const [error, setError] = useState<string | null>(null);
+  const cloud = config.cloud[id];
+  const update = (patch: Partial<typeof cloud>) =>
+    setConfig({ ...config, cloud: { ...config.cloud, [id]: { ...cloud, ...patch } } });
+
+  const saveKey = async () => {
+    setError(null);
+    try {
+      await api.put(`/api/providers/${id}/key`, { key: key.trim() });
+      setKey("");
+      onKey();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const findModels = async () => {
+    setError(null);
+    try {
+      setModels((await api.get<{ models: string[] }>(`/api/providers/${id}/models`)).models);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <Card title={label}>
+      <div className="row wrap">
+        <span className={`chip-static ${configured ? "" : "warn"}`}>
+          {configured ? t("models.key.ok") : t("models.key.missing")}
+        </span>
+        <a className="small" href={link} target="_blank" rel="noreferrer noopener">
+          {t("models.key.get")}
+        </a>
+      </div>
+      <Field label={t("models.key")} hint={t("models.key.hint")}>
+        <div className="row">
+          <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-…" />
+          <button onClick={() => void saveKey()} disabled={key.trim().length < 8}>
+            {t("common.save")}
+          </button>
+          {configured && (
+            <button onClick={() => void api.del(`/api/providers/${id}/key`).then(onKey)}>{t("kn.remove")}</button>
+          )}
+        </div>
+      </Field>
+      {configured && (
+        <>
+          <button onClick={() => void findModels()}>{t("models.load")}</button>
+          <Field label={t("models.role.reasoning")}>
+            <ModelPicker
+              value={cloud.model}
+              models={models}
+              onChange={(model) => update({ model })}
+              placeholder={id === "anthropic" ? "claude-opus-5-5" : ""}
+            />
+          </Field>
+          <Field label={t("models.role.fast")}>
+            <ModelPicker
+              value={cloud.fast_model}
+              models={models}
+              onChange={(fast_model) => update({ fast_model })}
+              placeholder={id === "anthropic" ? "claude-haiku-5-5" : t("models.same")}
+            />
+          </Field>
+          <Field label={t("models.role.vision")}>
+            <ModelPicker
+              value={cloud.vision_model}
+              models={models}
+              onChange={(vision_model) => update({ vision_model })}
+              placeholder={t("models.same")}
+            />
+          </Field>
+        </>
+      )}
+      {error && <p className="error-text small">{error}</p>}
+    </Card>
+  );
+}
+
 export function Models() {
   const { config, setConfig, save, error, saved } = useConfig();
-  const [models, setModels] = useState<string[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [keys, setKeys] = useState<Record<Cloud, boolean>>({ openai: false, anthropic: false, openrouter: false });
+  const [summary, setSummary] = useState("");
+  const [localModels, setLocalModels] = useState<string[]>();
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const loadProviders = useCallback(() => {
+    api
+      .get<{ keys: Record<Cloud, boolean>; summary: string }>("/api/providers")
+      .then((data) => {
+        setKeys(data.keys);
+        setSummary(data.summary);
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(loadProviders, [loadProviders]);
 
   if (!config) return null;
   const provider = config.provider;
-  const update = (patch: Partial<typeof provider>) => setConfig({ ...config, provider: { ...provider, ...patch } });
+  const updateLocal = (patch: Partial<typeof provider>) => setConfig({ ...config, provider: { ...provider, ...patch } });
+  const firstCloud = (CLOUDS.find(([id]) => keys[id])?.[0] ?? null) as Cloud | null;
 
-  const findModels = async () => {
-    setLoading(true);
-    setLoadError(null);
-    // Guarda primero la dirección para que el daemon consulte el servidor correcto.
+  const applyPreset = (preset: string) => {
+    const cloud: ProviderName = firstCloud ?? "local";
+    const r = (main: ProviderName, fallback: ProviderName | "none" = "none") => ({ provider: main, fallback });
+    const routing =
+      preset === "local"
+        ? { reasoning: r("local"), fast: r("local"), vision: r("local") }
+        : preset === "backup"
+          ? { reasoning: r("local", cloud), fast: r("local", cloud), vision: r("local") }
+          : preset === "hybrid"
+            ? { reasoning: r(cloud, "local"), fast: r("local", cloud), vision: r("local") }
+            : { reasoning: r(cloud, "local"), fast: r(cloud, "local"), vision: r(cloud, "local") };
+    setConfig({ ...config, routing });
+  };
+
+  const setRoute = (role: Role, patch: Partial<AppConfig["routing"][Role]>) =>
+    setConfig({ ...config, routing: { ...config.routing, [role]: { ...config.routing[role], ...patch } } });
+
+  const findLocal = async () => {
+    setLocalError(null);
     if (await save(config)) {
       try {
-        const data = await api.get<{ models: string[] }>("/api/provider/models");
-        setModels(data.models);
+        setLocalModels((await api.get<{ models: string[] }>("/api/providers/local/models")).models);
       } catch (e) {
-        setModels(null);
-        setLoadError((e as Error).message);
+        setLocalError((e as Error).message);
       }
     }
-    setLoading(false);
   };
+
+  const onSave = async () => {
+    if (await save(config)) loadProviders();
+  };
+  const usesCloud = Object.values(config.routing).some(
+    (route) => route.provider !== "local" || (route.fallback !== "none" && route.fallback !== "local"),
+  );
+
+  const providerOptions = (
+    <>
+      <option value="local">{t("models.local")}</option>
+      {CLOUDS.map(([id, name]) => (
+        <option key={id} value={id} disabled={!keys[id]}>
+          {name}
+        </option>
+      ))}
+    </>
+  );
 
   return (
     <>
       <PageHeader title={t("models.title")} subtitle={t("models.subtitle")} />
-      <Card>
+      <Card title={t("models.routing")}>
+        <p className="muted small">{summary}</p>
+        <div className="row wrap">
+          {PRESETS.map(([id, label]) => (
+            <button key={id} className="chip" onClick={() => applyPreset(id)} disabled={id !== "local" && !firstCloud}>
+              {t(label)}
+            </button>
+          ))}
+        </div>
+        {!firstCloud && <p className="muted small">{t("models.preset.needkey")}</p>}
+        <table className="candidates routes">
+          <thead>
+            <tr>
+              <th>{t("models.task")}</th>
+              <th>{t("models.main")}</th>
+              <th>{t("models.fallback")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ROLES.map(([role, label, hint]) => (
+              <tr key={role}>
+                <td>
+                  <strong>{t(label)}</strong>
+                  <div className="muted small">{t(hint)}</div>
+                </td>
+                <td>
+                  <select
+                    value={config.routing[role].provider}
+                    onChange={(e) => setRoute(role, { provider: e.target.value as ProviderName })}
+                    aria-label={`${t(label)} · ${t("models.main")}`}
+                  >
+                    {providerOptions}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    value={config.routing[role].fallback}
+                    onChange={(e) => setRoute(role, { fallback: e.target.value as ProviderName | "none" })}
+                    aria-label={`${t(label)} · ${t("models.fallback")}`}
+                  >
+                    <option value="none">{t("models.fallback.none")}</option>
+                    {providerOptions}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {usesCloud && <p className="notice small">{t("models.cloud.privacy")}</p>}
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={config.cloud.allow_images}
+            onChange={(e) => setConfig({ ...config, cloud: { ...config.cloud, allow_images: e.target.checked } })}
+          />
+          {t("models.images")}
+        </label>
+        <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
+      </Card>
+
+      <Card title={t("models.local.title")}>
+        <p className="muted small">{t("models.subtitle.local")}</p>
         <Field label={t("models.url")}>
           <div className="row">
-            <input value={provider.base_url} onChange={(e) => update({ base_url: e.target.value })} spellCheck={false} />
-            <button onClick={() => void findModels()} disabled={loading}>
-              {t("models.load")}
-            </button>
+            <input value={provider.base_url} onChange={(e) => updateLocal({ base_url: e.target.value })} spellCheck={false} />
+            <button onClick={() => void findLocal()}>{t("models.load")}</button>
           </div>
         </Field>
         <div className="row wrap">
           <span className="muted small">{t("models.presets")}:</span>
-          {PRESETS.map(([name, url]) => (
-            <button key={name} className="chip" onClick={() => update({ base_url: url })}>
+          {LOCAL_PRESETS.map(([name, url]) => (
+            <button key={name} className="chip" onClick={() => updateLocal({ base_url: url })}>
               {name}
             </button>
           ))}
         </div>
-        <Field label={t("models.model")}>
-          {models && models.length > 0 ? (
-            <select value={provider.model} onChange={(e) => update({ model: e.target.value })}>
-              <option value="">—</option>
-              {models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input value={provider.model} onChange={(e) => update({ model: e.target.value })} spellCheck={false} />
-          )}
-        </Field>
-        <Field label={t("models.vision")} hint={t("models.vision.hint")}>
-          {models && models.length > 0 ? (
-            <select value={provider.vision_model} onChange={(e) => update({ vision_model: e.target.value })}>
-              <option value="">—</option>
-              {models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              value={provider.vision_model}
-              onChange={(e) => update({ vision_model: e.target.value })}
-              spellCheck={false}
+        <div className="two-col tight">
+          <Field label={t("models.role.reasoning")}>
+            <ModelPicker value={provider.model} models={localModels} onChange={(model) => updateLocal({ model })} />
+          </Field>
+          <Field label={t("models.fast")} hint={t("models.fast.hint")}>
+            <ModelPicker
+              value={provider.fast_model}
+              models={localModels}
+              onChange={(fast_model) => updateLocal({ fast_model })}
             />
-          )}
-        </Field>
-        <Field label={t("models.fast")} hint={t("models.fast.hint")}>
-          {models && models.length > 0 ? (
-            <select value={provider.fast_model} onChange={(e) => update({ fast_model: e.target.value })}>
-              <option value="">—</option>
-              {models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input value={provider.fast_model} onChange={(e) => update({ fast_model: e.target.value })} spellCheck={false} />
-          )}
-        </Field>
-        {models?.length === 0 && <p className="muted">{t("models.none")}</p>}
-        {loadError && (
-          <p className="error-text" role="alert">
-            {loadError}
-          </p>
-        )}
-        <SaveBar onSave={() => void save(config)} saved={saved} error={error} />
+          </Field>
+          <Field label={t("models.vision")} hint={t("models.vision.hint")}>
+            <ModelPicker
+              value={provider.vision_model}
+              models={localModels}
+              onChange={(vision_model) => updateLocal({ vision_model })}
+            />
+          </Field>
+        </div>
+        {localModels?.length === 0 && <p className="muted">{t("models.none")}</p>}
+        {localError && <p className="error-text">{localError}</p>}
+        <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
       </Card>
+
+      <div className="two-col">
+        {CLOUDS.map(([id, label, link]) => (
+          <CloudCard
+            key={id}
+            id={id}
+            label={label}
+            link={link}
+            configured={keys[id]}
+            config={config}
+            setConfig={setConfig}
+            onKey={loadProviders}
+          />
+        ))}
+      </div>
+      <SaveBar onSave={() => void onSave()} saved={saved} error={error} />
     </>
   );
 }

@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=../profile.schema.json
+# Perfil de Stardew Valley.
+#
+# Las pantallas se reconocen por su texto, nunca por coordenadas. El guardado (XML) aporta el día,
+# el dinero, las habilidades, la mochila y las amistades, así que el asistente sabe cómo va la granja
+# sin que el jugador lo cuente. Los textos del juego van en ficheros XNB que no se leen; el
+# vocabulario base trae los nombres en inglés y español.
+id: stardew-valley
+name: Stardew Valley
+version: 1
+description: Simulador de granja de ConcernedApe. Lee el guardado y reconoce profesiones, tiendas, diálogos y el resumen del día.
+game:
+  process: [Stardew Valley, StardewValley, StardewModdingAPI]
+  window_title: Stardew Valley
+  languages_supported: [en, es, fr, de, it, pt, ja, ko, zh, ru, tr, hu]
+  install_paths:
+    windows:
+      - "%ProgramFiles(x86)%/Steam/steamapps/common/Stardew Valley"
+      - "C:/Program Files (x86)/Steam/steamapps/common/Stardew Valley"
+      - "C:/Program Files (x86)/GOG Galaxy/Games/Stardew Valley"
+    macos:
+      - "~/Library/Application Support/Steam/steamapps/common/Stardew Valley"
+    linux:
+      - "~/.local/share/Steam/steamapps/common/Stardew Valley"
+      - "~/.steam/steam/steamapps/common/Stardew Valley"
+
+vocabulary:
+  files: [vocabulary.yaml]
+
+screens:
+  - id: profession_choice
+    description: Subida de nivel con elección de profesión
+    signals:
+      text_matches: { vocabulary: profession_titles, region: top }
+    extract:
+      values:
+        profession: { vocabulary: professions }
+    vision: on_uncertain
+    evidence: offered
+    proactive: { enabled: true, cooldown_seconds: 10, task: compare_options }
+    outputs: [overlay, voice]
+
+  - id: shipping_summary
+    description: Resumen de lo vendido al terminar el día
+    signals:
+      all_of:
+        - text_matches: { vocabulary: shipping_categories }
+        - count_at_least: { lines: 4 }
+        - text_matches: { vocabulary: total_label }
+    vision: never
+    proactive: { enabled: true, cooldown_seconds: 30, task: day_summary, once_per_encounter: true }
+    outputs: [text, voice]
+
+  - id: seed_shop
+    description: Tienda con semillas a la venta
+    signals:
+      repeated_rows: { min: 3, vocabulary: seeds }
+    extract:
+      lists:
+        offers:
+          anchor: { vocabulary: seeds }
+          min_items: 3
+          max_items: 12
+          fields:
+            name: { source: anchor, vocabulary: seeds }
+    vision: never
+    proactive: { enabled: true, cooldown_seconds: 60, task: suggest_purchase }
+    outputs: [overlay]
+
+  - id: dialogue
+    description: Conversación con un vecino
+    signals:
+      all_of:
+        - text_matches: { vocabulary: villagers, region: bottom }
+      none_of:
+        - text_matches: { vocabulary: reading_menus, region: top }
+    extract:
+      values:
+        villager: { vocabulary: villagers }
+    vision: never
+    outputs: [text]
+
+  - id: reading_menu
+    description: Inventario, mapa, colecciones u opciones (no es una decisión)
+    signals:
+      text_matches: { vocabulary: reading_menus, region: top }
+    vision: never
+    outputs: [text]
+
+evidence:
+  save_reader: plugin:StardewSaveReader
+  save_paths:
+    windows: ["%APPDATA%/StardewValley/Saves"]
+    macos: ["~/.config/StardewValley/Saves"]
+    linux: ["~/.config/StardewValley/Saves"]
+
+knowledge:
+  sources:
+    - url: https://stardewvalleywiki.com/Stardew_Valley_Wiki
+      depth: 1
+      include: ["/*"]
+  refresh: monthly
+
+prompts:
+  advisor: prompts/advisor.md
+  task_day_summary: prompts/task_day_summary.md
+  task_suggest_purchase: prompts/task_suggest_purchase.md

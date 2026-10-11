@@ -99,6 +99,9 @@ class Assistant:
         retrieve: Retriever | None = None,
         has_knowledge: Callable[[], bool] = lambda: False,
         state: Callable[[], str] = lambda: "",
+        fast: Callable[[], Provider | None] | None = None,
+        fast_model: Callable[[], str | None] | None = None,
+        fast_enabled: Callable[[], bool] | None = None,
     ) -> None:
         self._bus = bus
         self._config = config
@@ -109,6 +112,10 @@ class Assistant:
         self._retrieve = retrieve
         self._has_knowledge = has_knowledge
         self._state = state
+        # Tarea rápida (decidir la ruta, palabras clave, respuestas breves): otro proveedor o modelo.
+        self._fast = fast or provider
+        self._fast_model = fast_model or (lambda: self._config().provider.fast_model or None)
+        self._fast_enabled = fast_enabled or (lambda: bool(self._config().provider.fast_model))
         self._task: asyncio.Task[None] | None = None
         self._history: deque[Turn] = deque(maxlen=HISTORY_TURNS)
         self._last_proactive = 0.0
@@ -225,13 +232,14 @@ class Assistant:
         config = self._config()
         if not config.knowledge.rewrite_queries:
             return []
+        provider = self._fast() or provider
         loaded = self._profile()
         game = loaded.profile.name if loaded else "the game"
         try:
             result = await asyncio.wait_for(
                 provider.chat(
                     [Message("system", KEYWORDS_PROMPT.format(game=game)), Message("user", text)],
-                    model=config.provider.fast_model or None,
+                    model=self._fast_model(),
                     max_tokens=80,
                     temperature=0,
                     json_schema=KEYWORDS_SCHEMA,
@@ -272,15 +280,15 @@ class Assistant:
         )
         return "\n\n".join(lines), sources
 
-    async def _route(self, provider: Provider, text: str) -> Literal["quick", "reasoned"]:
-        fast = self._config().provider.fast_model
-        if not fast:
+    async def _route(self, text: str) -> Literal["quick", "reasoned"]:
+        fast = self._fast()
+        if fast is None or not self._fast_enabled():
             return "reasoned"
         try:
             result = await asyncio.wait_for(
-                provider.chat(
+                fast.chat(
                     [Message("system", ROUTER_PROMPT), Message("user", text)],
-                    model=fast,
+                    model=self._fast_model(),
                     max_tokens=20,
                     temperature=0,
                     json_schema=ROUTER_SCHEMA,
@@ -300,12 +308,14 @@ class Assistant:
         if provider is None:
             self._emit_error(question.id, "question", question.text, outputs, "No hay modelo configurado")
             return
-        route = await self._route(provider, question.text)
+        route = await self._route(question.text)
+        client: Provider = provider
         messages = [Message("system", self._system())]
         for turn in self._history:
             messages += [Message("user", turn.question), Message("assistant", turn.answer)]
         if route == "quick":
-            model = config.provider.fast_model or None
+            client = self._fast() or provider
+            model = self._fast_model()
             messages.append(Message("user", question.text))
             max_tokens = 120
             sources: list[dict[str, str]] = []
@@ -318,7 +328,7 @@ class Assistant:
             messages.append(Message("user", f"{context}\n\n{question.text}" if context else question.text))
             max_tokens = 500
         answer = await self._stream(
-            question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources
+            question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources, client
         )
         if answer:
             self._history.append(Turn(question.text, answer))
@@ -348,10 +358,11 @@ class Assistant:
         max_tokens: int,
         route: Literal["quick", "reasoned", "task"],
         sources: list[dict[str, str]] | None = None,
+        client: Provider | None = None,
     ) -> str:
-        provider = self._provider()
+        provider = client or self._provider()
         assert provider is not None
-        chosen = model or self._config().provider.model
+        chosen = model or getattr(provider, "model", "") or self._config().provider.model
         text = ""
 
         def update(**fields: Any) -> AnswerUpdate:

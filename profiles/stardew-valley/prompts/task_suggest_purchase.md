@@ -1,0 +1,1 @@
+El jugador está en una tienda de semillas. Recomienda UNA semilla de las visibles por su nombre y explica en una frase por qué, teniendo en cuenta los días que quedan de estación, el dinero disponible y si es rentable. Si ninguna compensa, dilo.

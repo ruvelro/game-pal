@@ -101,7 +101,7 @@ def test_lint_reports_undeclared_vocabulary(tmp_path: Path) -> None:
 def test_bundled_profiles_have_no_warnings(repo_profiles: Path) -> None:
     from gamepal.profiles.lint import lint
 
-    for name in ("generic", "hades-2"):
+    for name in ("generic", "hades-2", "stardew-valley"):
         assert lint(load_profile(repo_profiles / name, bundled=True)) == []
 
 

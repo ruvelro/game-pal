@@ -1,0 +1,130 @@
+# Vocabulario base de Stardew Valley.
+#
+# Los nombres en inglés son los del juego. Los españoles siguen la traducción oficial; los
+# marcados «sin verificar» están pendientes de contrastar con el juego en ese idioma.
+sets:
+  profession_titles:
+    - id: choose_profession
+      names: { en: Choose a profession, es: Elige una profesión }  # sin verificar fuera de en
+    - id: level_up
+      names: { en: Level Up, es: Subida de nivel }  # sin verificar fuera de en
+
+  professions:
+    - { id: rancher, names: { en: Rancher, es: Ganadero } }
+    - { id: tiller, names: { en: Tiller, es: Labrador } }
+    - { id: coopmaster, names: { en: Coopmaster, es: Avicultor } }
+    - { id: shepherd, names: { en: Shepherd, es: Pastor } }
+    - { id: artisan, names: { en: Artisan, es: Artesano } }
+    - { id: agriculturist, names: { en: Agriculturist, es: Agricultor } }
+    - { id: fisher, names: { en: Fisher, es: Pescador } }
+    - { id: trapper, names: { en: Trapper, es: Trampero } }
+    - { id: angler, names: { en: Angler, es: Pescador de caña } }
+    - { id: pirate, names: { en: Pirate, es: Pirata } }
+    - { id: mariner, names: { en: Mariner, es: Marinero } }
+    - { id: luremaster, names: { en: Luremaster, es: Maestro del cebo } }
+    - { id: forester, names: { en: Forester, es: Silvicultor } }
+    - { id: gatherer, names: { en: Gatherer, es: Recolector } }
+    - { id: lumberjack, names: { en: Lumberjack, es: Leñador } }
+    - { id: tapper, names: { en: Tapper, es: Sangrador } }
+    - { id: botanist, names: { en: Botanist, es: Botánico } }
+    - { id: tracker, names: { en: Tracker, es: Rastreador } }
+    - { id: miner, names: { en: Miner, es: Minero } }
+    - { id: geologist, names: { en: Geologist, es: Geólogo } }
+    - { id: blacksmith, names: { en: Blacksmith, es: Herrero } }
+    - { id: prospector, names: { en: Prospector, es: Prospector } }
+    - { id: excavator, names: { en: Excavator, es: Excavador } }
+    - { id: gemologist, names: { en: Gemologist, es: Gemólogo } }
+    - { id: fighter, names: { en: Fighter, es: Luchador } }
+    - { id: scout, names: { en: Scout, es: Explorador } }
+    - { id: brute, names: { en: Brute, es: Bruto } }
+    - { id: defender, names: { en: Defender, es: Defensor } }
+    - { id: acrobat, names: { en: Acrobat, es: Acróbata } }
+    - { id: desperado, names: { en: Desperado, es: Forajido } }
+
+  shipping_categories:
+    - { id: farming, names: { en: Farming, es: Agricultura } }
+    - { id: foraging, names: { en: Foraging, es: Recolección } }
+    - { id: fishing, names: { en: Fishing, es: Pesca } }
+    - { id: mining, names: { en: Mining, es: Minería } }
+    - { id: other, names: { en: Other, es: Otros } }
+
+  total_label:
+    - { id: total, names: { en: Total, es: Total } }
+
+  seeds:
+    - { id: parsnip_seeds, names: { en: Parsnip Seeds, es: Semillas de chirivía } }
+    - { id: bean_starter, names: { en: Bean Starter, es: Semillero de judías } }
+    - { id: cauliflower_seeds, names: { en: Cauliflower Seeds, es: Semillas de coliflor } }
+    - { id: potato_seeds, names: { en: Potato Seeds, es: Semillas de patata } }
+    - { id: tulip_bulb, names: { en: Tulip Bulb, es: Bulbo de tulipán } }
+    - { id: kale_seeds, names: { en: Kale Seeds, es: Semillas de col rizada } }
+    - { id: jazz_seeds, names: { en: Jazz Seeds, es: Semillas de jazz } }
+    - { id: garlic_seeds, names: { en: Garlic Seeds, es: Semillas de ajo } }
+    - { id: rice_shoot, names: { en: Rice Shoot, es: Brote de arroz } }
+    - { id: melon_seeds, names: { en: Melon Seeds, es: Semillas de melón } }
+    - { id: tomato_seeds, names: { en: Tomato Seeds, es: Semillas de tomate } }
+    - { id: blueberry_seeds, names: { en: Blueberry Seeds, es: Semillas de arándano } }
+    - { id: pepper_seeds, names: { en: Pepper Seeds, es: Semillas de guindilla } }
+    - { id: wheat_seeds, names: { en: Wheat Seeds, es: Semillas de trigo } }
+    - { id: radish_seeds, names: { en: Radish Seeds, es: Semillas de rábano } }
+    - { id: poppy_seeds, names: { en: Poppy Seeds, es: Semillas de amapola } }
+    - { id: spangle_seeds, names: { en: Spangle Seeds, es: Semillas de lentejuela } }
+    - { id: hops_starter, names: { en: Hops Starter, es: Semillero de lúpulo } }
+    - { id: corn_seeds, names: { en: Corn Seeds, es: Semillas de maíz } }
+    - { id: sunflower_seeds, names: { en: Sunflower Seeds, es: Semillas de girasol } }
+    - { id: red_cabbage_seeds, names: { en: Red Cabbage Seeds, es: Semillas de lombarda } }
+    - { id: eggplant_seeds, names: { en: Eggplant Seeds, es: Semillas de berenjena } }
+    - { id: pumpkin_seeds, names: { en: Pumpkin Seeds, es: Semillas de calabaza } }
+    - { id: bok_choy_seeds, names: { en: Bok Choy Seeds, es: Semillas de bok choy } }
+    - { id: yam_seeds, names: { en: Yam Seeds, es: Semillas de ñame } }
+    - { id: cranberry_seeds, names: { en: Cranberry Seeds, es: Semillas de arándano rojo } }
+    - { id: fairy_seeds, names: { en: Fairy Seeds, es: Semillas de flor de hada } }
+    - { id: amaranth_seeds, names: { en: Amaranth Seeds, es: Semillas de amaranto } }
+    - { id: grape_starter, names: { en: Grape Starter, es: Semillero de uvas } }
+    - { id: artichoke_seeds, names: { en: Artichoke Seeds, es: Semillas de alcachofa } }
+    - { id: beet_seeds, names: { en: Beet Seeds, es: Semillas de remolacha } }
+    - { id: strawberry_seeds, names: { en: Strawberry Seeds, es: Semillas de fresa } }
+    - { id: ancient_seeds, names: { en: Ancient Seeds, es: Semillas antiguas } }
+    - { id: grass_starter, names: { en: Grass Starter, es: Semillero de hierba } }
+
+  villagers:
+    - { id: abigail, names: { en: Abigail } }
+    - { id: alex, names: { en: Alex } }
+    - { id: caroline, names: { en: Caroline } }
+    - { id: clint, names: { en: Clint } }
+    - { id: demetrius, names: { en: Demetrius } }
+    - { id: elliott, names: { en: Elliott } }
+    - { id: emily, names: { en: Emily } }
+    - { id: evelyn, names: { en: Evelyn } }
+    - { id: george, names: { en: George } }
+    - { id: gus, names: { en: Gus } }
+    - { id: haley, names: { en: Haley } }
+    - { id: harvey, names: { en: Harvey } }
+    - { id: jas, names: { en: Jas } }
+    - { id: jodi, names: { en: Jodi } }
+    - { id: kent, names: { en: Kent } }
+    - { id: krobus, names: { en: Krobus } }
+    - { id: leah, names: { en: Leah } }
+    - { id: leo, names: { en: Leo } }
+    - { id: lewis, names: { en: Lewis } }
+    - { id: linus, names: { en: Linus } }
+    - { id: marnie, names: { en: Marnie } }
+    - { id: maru, names: { en: Maru } }
+    - { id: pam, names: { en: Pam } }
+    - { id: penny, names: { en: Penny } }
+    - { id: pierre, names: { en: Pierre } }
+    - { id: robin, names: { en: Robin } }
+    - { id: sam, names: { en: Sam } }
+    - { id: sandy, names: { en: Sandy } }
+    - { id: sebastian, names: { en: Sebastian } }
+    - { id: shane, names: { en: Shane } }
+    - { id: vincent, names: { en: Vincent } }
+    - { id: willy, names: { en: Willy } }
+    - { id: wizard, names: { en: Wizard, es: Mago } }
+
+  reading_menus:
+    - { id: inventory, names: { en: Inventory, es: Inventario } }
+    - { id: collections, names: { en: Collections, es: Colecciones } }
+    - { id: options, names: { en: Options, es: Opciones } }
+    - { id: social, names: { en: Social } }
+    - { id: crafting, names: { en: Crafting, es: Fabricación } }

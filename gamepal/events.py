@@ -160,6 +160,22 @@ class EvidenceChanged(Event):
     snapshot: dict[str, Any]
 
 
+class ActivityRecorded(Event):
+    """Una petición a un modelo terminada. Nunca lleva el contenido, solo métricas."""
+
+    topic: ClassVar[str] = "activity"
+    role: str
+    provider: str
+    local: bool
+    model: str
+    ok: bool
+    ms: float
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost: float | None = None
+    fallback: bool = False
+
+
 class LogMessage(Event):
     topic: ClassVar[str] = "log"
     level: Literal["debug", "info", "warning", "error"]

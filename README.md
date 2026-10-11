@@ -28,7 +28,7 @@ Cada juego es un **perfil**: una carpeta con unas reglas en YAML y las webs de d
 
 ## Estado
 
-En desarrollo. Ya funciona: captura de la ventana del juego, lectura del texto, reconocimiento de pantallas por perfil (con Hades II incluido), preguntas por voz con frase clave o pulsando una tecla o un botón del mando, respuestas habladas y sobre el juego, avisos por su cuenta en los momentos clave, conocimiento sacado de wikis y documentos con fuentes citadas, lectura del guardado de Hades II para saber qué llevas, memoria opcional entre sesiones y una GUI para controlarlo todo. Todavía no hay versión instalable.
+En desarrollo. Ya funciona: captura de la ventana del juego, lectura del texto, reconocimiento de pantallas por perfil (con Hades II y Stardew Valley incluidos), preguntas por voz con frase clave o pulsando una tecla o un botón del mando, respuestas habladas y sobre el juego, avisos por su cuenta en los momentos clave, conocimiento sacado de wikis y documentos con fuentes citadas, lectura del guardado de Hades II y Stardew Valley para saber cómo vas, memoria opcional entre sesiones, OpenAI, Claude y OpenRouter opcionales por tarea con un panel de actividad, y una GUI para controlarlo todo. Todavía no hay versión instalable.
 
 La especificación completa está en [docs/spec.md](docs/spec.md).
 

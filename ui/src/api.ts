@@ -272,6 +272,13 @@ export interface AppConfig {
     fast_model: string;
     timeout_seconds: number;
   };
+  cloud: Record<"openai" | "anthropic" | "openrouter", { model: string; fast_model: string; vision_model: string }> & {
+    allow_images: boolean;
+  };
+  routing: Record<
+    "reasoning" | "fast" | "vision",
+    { provider: "local" | "openai" | "anthropic" | "openrouter"; fallback: "none" | "local" | "openai" | "anthropic" | "openrouter" }
+  >;
   voice: VoiceConfig;
   output: OutputConfig;
   knowledge: {

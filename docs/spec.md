@@ -159,7 +159,9 @@ Políticas híbridas por rol, elegibles en la GUI:
 - **Nube para razonar, local para mirar**: la visión y el OCR en local, la pregunta y el contexto a la nube.
 - **Nube para todo lo que se pida**: lo proactivo en local, las preguntas del jugador en la nube.
 
-Cada petición lleva etiqueta de rol, proveedor, tokens y latencia, y aparece en el panel de actividad. Antes de enviar una captura a un proveedor remoto por primera vez en la sesión, la GUI lo avisa.
+Implementación (M6): cada rol (`reasoning`, `fast`, `vision`) tiene un proveedor principal y un respaldo opcional en `routing`; la GUI ofrece cuatro preajustes (solo local, local con respaldo en la nube, híbrido y nube) y permite ajustar cada rol a mano. El respaldo entra cuando el principal falla, nunca después de haber mostrado parte de una respuesta, y usa su propio modelo para esa tarea. OpenAI y OpenRouter comparten el cliente compatible con OpenAI; Claude usa el SDK oficial de Anthropic, con `claude-opus-5-5` para razonar y `claude-haiku-5-5` para lo rápido por defecto, esfuerzo bajo o medio según la longitud de la respuesta y el respaldo del servidor ante rechazos activado en los modelos que lo admiten. Las capturas solo van a la nube si el jugador lo permite expresamente (`cloud.allow_images`). Las claves se guardan con `keyring` en el almacén del sistema y la API nunca las devuelve.
+
+Cada petición lleva etiqueta de rol, proveedor, tokens y latencia, y aparece en el panel de actividad. El registro vive en SQLite local; el coste usa el que informa el proveedor (OpenRouter) o una estimación por tarifa marcada como tal. Antes de enviar una captura a un proveedor remoto por primera vez en la sesión, la GUI lo avisa.
 
 Presupuesto de contexto: las instrucciones del sistema se componen por bloques con caché de prompt cuando el proveedor lo soporte; el registro de evidencia se resume de forma incremental para mantenerse bajo un límite de tokens configurable; las capturas se recortan a la ventana del juego y se reescalan a un ancho máximo por rol.
 
@@ -283,7 +285,7 @@ Una pantalla se confirma con dos lecturas coincidentes, o con una sola si la pun
 ### 5.4 Perfiles incluidos en v0.1
 
 - **Hades II**: pantallas de bendición, martillo, poma, recuerdo, puertas, presentación de jefe, victoria y derrota; lector de guardado (SGB1, Adler-32, LZ4, LuaBins) para arma, aspecto, arcanas, bendiciones con nivel y rareza, recuerdos y sala.
-- **Stardew Valley**: pantallas de inventario, diálogo, tienda y nivel de habilidad; lector del guardado XML para día, estación, dinero, amistades, habilidades y colección; fuentes de la wiki oficial.
+- **Stardew Valley**: pantallas de elección de profesión, resumen del día, tienda de semillas, diálogo y menús; lector del guardado XML (sin DTD ni entidades) para día, estación, tiempo de mañana, suerte, dinero, habilidades, mochila, cónyuge y amistades; fuente de la wiki oficial, que se descarga solo cuando el jugador lo pide.
 - **Genérico**: sin señales; solo OCR, VLM y conocimiento por URL. Es el punto de partida para crear un perfil nuevo.
 
 ## 6. GUI
@@ -375,7 +377,7 @@ game-pal/
 | M3 · Hablar ✅ | Wake word, PTT teclado y mando, VAD, STT, TTS, overlay, enrutado rápido/razonado |
 | M4 · Saber ✅ | Ingesta por URL y ficheros, índice híbrido, citas, actualización |
 | M5 · Recordar ✅ | Lector de guardado de Hades II, modelo de evidencia completo, memoria por sesión |
-| M6 · Abrir | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
+| M6 · Abrir ✅ | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
 | M7 · Pulir | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |
 
 ## 11. Riesgos y mitigaciones
