@@ -40,6 +40,14 @@ def _bare_text(html: str) -> str:
     return re.sub(r"\s+", " ", unescape(text)).strip()
 
 
+def prose_first(markdown: str) -> str:
+    """Las frases antes que la tabla de la ficha: sin razonar, el modelo lee mal las celdas sueltas."""
+    lines = markdown.splitlines()
+    table = [line for line in lines if line.lstrip().startswith("|")]
+    prose = [line for line in lines if not line.lstrip().startswith("|")]
+    return "\n".join([*prose, "", *table]).strip() if table and any(p.strip() for p in prose) else markdown
+
+
 def candidates(*groups: list[str]) -> list[str]:
     """Nombres que podrían ser el título de una ficha: sin cifras sueltas ni frases largas, sin repetir."""
     seen: dict[str, str] = {}
@@ -169,5 +177,5 @@ class WikiLookup:
         wrapped = f"<html><head><title>{title}</title></head><body><main>{html}</main></body></html>"
         document = await asyncio.to_thread(html_to_document, url or title, wrapped)
         # El extractor descarta las páginas muy cortas; una ficha breve sigue siendo útil.
-        text = document.markdown if document is not None else _bare_text(html)
+        text = prose_first(document.markdown) if document is not None else _bare_text(html)
         return WikiPage(title, url, text[:MAX_PAGE_CHARS], language) if text.strip() else None

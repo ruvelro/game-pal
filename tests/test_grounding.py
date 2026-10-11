@@ -14,7 +14,7 @@ from gamepal.bus import EventBus
 from gamepal.checks import identify
 from gamepal.config import AppConfig, load_config
 from gamepal.events import AnswerUpdate, QuestionAsked
-from gamepal.knowledge.lookup import WikiLookup, WikiPage, candidates
+from gamepal.knowledge.lookup import WikiLookup, WikiPage, candidates, prose_first
 from gamepal.knowledge.service import KnowledgeService
 from gamepal.knowledge.store import KnowledgeStore
 from gamepal.profiles import LoadedProfile, ProfileStore, load_profile
@@ -109,7 +109,9 @@ def test_rows_carry_the_dates_already_counted(reference: Reference) -> None:
     assert "plantada hoy (día 18): sí llega, primera cosecha el día 28, 1 sola cosecha esta estación" in beans
     assert "plantada mañana (día 19): no llega" in beans
     assert "Festival del Huevo 100 g (ya pasó este año: fue el día 13 de primavera)" in lines["- Fresa (Strawberry)"]
-    assert "Pierre 20 g" in lines["- Chirivía (Parsnip)"]
+    # Precio de compra de la semilla y de venta de la cosecha, sin que se puedan confundir.
+    assert "la cosecha se vende por 35 g" in lines["- Chirivía (Parsnip)"]
+    assert "semilla «Semillas de chirivía» se compra en: Pierre 20 g" in lines["- Chirivía (Parsnip)"]
     summer = reference.render("maíz", Today("summer", 20, 1), "es")
     assert "sigue creciendo en otoño" in summer  # el maíz es de verano y otoño
     assert "Días base" in text
@@ -181,6 +183,12 @@ async def test_save_names_are_translated_but_not_through_redirects() -> None:
     names = await lookup.translate(["Trash", "Gold Pickaxe", "Pineapple"], "es")
     assert names == {"Trash": "Basura", "Pineapple": "Piña"}
     assert await lookup.translate(["Trash"], "en") == {}
+
+
+def test_wiki_pages_put_the_prose_before_the_infobox() -> None:
+    page = "| Katana de lava |\n| Obtención: | Gremio |\nLa Katana de lava se compra en el Gremio por 25 000o."
+    assert prose_first(page).startswith("La Katana de lava se compra")
+    assert prose_first("Solo texto.") == "Solo texto."
 
 
 def test_question_terms_skip_filler_words() -> None:

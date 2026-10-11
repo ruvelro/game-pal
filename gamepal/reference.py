@@ -50,7 +50,7 @@ TEXT = {
         "days": "días", "day": "día", "regrow": "vuelve a dar cada {n} {days}",
         "trellis": "con espaldera (no se pasa por encima)",
         "irrigated": "{n} días si está junto al agua", "island": "en la isla Jengibre, todo el año",
-        "sells": "se vende por {n} g", "seed": "semilla", "where": "dónde",
+        "sells": "la cosecha se vende por {n} g", "seed": "semilla", "where": "dónde", "buy": "se compra en",
         "when_today": "plantada hoy (día {d})", "when_tomorrow": "plantada mañana (día {d})",
         "ready": "sí llega, se cosecha el día {h}", "first": "sí llega, primera cosecha el día {h}",
         "harvests": "{n} cosechas en total esta estación", "harvest_one": "1 sola cosecha esta estación",
@@ -77,7 +77,7 @@ TEXT = {
         "days": "days", "day": "day", "regrow": "produces again every {n} {days}",
         "trellis": "trellis (can't walk through)",
         "irrigated": "{n} days when irrigated", "island": "all year on Ginger Island",
-        "sells": "sells for {n}g", "seed": "seed", "where": "where",
+        "sells": "the crop sells for {n}g", "seed": "seed", "where": "where", "buy": "bought at",
         "when_today": "planted today (day {d})", "when_tomorrow": "planted tomorrow (day {d})",
         "ready": "makes it, harvest on day {h}", "first": "makes it, first harvest on day {h}",
         "harvests": "{n} harvests this season", "harvest_one": "a single harvest this season",
@@ -409,7 +409,7 @@ class Reference:
                 f"{places.get(k, k)} {v} g{self._event_note(table, k, today, language)}"
                 for k, v in (seed.get("prices") or {}).items()
             )
-            parts.append(f"{text['seed']} «{seed_name}»" + (f": {prices}" if prices else ""))
+            parts.append(f"{text['seed']} «{seed_name}»" + (f" {text['buy']}: {prices}" if prices else ""))
             # Si solo se vende en fiestas que ya pasaron, decirlo claro: si no, el modelo la recomienda igual.
             if not seed.get("prices"):
                 parts.append(text["never_sold"])
