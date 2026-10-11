@@ -48,9 +48,19 @@ class EventBus:
     def __init__(self) -> None:
         self._subscriptions: set[Subscription] = set()
         self._last: dict[str, Event] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def publish(self, event: Event) -> None:
-        """Publica sin bloquear. Debe llamarse desde el hilo del bucle de eventos."""
+        """Publica sin bloquear. Desde otro hilo (una descarga, por ejemplo), lo pasa al del bucle de eventos."""
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            if self._loop is not None and not self._loop.is_closed():
+                self._loop.call_soon_threadsafe(self._deliver, event)
+                return
+        self._deliver(event)
+
+    def _deliver(self, event: Event) -> None:
         self._last[self._key(event)] = event
         for sub in tuple(self._subscriptions):
             if sub.wants(event):
@@ -62,6 +72,7 @@ class EventBus:
 
     @asynccontextmanager
     async def subscribe(self, topics: set[str] | None = None, maxsize: int = 256) -> AsyncIterator[Subscription]:
+        self._loop = asyncio.get_running_loop()
         sub = Subscription(frozenset(topics) if topics else None, maxsize)
         self._subscriptions.add(sub)
         try:

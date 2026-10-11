@@ -50,7 +50,7 @@ Para dar consejos necesita un modelo de IA: lo más sencillo es instalar [Ollama
 
 Tampoco hace falta elegir el juego: si tiene perfil, game-pal lo reconoce al abrirlo. Los idiomas se toman del sistema la primera vez.
 
-Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md).
+Si algo falla, mira [docs/problemas.md](docs/problemas.md). Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md).
 
 ## Contribuir
 

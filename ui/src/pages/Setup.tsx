@@ -9,6 +9,7 @@ import {
   type WindowSummary,
 } from "../api";
 import { CheckRow, CommandBox, useSetupInfo } from "../components/Checks";
+import { Downloads } from "../components/Downloads";
 import { Preview } from "../components/Preview";
 import { Field, formatKey } from "../components/ui";
 import { LANGUAGES, t, type Key } from "../i18n";
@@ -528,6 +529,7 @@ export function Setup({ live, onDone }: { live: LiveState; onDone: () => void })
           </li>
         ))}
       </ol>
+      <Downloads live={live} />
       <section className="card setup-card">
         {step === 0 && <GameStep config={config} setConfig={setConfig} reload={reload} />}
         {step === 1 && <ModelStep {...props} />}

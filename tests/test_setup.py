@@ -6,6 +6,7 @@ import pytest
 from gamepal import checks, cli, ui_build
 from gamepal.checks import Check, check_config, check_game, check_models, check_ocr, check_voice
 from gamepal.config import AppConfig, OcrConfig, RoleRoute, RoutingConfig, VoiceConfig
+from gamepal.explain import explain_error
 from gamepal.paths import AppPaths
 from gamepal.profiles import ProfileStore
 from gamepal.providers import ProviderError
@@ -223,3 +224,31 @@ def test_doctor_reports_fixes(
     found[1] = found[1].model_copy(update={"state": "ok"})
     assert cli.main(["doctor"]) == 0
     assert "Todo listo" in capsys.readouterr().out
+
+
+async def test_models_detects_a_busy_port() -> None:
+    async def busy(url: str) -> tuple[str, ...]:
+        raise ProviderError(f"local respondió 503: model inventory unavailable ({url})")
+
+    check = await check_models(AppConfig(), no_keys, busy)
+    assert check.state == "error"
+    assert "otro programa" in check.detail
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("No hay modelo seleccionado para local", "Aún no has elegido el modelo"),
+        ("No se pudo contactar con local: ConnectError", "No consigo hablar con Ollama"),
+        ("local respondió 404: model 'qwen3:8b' not found", "ollama pull qwen3:8b"),
+        ("local respondió 503: model inventory unavailable", "otro programa"),
+        ("Anthropic rechazó la clave de API", "Anthropic (Claude) no acepta la clave"),
+        ("openrouter respondió 429: rate limited", "límite de uso"),
+        ("Se cortó la conexión con local: ReadTimeout", "ha tardado demasiado"),
+        ("Algo totalmente distinto", "Algo totalmente distinto"),
+    ],
+)
+def test_errors_are_explained(raw: str, expected: str) -> None:
+    config = AppConfig()
+    config.provider.model = "qwen3:8b"
+    assert expected in explain_error(raw, config)

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig
+from gamepal.downloads import MB, FolderProgress, describe
 from gamepal.events import StatusChanged
 from gamepal.perception.vocabulary import Vocabulary
 from gamepal.voice.audio import Microphone, Speaker, tone
@@ -24,6 +25,8 @@ from gamepal.voice.vad import EnergyVad, SileroVad, Vad
 log = logging.getLogger(__name__)
 
 MAX_HOTWORDS = 60
+# Tamaño aproximado de cada modelo de Whisper (CTranslate2), para mostrar el progreso de la descarga.
+WHISPER_SIZES_MB = {"tiny": 75, "base": 145, "small": 484, "medium": 1530, "large-v3-turbo": 1620}
 
 
 class VoiceService:
@@ -49,12 +52,13 @@ class VoiceService:
         self.controller: VoiceController | None = None
         self.tts: Tts | None = None
 
-    def _status(self, state: str, detail: str = "") -> None:
-        self._bus.publish(StatusChanged(component="voice", state=state, detail=detail))  # type: ignore[arg-type]
+    def _status(self, state: str, detail: str = "", progress: float | None = None) -> None:
+        event = StatusChanged(component="voice", state=state, detail=detail, progress=progress)  # type: ignore[arg-type]
+        self._bus.publish(event)
 
     def _progress(self, name: str, received: int, total: int | None) -> None:
         if total and received % (4 << 20) < 65536:
-            self._status("starting", f"Descargando {name}: {received * 100 // total} %")
+            self._status("starting", describe(name, received, total / MB), received / total)
 
     # Construcción --------------------------------------------------------------------------
 
@@ -84,7 +88,14 @@ class VoiceService:
         if stt.backend == "local-openai":
             return LocalServerStt(stt.base_url, model)
         self._status("starting", f"Cargando Whisper {model}…")
-        return WhisperStt(model, download_root=str(self._whisper_dir))
+        name = f"Whisper {model}"
+
+        def report(received: int, fraction: float | None) -> None:
+            self._status("starting", describe(name, received, WHISPER_SIZES_MB.get(model)), fraction)
+
+        # La primera vez, faster-whisper descarga el modelo sin informar del progreso.
+        with FolderProgress(self._whisper_dir, report, WHISPER_SIZES_MB.get(model)):
+            return WhisperStt(model, download_root=str(self._whisper_dir))
 
     def _hotwords(self) -> str:
         names: list[str] = []

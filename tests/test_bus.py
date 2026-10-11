@@ -1,4 +1,5 @@
 import asyncio
+import threading
 
 from gamepal.bus import EventBus
 from gamepal.events import LogMessage, StatusChanged
@@ -39,3 +40,16 @@ async def test_unsubscribe_on_exit() -> None:
     async with bus.subscribe():
         assert len(bus._subscriptions) == 1
     assert not bus._subscriptions
+
+
+async def test_publish_from_another_thread_reaches_subscribers() -> None:
+    bus = EventBus()
+    async with bus.subscribe({"status"}) as sub:
+        thread = threading.Thread(
+            target=bus.publish, args=(StatusChanged(component="voice", state="starting", detail="Descargando"),)
+        )
+        thread.start()
+        thread.join()
+        event = await asyncio.wait_for(sub.get(), 1)
+    assert isinstance(event, StatusChanged)
+    assert event.detail == "Descargando"

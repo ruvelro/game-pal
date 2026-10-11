@@ -327,7 +327,7 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
     name = server_name(url)
     try:
         models = await probe(url)
-    except (ProviderError, ValueError):
+    except (ProviderError, ValueError) as exc:
         others = await discover_servers(probe, skip=url)
         if others:
             names = ", ".join(f"{other} ({other_url})" for other, other_url, _ in others)
@@ -338,6 +338,18 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
                 detail=f"{name} no responde en {url}",
                 fix=f"Hay otro servidor en marcha: {names}. "
                 + (AUTO_PICK if not config.provider.model else "Elígelo en la página Modelos."),
+            )
+        if "respondió" in str(exc):
+            # Algo escucha en ese puerto pero no es un servidor de modelos que funcione.
+            return Check(
+                id="model",
+                title=title,
+                state="error",
+                detail=f"En {url} responde otro programa, no {name}",
+                fix=(
+                    f"Algo ocupa el puerto de {name} y contesta con error. Si tienes {name}, cierra ese programa "
+                    f"y vuelve a abrir {name}; si no, elige otro servidor en la página Modelos."
+                ),
             )
         if name == "Ollama":
             return Check(
