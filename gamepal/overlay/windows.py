@@ -176,6 +176,11 @@ def _declare() -> None:
 
 _declare()
 
+# Los procedimientos de ventana viven mientras el proceso: las ventanas no se destruyen al soltar el objeto
+# y Windows les sigue mandando mensajes (activar otra ventana del hilo, por ejemplo). Si el procedimiento
+# se liberase, saltaría a memoria ya liberada.
+_PROCEDURES: list[Any] = []
+
 
 class WindowsOverlay:
     def __init__(self) -> None:
@@ -187,6 +192,7 @@ class WindowsOverlay:
         self._view: View | None = None
         self._blocks: list[tuple[str, Any, int, wintypes.RECT]] = []
         self._proc = WNDPROC(self._wndproc)
+        _PROCEDURES.append(self._proc)
         instance = kernel32.GetModuleHandleW(None)
         cls = WNDCLASSEXW()
         cls.cbSize = ctypes.sizeof(WNDCLASSEXW)
@@ -295,6 +301,7 @@ class WindowsOverlay:
         self._cue: Any = None
         self._input_background = gdi32.CreateSolidBrush(_rgb(18, 49, 56))
         self._chat_proc = WNDPROC(self._chat_wndproc)
+        _PROCEDURES.append(self._chat_proc)
         cls = WNDCLASSEXW()
         cls.cbSize = ctypes.sizeof(WNDCLASSEXW)
         cls.lpfnWndProc = self._chat_proc
@@ -321,6 +328,7 @@ class WindowsOverlay:
         user32.SetWindowTextW(self._chat_title, "GAME-PAL")
         # Intro y Esc llegan al campo, no a la ventana: se intercepta su procedimiento.
         self._input_proc = WNDPROC(self._input_wndproc)
+        _PROCEDURES.append(self._input_proc)
         self._input_default = user32.SetWindowLongPtrW(
             self._input, GWLP_WNDPROC, ctypes.cast(self._input_proc, ctypes.c_void_p)
         )
