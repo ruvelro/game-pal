@@ -147,3 +147,25 @@ async def test_managed_engine_is_left_alone() -> None:
     config = AppConfig()
     config.provider.kind = "managed"
     assert await choose_local_model(config, 16, servers({OLLAMA: ("qwen3:8b",)})) is None
+
+
+async def test_model_sees_asks_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    from gamepal import autodetect
+
+    replies = {
+        "/api/show": httpx.Response(200, json={"capabilities": ["completion", "vision", "thinking"]}),
+    }
+    real = httpx.AsyncClient
+
+    def client(**kwargs: object) -> httpx.AsyncClient:
+        transport = httpx.MockTransport(lambda r: replies.get(r.url.path, httpx.Response(404)))
+        return real(transport=transport, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(autodetect.httpx, "AsyncClient", client)
+    assert await autodetect.model_sees("http://127.0.0.1:11434/v1", "qwen3.6:latest")
+    replies["/api/show"] = httpx.Response(200, json={"capabilities": ["completion"]})
+    assert not await autodetect.model_sees("http://127.0.0.1:11434/v1", "qwen3:8b")
+    replies.pop("/api/show")
+    assert not await autodetect.model_sees("http://127.0.0.1:1234/v1", "otro")

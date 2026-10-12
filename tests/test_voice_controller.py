@@ -82,7 +82,7 @@ async def test_wake_phrase_is_heard_on_the_first_pause_and_the_question_follows(
     controller, cues, queue = make(bus, wake, main)
     async with bus.subscribe({"assistant.question"}) as sub:
         # «Oye compañero», pausa corta (menos que el silencio que cierra la frase) y la pregunta.
-        await feed(controller, queue, frames((VOICE, 0.8), (QUIET, 0.35), (VOICE, 1.2), (QUIET, 1.0)))
+        await feed(controller, queue, frames((VOICE, 0.8), (QUIET, 0.35), (VOICE, 1.2), (QUIET, 1.4)))
         [question] = await received(sub)
     assert isinstance(question, QuestionAsked)
     assert question.text == "qué planto en verano?"
@@ -101,7 +101,7 @@ async def test_only_the_wake_phrase_waits_for_the_question() -> None:
         ScriptedStt(lambda s: "Oye compañero." if s < 1.5 else "¿Qué planto?"),
     )
     async with bus.subscribe({"assistant.question"}) as sub:
-        await feed(controller, queue, frames((VOICE, 0.9), (QUIET, 1.0), (VOICE, 1.6), (QUIET, 1.0)))
+        await feed(controller, queue, frames((VOICE, 0.9), (QUIET, 1.4), (VOICE, 1.6), (QUIET, 1.4)))
         [question] = await received(sub)
     assert isinstance(question, QuestionAsked)
     assert question.text == "¿Qué planto?"
@@ -120,3 +120,46 @@ async def test_its_own_voice_does_not_stop_it_but_a_short_stop_phrase_does() -> 
         await feed(controller, queue, frames((VOICE, 0.5), (QUIET, 1.0)))
         [stopped] = await received(sub)
     assert isinstance(stopped, SpeechStopped)
+
+
+async def test_its_order_at_the_end_of_its_own_voice_stops_it() -> None:
+    bus = EventBus()
+    # Mientras habla, su voz y la del jugador llegan en una sola frase; la orden va al final.
+    controller, _, queue = make(
+        bus, ScriptedStt(lambda s: "Úsala para invierno. Parar."), ScriptedStt(lambda s: ""), is_speaking=lambda: True
+    )
+    async with bus.subscribe({"voice.stopped"}) as sub:
+        await feed(controller, queue, frames((VOICE, 4.0), (QUIET, 1.0)))
+        [stopped] = await received(sub)
+    assert isinstance(stopped, SpeechStopped)
+
+
+async def test_a_single_word_is_not_a_question_and_a_cut_question_waits() -> None:
+    bus = EventBus()
+    answers = iter(["Oye compañero, nada.", "Oye compañero, ¿podemos con…", "la azada?"])
+    controller, _, queue = make(bus, ScriptedStt(lambda s: "oye compañero"), ScriptedStt(lambda s: next(answers)))
+    async with bus.subscribe({"assistant.question"}) as sub:
+        await feed(controller, queue, frames((VOICE, 1.2), (QUIET, 1.4)))
+        assert await received(sub) == []
+        await feed(controller, queue, frames((VOICE, 1.8), (QUIET, 1.4), (VOICE, 0.8), (QUIET, 1.4)))
+        [question] = await received(sub)
+    assert isinstance(question, QuestionAsked)
+    assert question.text == "podemos con la azada?"
+
+
+async def test_question_heard_on_the_fly_is_not_lost_when_little_follows() -> None:
+    bus = EventBus()
+    # Sin pausa: la comprobación al vuelo llega a los 2 s y ya oye el principio de la pregunta; la frase
+    # termina poco después. Antes se daba por «solo la frase clave» y la pregunta se perdía.
+    wake = ScriptedStt(lambda s: "oye compañero, qué bendición me")
+    main = ScriptedStt(lambda s: "Oye compañero, ¿qué bendición me conviene?")
+    controller, _, queue = make(bus, wake, main)
+    async with bus.subscribe({"assistant.question"}) as sub:
+        task = asyncio.create_task(controller.run())
+        # Todo el audio llega antes de que termine la comprobación al vuelo, como en una prueba rápida.
+        for chunk in frames((VOICE, 2.3), (QUIET, 1.5)):
+            queue.put_nowait(chunk)
+        [question] = await received(sub) or [await asyncio.wait_for(sub.get(), 2)]
+        task.cancel()
+    assert isinstance(question, QuestionAsked)
+    assert question.text == "qué bendición me conviene?"

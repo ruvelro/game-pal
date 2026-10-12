@@ -57,8 +57,10 @@ class ProviderConfig(_Model):
     kind: Literal["local-openai", "managed"] = "local-openai"
     base_url: str = "http://127.0.0.1:11434/v1"
     model: str = ""
-    # Modelo con visión para pantallas dudosas. Vacío: la visión queda desactivada.
+    # Modelo con visión: mira la pantalla al responder y resuelve pantallas dudosas. Vacío: sin visión.
     vision_model: str = ""
+    # Si el modelo que razona también ve imágenes (Qwen 3.5/3.6, Gemma 3…), se usa para la visión sin pedirlo.
+    auto_vision: bool = True
     # Modelo pequeño y rápido para decidir cómo responder y para respuestas breves. Vacío: no se usa.
     fast_model: str = ""
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
@@ -173,7 +175,9 @@ class VoiceConfig(_Model):
     stt: SttConfig = Field(default_factory=SttConfig)
     tts: TtsConfig = Field(default_factory=TtsConfig)
     # Frases que cortan la respuesta hablada.
-    stop_phrases: list[str] = Field(default_factory=lambda: ["gracias", "para", "silencio", "thanks", "stop"])
+    stop_phrases: list[str] = Field(
+        default_factory=lambda: ["gracias", "para", "calla", "cállate", "basta", "silencio", "thanks", "stop"]
+    )
     # Sensibilidad del detector de voz (probabilidad mínima de habla).
     vad_threshold: float = Field(default=0.5, ge=0.1, le=0.95)
 

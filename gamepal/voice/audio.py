@@ -81,6 +81,7 @@ class Microphone:
 
 
 KEEP_OPEN_S = 1.5
+OUTPUT_LATENCY_S = 0.35
 
 
 class Speaker:
@@ -150,14 +151,14 @@ class Speaker:
                             dtype="float32",
                             device=_device_index(self._device, "output"),
                             # Margen de sobra: con el equipo cargado (juego, OCR, transcripción) un búfer corto se
-                            # vaciaba y la voz tartamudeaba.
-                            latency="high",
+                            # vaciaba y la voz tartamudeaba y chasqueaba. «high» se quedaba en ~0,1 s en macOS.
+                            latency=OUTPUT_LATENCY_S,
                         )
                         stream.start()
                         # Un poco de silencio delante para que el dispositivo no se coma la primera sílaba.
                         stream.write(np.zeros((rate // 20, 1), dtype=np.float32))
                     data = np.clip(audio * self.volume, -1, 1).astype(np.float32)
-                    block = rate // 10  # 100 ms: permite cortar enseguida
+                    block = rate // 5  # 200 ms por escritura: menos saltos entre hilos; abort() corta igual
                     for start in range(0, len(data), block):
                         if self._stop.is_set():
                             break

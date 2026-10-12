@@ -58,6 +58,8 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **Tarda en responder.** En el registro (macOS: `~/Library/Logs/game-pal/game-pal.log`) cada pregunta deja cuánto tardó la transcripción, los datos (fichas de la wiki), las primeras palabras del modelo y la respuesta entera. Si lo lento son las fichas, se responde sin ellas a los 3,5 s; si es el modelo, prueba uno más pequeño o desactiva que piense antes de responder.
 
+**No entiende dónde estoy ni lo que hay alrededor.** Sin un modelo que vea imágenes, game-pal solo sabe lo que está escrito en pantalla, y en la granja no hay texto. Si tu modelo ve (Qwen 3.5 o 3.6, Gemma 3…), game-pal lo usa solo; si no, elige uno en Modelos › Opciones avanzadas › Modelo con visión. Las preguntas sobre lo que se ve («¿qué hago aquí?») van entonces con una captura.
+
 **No sabe qué objeto llevo en la mano.** game-pal lee el texto de la pantalla, y el objeto seleccionado no aparece escrito. Dile cuál es («tengo un ramo de flores, ¿a quién se lo doy?») o abre el inventario y pasa el ratón por encima para que salga su nombre.
 
 **La primera vez tarda en activarse la voz.** Se descargan los modelos de voz (unos 140 MB con Whisper base). La GUI muestra una barra con el progreso.

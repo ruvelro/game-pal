@@ -206,3 +206,43 @@ def test_card_stays_while_the_answer_is_being_spoken() -> None:
     model.handle({"topic": "voice.speaking", "data": {"speaking": False}}, now=40)
     assert model.view(now=44) is not None
     assert model.view(now=46) is None  # `linger` desde que dejó de hablar
+
+
+async def test_question_goes_with_a_screenshot_to_the_model_that_sees(hades: LoadedProfile) -> None:
+    import numpy as np
+
+    bus, text_seen, vision_seen = EventBus(), [], []
+    config = AppConfig.model_validate({"output": {"answers": ["text"]}})
+    screen = np.full((720, 1280, 3), 90, dtype=np.uint8)
+    assistant = Assistant(
+        bus, config=lambda: config, provider=lambda: _provider("No lo sé.", text_seen), profile=lambda: hades,
+        screen=lambda: None, read=lambda: None,
+        vision=lambda: _provider("Estás junto a unos hierbajos: córtalos con la guadaña.", vision_seen),
+        frame=lambda: screen,
+    )  # fmt: skip
+    runner = asyncio.create_task(assistant.run())
+    await asyncio.sleep(0)
+    events = await _collect(bus, lambda: bus.publish(QuestionAsked(id="q1", text="¿Qué hago aquí?", source="voice")))
+    runner.cancel()
+    assert "hierbajos" in events[-1].text
+    assert text_seen == []  # responde el que ve
+    content = vision_seen[-1]["messages"][-1]["content"]
+    assert content[-1]["type"] == "image_url"
+    assert content[-1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert "captura" in vision_seen[-1]["messages"][0]["content"]
+
+
+async def test_without_a_model_that_sees_it_answers_with_text_only(hades: LoadedProfile) -> None:
+    import numpy as np
+
+    bus, seen = EventBus(), []
+    config = AppConfig.model_validate({"output": {"answers": ["text"]}})
+    assistant = Assistant(
+        bus, config=lambda: config, provider=lambda: _provider("Vale.", seen), profile=lambda: hades,
+        screen=lambda: None, read=lambda: None, frame=lambda: np.zeros((10, 10, 3), dtype=np.uint8),
+    )  # fmt: skip
+    runner = asyncio.create_task(assistant.run())
+    await asyncio.sleep(0)
+    await _collect(bus, lambda: bus.publish(QuestionAsked(id="q1", text="¿Qué hago?", source="voice")))
+    runner.cancel()
+    assert isinstance(seen[-1]["messages"][-1]["content"], str)

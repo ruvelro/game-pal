@@ -4,6 +4,13 @@
 
 ### Para jugar
 
+- Mira la pantalla al responder: si el modelo ve imágenes (como Qwen 3.6 en NVIDIA PAIR), se activa solo y las preguntas sobre lo que se ve («¿qué hago aquí?», «¿qué árboles son esos?») van con una captura.
+- Responde a lo que se pregunta: el estado de la partida guardada es contexto, no algo que resumir en cada respuesta.
+- Encuentra las fichas de la wiki aunque Whisper escriba el nombre casi bien («árbules frutales», «minicaja de música»).
+- El modelo se precalienta al arrancar: la primera respuesta ya no tarda 8 s en empezar.
+- «Para», «parar», «calla» o «basta» lo callan también mientras habla, aunque el micrófono oiga a la vez su voz.
+- Más paciencia al escuchar la pregunta (1,1 s de silencio), y una pregunta que se queda a medias («¿podemos con…») espera al resto. Una palabra suelta («Nada.») ya no se toma como pregunta.
+- Mientras te escucha o te habla, la lectura de pantalla espera, y el OCR usa 2 hilos en vez de todos: la voz y la transcripción ya no se quedan sin CPU.
 - La frase clave se reconoce al vuelo, en la primera pausa, sin esperar a que acabes de hablar: el aviso de «te escucho» llega enseguida y la pregunta puede ir en la misma frase.
 - Whisper ya no reintenta cuando duda (una frase de 2 s llegaba a tardar 9 s) y, para la frase clave, solo transcribe el principio de lo dicho.
 - «Para» y «gracias» solo callan a game-pal si es todo lo que dices: su propia voz, oída por el micrófono, cortaba las respuestas a media frase y apagaba el overlay.

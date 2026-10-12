@@ -161,7 +161,7 @@ def test_speaker_plays_sentences_through_one_stream(monkeypatch: pytest.MonkeyPa
     assert speaker.wait_idle(5)
     # Tres frases, un solo flujo: abrir uno por frase dejaba cortes entre ellas.
     assert len(FakeStream.opened) == 1
-    assert FakeStream.opened[0].kwargs["latency"] == "high"
+    assert FakeStream.opened[0].kwargs["latency"] >= 0.3  # type: ignore[operator]
     assert FakeStream.opened[0].written >= 3 * len(sentence)
     speaker.play(np.zeros(22050 * 5, dtype=np.float32), 22050)
     speaker.stop()

@@ -113,6 +113,12 @@ class VoiceService:
                     return ", ".join(dict.fromkeys(names))
         return ", ".join(dict.fromkeys(names))
 
+    def busy(self) -> bool:
+        """Si está escuchando una pregunta, transcribiéndola o hablando: lo demás debe dejarle la CPU."""
+        controller = self.controller
+        listening = controller is not None and controller.state in ("armed", "recording", "transcribing")
+        return listening or (self.speech is not None and self.speech.speaking)
+
     # Ciclo de vida -------------------------------------------------------------------------
 
     async def start(self, config: AppConfig) -> None:

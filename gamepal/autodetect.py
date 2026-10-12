@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlsplit
+
+import httpx
 
 from gamepal.capture import WindowInfo, match_window
 from gamepal.checks import Probe, discover_servers, identify, probe_local, real_probe, server_name
@@ -112,3 +115,27 @@ def next_profile(
         return None
     detected = detect_game(profiles, windows, foreground)
     return detected if detected and detected != config.profile else None
+
+
+async def model_sees(base_url: str, model: str, api_key: str | None = None) -> bool:
+    """Si el modelo de un servidor ve imágenes, según el propio servidor.
+
+    Ollama (y lo que lo imita, como NVIDIA PAIR) lo dice en /api/show; LM Studio, con `type: vlm` en su lista.
+    Si el servidor no lo sabe decir, se da por que no: mejor sin visión que mandar imágenes a quien no las ve.
+    """
+    parts = urlsplit(base_url)
+    root = f"{parts.scheme}://{parts.netloc}"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    async with httpx.AsyncClient(timeout=5.0, trust_env=False, follow_redirects=False, headers=headers) as client:
+        try:
+            response = await client.post(f"{root}/api/show", json={"model": model})
+            data = response.json() if response.status_code == 200 else None
+            if isinstance(data, dict) and isinstance(data.get("capabilities"), list):
+                return "vision" in data["capabilities"]
+            response = await client.get(f"{root}/api/v0/models/{model}")
+            data = response.json() if response.status_code == 200 else None
+            if isinstance(data, dict) and "type" in data:
+                return bool(data["type"] == "vlm")
+        except (httpx.HTTPError, ValueError):
+            return False
+    return False

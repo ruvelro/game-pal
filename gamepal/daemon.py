@@ -5,16 +5,18 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from gamepal.activity import ActivityStore
 from gamepal.assistant import Assistant
-from gamepal.autodetect import choose_local_model, game_is_open, next_profile
+from gamepal.autodetect import choose_local_model, game_is_open, model_sees, next_profile
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
-from gamepal.checks import KeyedProbe, Probe
+from gamepal.capture.base import RGBImage
+from gamepal.checks import KeyedProbe, Probe, real_probe
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.evidence.service import EvidenceService
@@ -34,7 +36,7 @@ from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.permissions import Need, needed
 from gamepal.permissions import state as permission_state
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
-from gamepal.providers import Provider, create_provider
+from gamepal.providers import Message, Provider, ProviderError, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
 from gamepal.reference import Reference, Today
 from gamepal.runtime.catalog import bundled_catalog
@@ -47,6 +49,7 @@ log = logging.getLogger(__name__)
 # Cada cuánto se mira qué juego está abierto y, mientras falte, si ya hay un modelo local.
 AUTODETECT_INTERVAL_S = 5.0
 MODEL_RETRY_TICKS = 6
+WARM_UP_TIMEOUT_S = 180.0
 
 
 @dataclass
@@ -144,6 +147,8 @@ class Daemon:
             reference=lambda: self.reference,
             today=self._today,
             lookup=self._lookup,
+            vision=lambda: self.hub.route("vision") if self.vision_enabled() else None,
+            frame=self._latest_image,
         )
         self._assistant_task: asyncio.Task[None] | None = None
         self.voice = VoiceService(
@@ -154,6 +159,8 @@ class Daemon:
         )
         self.overlay: OverlayProcess | None = None
         self._voice_started = False
+        self._warming: asyncio.Task[None] | None = None
+        self._vision_checked: tuple[str, str] | None = None
         # Si los atajos pudieron escuchar el teclado al arrancar la voz (en macOS hace falta un permiso).
         self._input_ready = True
 
@@ -243,6 +250,44 @@ class Daemon:
         self.notes = [*self.notes[-9:], text]
         return text
 
+    def _latest_image(self) -> RGBImage | None:
+        watcher = self.c.watcher
+        frame = watcher.latest_frame if watcher is not None else None
+        return frame.image if frame is not None else None
+
+    async def autodetect_vision(self) -> str | None:
+        """Si el modelo que razona también ve, se usa para mirar la pantalla al responder."""
+        provider = self.config.provider
+        key = (provider.base_url, provider.model)
+        if provider.kind != "local-openai" or not provider.model or provider.vision_model or not provider.auto_vision:
+            return None
+        if not real_probe(self.probe):
+            return None  # en los tests no hay servidor al que preguntar
+        if key == self._vision_checked:
+            return None
+        self._vision_checked = key
+        secret: str | None = await asyncio.to_thread(self.secrets.get, "server")
+        if not await model_sees(provider.base_url, provider.model, secret):
+            return None
+        updated = provider.model_copy(update={"vision_model": provider.model})
+        await self.apply(self.config.model_copy(update={"provider": updated}))
+        return self._note(f"Visión activada: {provider.model} ve la pantalla al responder")
+
+    async def _warm_up(self) -> None:
+        """Una petición mínima al arrancar: el primer uso cargaba el modelo y la primera respuesta tardaba 8 s."""
+        if self.config.routing.reasoning.provider != "local" or not self.config.provider.model:
+            return
+        if self.config.provider.kind != "managed" and not real_probe(self.probe):
+            return
+        started = time.perf_counter()
+        try:
+            client = self.hub.client("local")
+            await asyncio.wait_for(client.chat([Message("user", "Hola")], max_tokens=1), WARM_UP_TIMEOUT_S)
+        except (ProviderError, TimeoutError) as exc:
+            log.info("No se pudo precalentar el modelo: %s", exc)
+            return
+        log.info("Modelo listo (precalentado en %.1f s)", time.perf_counter() - started)
+
     async def autodetect_model(self) -> str | None:
         """Si no hay modelo local elegido, elige servidor y modelo entre los que estén en marcha."""
         choice = await choose_local_model(self.config, total_memory_gb(), self.probe)
@@ -269,7 +314,7 @@ class Daemon:
         return self._note(f"Juego detectado: {profiles[target].profile.name}")
 
     async def autodetect(self) -> list[str]:
-        changes = [await self.autodetect_game(), await self.autodetect_model()]
+        changes = [await self.autodetect_game(), await self.autodetect_model(), await self.autodetect_vision()]
         return [change for change in changes if change]
 
     async def _autodetect_once(self) -> None:
@@ -287,6 +332,7 @@ class Daemon:
                 await self.autodetect_game()
                 if not self.config.provider.model and ticks % MODEL_RETRY_TICKS == 0:
                     await self.autodetect_model()
+                await self.autodetect_vision()
                 await self._rearm_hotkeys()
             except Exception:
                 log.debug("Falló la detección automática", exc_info=True)
@@ -508,6 +554,8 @@ class Daemon:
             create_provider(self.config.provider)  # valida la dirección del servidor local
             self.c.provider = self.hub.route("reasoning")
             self.c.errors.pop("provider", None)
+            if self._warming is None or self._warming.done():
+                self._warming = asyncio.create_task(self._warm_up(), name="warm-up")
             self.bus.publish(StatusChanged(component="provider", state="idle", detail=self.routing_summary()))
         except Exception as exc:
             self.c.provider = None
@@ -591,8 +639,9 @@ class Daemon:
             self.c.watcher = None
             return
         self.c.watcher = ScreenWatcher(
-            self.bus, self.c.backend, self.c.ocr, self.config.capture, self.target(), paused=was_paused
-        )
+            self.bus, self.c.backend, self.c.ocr, self.config.capture, self.target(), paused=was_paused,
+            busy=self.voice.busy,
+        )  # fmt: skip
         self.c.watcher_task = asyncio.create_task(self.c.watcher.run(), name="watcher")
 
     # Acciones ------------------------------------------------------------------------------

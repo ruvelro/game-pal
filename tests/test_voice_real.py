@@ -7,6 +7,7 @@ import pytest
 
 from gamepal.bus import EventBus
 from gamepal.events import QuestionAsked
+from gamepal.perception.text import normalize
 from gamepal.voice.controller import VoiceController
 from gamepal.voice.models import SILERO_VAD, ModelStore, piper_artifacts
 from gamepal.voice.stt import WhisperStt
@@ -67,8 +68,10 @@ async def test_wake_phrase_and_question_in_one_breath(store: ModelStore, piper: 
     chunks = _say(piper, "Oye compañero, ¿qué bendición me conviene coger ahora?")
     event = await _run(controller, queue, bus, chunks)
     assert event.source == "voice"
-    assert "bendici" in event.text.lower()
-    assert "compañero" not in event.text.lower()
+    # Whisper base no siempre escribe igual la misma voz sintética («bendición», «medición», «bendiceme»);
+    # lo que importa aquí es que llega la pregunta, sin la frase clave.
+    assert "coger ahora" in normalize(event.text)
+    assert "companero" not in normalize(event.text)
 
 
 async def test_push_to_talk_records_without_wake_phrase(store: ModelStore, piper: PiperTts) -> None:
@@ -99,4 +102,4 @@ async def test_push_to_talk_records_without_wake_phrase(store: ModelStore, piper
         task.cancel()
     assert isinstance(event, QuestionAsked)
     assert event.source == "push_to_talk"
-    assert "cronos" in event.text.lower()
+    assert "cronos" in normalize(event.text)  # sin tildes: a veces sale «acrónos»

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from gamepal.bus import EventBus
@@ -53,8 +54,12 @@ class ScreenWatcher:
         target: Target,
         *,
         paused: bool = False,
+        busy: Callable[[], bool] = lambda: False,
     ) -> None:
         self._bus = bus
+        # Mientras te escucha o te habla, la lectura de pantalla espera: el OCR competía por la CPU con la
+        # transcripción y la voz, que tartamudeaba.
+        self._busy = busy
         self._backend = backend
         self._ocr = ocr
         self._config = config
@@ -177,7 +182,7 @@ class ScreenWatcher:
         new_screen = self._read_hash is None or distance(current, self._read_hash) >= self._config.change_threshold
         ocr_idle = self._ocr_task is None or self._ocr_task.done()
         wants_read = new_screen or self._force_read
-        if wants_read and self._stable >= self._config.settle_frames and ocr_idle:
+        if wants_read and self._stable >= self._config.settle_frames and ocr_idle and not self._busy():
             self._read_hash = current
             self._force_read = False
             # Se guardan los frames leídos recientes para que la visión use exactamente esa imagen.

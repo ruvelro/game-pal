@@ -43,6 +43,9 @@ def _setup_logging(paths: AppPaths, verbose: bool) -> None:
     # Cada petición de una descarga y cada trozo de audio de Whisper llenaban el registro y tapaban lo útil.
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "faster_whisper", "uvicorn.access"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    # pynput avisa de «not trusted» en cada arranque aunque el permiso de Monitorización de entrada baste;
+    # game-pal ya comprueba el permiso de verdad y lo explica en «Lo que falta».
+    logging.getLogger("pynput").setLevel(logging.ERROR)
 
 
 def _free_port(preferred: int) -> int:
