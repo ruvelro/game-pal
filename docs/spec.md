@@ -388,6 +388,17 @@ game-pal/
 | M6 · Abrir ✅ | Proveedores nube, modo híbrido, panel de actividad, claves en almacén del sistema, Stardew Valley |
 | M7 · Pulir ✅ | Asistente de primer uso, catálogo de modelos, instaladores, firmas, docs de creación de perfiles, v0.1 |
 
+La versión 0.1.0 está etiquetada (12 de octubre de 2026) y sus instaladores esperan en un borrador de versión. Lo que sigue:
+
+| Hito | Contenido |
+| --- | --- |
+| v0.1 · Publicar | Publicar el borrador con notas sobre los avisos de Gatekeeper y SmartScreen; dejar el tar.gz de Linux por debajo de 300 MB |
+| M8 · Acertar | Menos detalles inventados con modelos locales pequeños: más datos exactos en las tablas de los perfiles, evaluación por perfil desde la GUI y pruebas con partidas reales |
+| M9 · Distribuir | Notarización de Apple y Authenticode de Windows, MSIX, Flatpak, actualizador y ventana nativa con pywebview |
+| M10 · Más juegos | Más perfiles incluidos y editor visual de perfiles en la GUI (fase 2) |
+| M11 · Recordar la partida | Historial de partidas, resumen de sesión y exportación en HTML y PNG (fase 2) |
+| M12 · Compartir | Panel remoto desde el móvil u otro equipo de la misma red y catálogo de perfiles por repositorio Git (fase 2) |
+
 ## 11. Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
