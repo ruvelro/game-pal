@@ -38,6 +38,14 @@ class ScriptedStt:
         return self._reply(seconds)
 
 
+EXPECT_S = 5.0
+
+
+async def expect(sub: Subscription, count: int = 1) -> list[Event]:
+    """Los `count` eventos que se esperan, con margen: en una CI lenta la transcripción (en otro hilo) tarda."""
+    return [await asyncio.wait_for(sub.get(), EXPECT_S) for _ in range(count)]
+
+
 async def received(sub: Subscription) -> list[Event]:
     """Lo que ha llegado a la suscripción hasta ahora."""
     events: list[Event] = []
@@ -85,7 +93,7 @@ async def test_wake_phrase_is_heard_on_the_first_pause_and_the_question_follows(
     async with bus.subscribe({"assistant.question"}) as sub:
         # «Oye compañero», pausa corta (menos que el silencio que cierra la frase) y la pregunta.
         await feed(controller, queue, frames((VOICE, 0.8), (QUIET, 0.35), (VOICE, 1.2), (QUIET, 1.4)))
-        [question] = await received(sub)
+        [question] = await expect(sub)
     assert isinstance(question, QuestionAsked)
     assert question.text == "qué planto en verano?"
     assert cues == [True]  # un solo aviso, el de «te escucho»
@@ -104,7 +112,7 @@ async def test_only_the_wake_phrase_waits_for_the_question() -> None:
     )
     async with bus.subscribe({"assistant.question"}) as sub:
         await feed(controller, queue, frames((VOICE, 0.9), (QUIET, 1.4), (VOICE, 1.6), (QUIET, 1.4)))
-        [question] = await received(sub)
+        [question] = await expect(sub)
     assert isinstance(question, QuestionAsked)
     assert question.text == "¿Qué planto?"
     assert cues == [True]
@@ -120,7 +128,7 @@ async def test_its_own_voice_does_not_stop_it_but_a_short_stop_phrase_does() -> 
         await feed(controller, queue, frames((VOICE, 2.0), (QUIET, 1.0)))
         assert await received(sub) == []
         await feed(controller, queue, frames((VOICE, 0.5), (QUIET, 1.0)))
-        [stopped] = await received(sub)
+        [stopped] = await expect(sub)
     assert isinstance(stopped, SpeechStopped)
 
 
@@ -132,7 +140,7 @@ async def test_its_order_at_the_end_of_its_own_voice_stops_it() -> None:
     )
     async with bus.subscribe({"voice.stopped"}) as sub:
         await feed(controller, queue, frames((VOICE, 4.0), (QUIET, 1.0)))
-        [stopped] = await received(sub)
+        [stopped] = await expect(sub)
     assert isinstance(stopped, SpeechStopped)
 
 
@@ -144,7 +152,7 @@ async def test_a_single_word_is_not_a_question_and_a_cut_question_waits() -> Non
         await feed(controller, queue, frames((VOICE, 1.2), (QUIET, 1.4)))
         assert await received(sub) == []
         await feed(controller, queue, frames((VOICE, 1.8), (QUIET, 1.4), (VOICE, 0.8), (QUIET, 1.4)))
-        [question] = await received(sub)
+        [question] = await expect(sub)
     assert isinstance(question, QuestionAsked)
     assert question.text == "podemos con la azada?"
 
@@ -161,7 +169,7 @@ async def test_question_heard_on_the_fly_is_not_lost_when_little_follows() -> No
         # Todo el audio llega antes de que termine la comprobación al vuelo, como en una prueba rápida.
         for chunk in frames((VOICE, 2.3), (QUIET, 1.5)):
             queue.put_nowait(chunk)
-        [question] = await received(sub) or [await asyncio.wait_for(sub.get(), 2)]
+        [question] = await expect(sub)
         task.cancel()
     assert isinstance(question, QuestionAsked)
     assert question.text == "qué bendición me conviene?"
@@ -178,7 +186,7 @@ async def test_after_an_answer_it_listens_without_the_wake_phrase() -> None:
         for chunk in frames((VOICE, 0.6), (QUIET, 1.4)):
             await queue.put(chunk)
             await asyncio.sleep(0.001)
-        [answer] = await received(sub)
+        [answer] = await expect(sub)
         task.cancel()
     assert isinstance(answer, QuestionAsked)
     # Una palabra vale cuando se contesta a game-pal, y la pregunta va marcada para llevar la conversación.
