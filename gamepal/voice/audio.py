@@ -80,6 +80,9 @@ class Microphone:
             self._stream = None
 
 
+KEEP_OPEN_S = 1.5
+
+
 class Speaker:
     """Reproduce trozos de audio en orden y se calla al instante con `stop()`."""
 
@@ -121,29 +124,57 @@ class Speaker:
             self._wake.wait()
             self._wake.clear()
             self._stop.clear()
-            while True:
-                with self._lock:
-                    if not self._queue:
-                        self._idle.set()
-                        break
-                    audio, rate = self._queue.popleft()
-                try:
-                    data = np.clip(audio * self.volume, -1, 1).astype(np.float32)
-                    with sd.OutputStream(
-                        samplerate=rate, channels=1, dtype="float32", device=_device_index(self._device, "output")
-                    ) as stream:
-                        block = rate // 20  # 50 ms: permite cortar casi al instante
-                        for start in range(0, len(data), block):
-                            if self._stop.is_set():
-                                break
-                            stream.write(data[start : start + block].reshape(-1, 1))
-                except Exception:
-                    log.exception("No se pudo reproducir audio")
-                if self._stop.is_set():
+            stream: Any = None
+            rate = 0
+            try:
+                while True:
                     with self._lock:
+                        item = self._queue.popleft() if self._queue else None
+                        if item is None:
+                            self._idle.set()
+                    if item is None:
+                        # Entre una frase y la siguiente el flujo sigue abierto un momento: abrirlo y cerrarlo
+                        # en cada frase dejaba cortes y chasquidos.
+                        if self._stop.is_set() or not self._wake.wait(KEEP_OPEN_S):
+                            break
+                        self._wake.clear()
+                        continue
+                    audio, item_rate = item
+                    if stream is None or item_rate != rate:
+                        if stream is not None:
+                            stream.close()
+                        rate = item_rate
+                        stream = sd.OutputStream(
+                            samplerate=rate,
+                            channels=1,
+                            dtype="float32",
+                            device=_device_index(self._device, "output"),
+                            # Margen de sobra: con el equipo cargado (juego, OCR, transcripción) un búfer corto se
+                            # vaciaba y la voz tartamudeaba.
+                            latency="high",
+                        )
+                        stream.start()
+                        # Un poco de silencio delante para que el dispositivo no se coma la primera sílaba.
+                        stream.write(np.zeros((rate // 20, 1), dtype=np.float32))
+                    data = np.clip(audio * self.volume, -1, 1).astype(np.float32)
+                    block = rate // 10  # 100 ms: permite cortar enseguida
+                    for start in range(0, len(data), block):
+                        if self._stop.is_set():
+                            break
+                        stream.write(data[start : start + block].reshape(-1, 1))
+                    if self._stop.is_set():
+                        break
+            except Exception:
+                log.exception("No se pudo reproducir audio")
+            finally:
+                if stream is not None:
+                    # Al callarse se descarta lo que quede en el búfer; si no, se deja terminar.
+                    (stream.abort if self._stop.is_set() else stream.stop)()
+                    stream.close()
+                with self._lock:
+                    if self._stop.is_set():
                         self._queue.clear()
-                        self._idle.set()
-                    break
+                    self._idle.set()
 
 
 def tone(rising: bool = True, rate: int = 22050, seconds: float = 0.18) -> tuple[Audio, int]:

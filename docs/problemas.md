@@ -56,6 +56,10 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **La voz se cerraba con «Error processing file … phontab».** espeak-ng, que usa Piper, no acepta rutas de más de unos 160 caracteres para sus datos. game-pal les da una ruta corta y, si aun así fallara, usa la voz del sistema en lugar de cerrarse.
 
+**Tarda en responder.** En el registro (macOS: `~/Library/Logs/game-pal/game-pal.log`) cada pregunta deja cuánto tardó la transcripción, los datos (fichas de la wiki), las primeras palabras del modelo y la respuesta entera. Si lo lento son las fichas, se responde sin ellas a los 3,5 s; si es el modelo, prueba uno más pequeño o desactiva que piense antes de responder.
+
+**No sabe qué objeto llevo en la mano.** game-pal lee el texto de la pantalla, y el objeto seleccionado no aparece escrito. Dile cuál es («tengo un ramo de flores, ¿a quién se lo doy?») o abre el inventario y pasa el ratón por encima para que salga su nombre.
+
 **La primera vez tarda en activarse la voz.** Se descargan los modelos de voz (unos 140 MB con Whisper base). La GUI muestra una barra con el progreso.
 
 **Linux: «Sin audio».** Falta PortAudio: `sudo apt install libportaudio2`.

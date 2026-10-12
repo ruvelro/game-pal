@@ -80,23 +80,27 @@ class WikiLookup:
         return sorted(self._wikis, key=lambda wiki: wiki[0] != language)
 
     async def find(self, names: list[str], language: str) -> list[WikiPage]:
-        """Las fichas de los primeros nombres que existen como página, en el orden en que se dan."""
-        found: list[WikiPage] = []
-        pending = list(names)
-        for wiki_language, api in self._order(language):
-            if not pending or len(found) >= MAX_PAGES:
+        """Las fichas de los primeros nombres que existen como página, en el orden en que se dan.
+
+        Todo a la vez: se pregunta a todas las wikis y se descargan las fichas en paralelo. Una tras otra,
+        con el equipo cargado, la búsqueda llegaba a tardar más que el modelo en responder.
+        """
+        wikis = self._order(language)
+        existing = await asyncio.gather(*(self._existing(api, names) for _, api in wikis))
+        chosen: list[tuple[str, str, str, str]] = []
+        found_in = list(zip(wikis, existing, strict=True))
+        for name in names:
+            # La wiki del idioma del juego primero; si allí no está, la siguiente.
+            hit = next(((api, lang, *titles[name]) for (lang, api), titles in found_in if name in titles), None)
+            if hit is not None and all(hit[2] != other[2] for other in chosen):
+                chosen.append(hit)
+            if len(chosen) >= MAX_PAGES:
                 break
-            titles = await self._existing(api, pending)
-            for name in list(pending):
-                hit = titles.get(name)
-                if hit is None:
-                    continue
-                pending.remove(name)
-                page = await self._page(api, wiki_language, *hit)
-                if page is not None and all(page.title != other.title for other in found):
-                    found.append(page)
-                if len(found) >= MAX_PAGES:
-                    break
+        pages = await asyncio.gather(*(self._page(api, lang, title, url) for api, lang, title, url in chosen))
+        found: list[WikiPage] = []
+        for page in pages:
+            if page is not None and all(page.title != other.title for other in found):
+                found.append(page)
         return found
 
     async def translate(self, names: list[str], language: str) -> dict[str, str]:
@@ -178,4 +182,6 @@ class WikiLookup:
         document = await asyncio.to_thread(html_to_document, url or title, wrapped)
         # El extractor descarta las páginas muy cortas; una ficha breve sigue siendo útil.
         text = prose_first(document.markdown) if document is not None else _bare_text(html)
+        # Las tablas de horarios dejan decenas de líneas vacías que gastaban el espacio de la ficha.
+        text = re.sub(r"\n{3,}", "\n\n", text)
         return WikiPage(title, url, text[:MAX_PAGE_CHARS], language) if text.strip() else None

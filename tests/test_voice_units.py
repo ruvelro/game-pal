@@ -1,4 +1,5 @@
 import hashlib
+from typing import ClassVar
 
 import httpx
 import numpy as np
@@ -17,6 +18,9 @@ from gamepal.voice.vad import FRAME, EnergyVad, Segmenter
         ("oye compañeros que hago", "que hago"),  # error de transcripción
         ("Eh, oye compañero", ""),
         ("Hey pal, what now?", "what now?"),
+        # Lo que Whisper entiende a veces: la palabra larga casi exacta y algo corto delante.
+        ("Puede compañero.", ""),
+        ("Hoy es compañero, ¿qué planto?", "qué planto?"),
     ],
 )
 def test_wake_phrase_at_start(text: str, rest: str) -> None:
@@ -30,10 +34,14 @@ def test_wake_phrase_not_elsewhere(text: str) -> None:
     assert PhraseMatcher(["oye compañero", "hey pal"]).match_start(text) is None
 
 
-def test_stop_phrases_anywhere() -> None:
+def test_stop_phrases_only_when_they_are_all_that_was_said() -> None:
     matcher = PhraseMatcher(["gracias", "para"])
-    assert matcher.contains("Vale, gracias.") == "gracias"
-    assert matcher.contains("paragüero") is None
+    assert matcher.whole("Vale, gracias.") == "gracias"
+    assert matcher.whole("Para ya.") == "para"
+    assert matcher.whole("paragüero") is None
+    # La propia voz de game-pal, oída por el micrófono, no debe cortarla.
+    assert matcher.whole("Úsala para invierno y luego vuelve a casa.") is None
+    assert matcher.whole("para que termine la semana") is None
 
 
 def test_segmenter_cuts_on_silence() -> None:
@@ -108,3 +116,53 @@ def test_download_rejects_untrusted_hosts(tmp_path) -> None:  # type: ignore[no-
         _store(tmp_path, b"x").ensure(Artifact("a", "https://evil.example/a"))
     with pytest.raises(ModelDownloadError, match="no permitido"):
         _store(tmp_path, b"x").ensure(Artifact("a", "http://huggingface.co/a"))
+
+
+class FakeStream:
+    opened: ClassVar[list["FakeStream"]] = []
+
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
+        self.written = 0
+        self.aborted = False
+        FakeStream.opened.append(self)
+
+    def start(self) -> None:
+        return None
+
+    def write(self, data: np.ndarray) -> None:
+        self.written += len(data)
+
+    def stop(self) -> None:
+        return None
+
+    def abort(self) -> None:
+        self.aborted = True
+
+    def close(self) -> None:
+        return None
+
+
+def test_speaker_plays_sentences_through_one_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    from gamepal.voice.audio import Speaker
+
+    fake = types.ModuleType("sounddevice")
+    fake.OutputStream = FakeStream  # type: ignore[attr-defined]
+    fake.query_devices = lambda: []  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    FakeStream.opened.clear()
+    speaker = Speaker()
+    sentence = np.zeros(22050 // 2, dtype=np.float32)
+    for _ in range(3):
+        speaker.play(sentence, 22050)
+    assert speaker.wait_idle(5)
+    # Tres frases, un solo flujo: abrir uno por frase dejaba cortes entre ellas.
+    assert len(FakeStream.opened) == 1
+    assert FakeStream.opened[0].kwargs["latency"] == "high"
+    assert FakeStream.opened[0].written >= 3 * len(sentence)
+    speaker.play(np.zeros(22050 * 5, dtype=np.float32), 22050)
+    speaker.stop()
+    assert speaker.wait_idle(5)

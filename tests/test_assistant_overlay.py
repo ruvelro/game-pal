@@ -195,3 +195,14 @@ def test_chat_ignores_open_orders_from_before_it_connected() -> None:
     assert not client.model.chat_open
     client._handle({"topic": "overlay.chat", "data": {"at": 101.0}})
     assert client.model.chat_open
+
+
+def test_card_stays_while_the_answer_is_being_spoken() -> None:
+    model = OverlayModel(linger=5)
+    model.handle({"topic": "assistant.answer", "data": {"id": "a", "text": "Larga", "done": True,
+                                                        "outputs": ["overlay"]}}, now=0)  # fmt: skip
+    model.handle({"topic": "voice.speaking", "data": {"speaking": True}}, now=1)
+    assert model.view(now=30) is not None  # sigue hablando: la tarjeta no se va
+    model.handle({"topic": "voice.speaking", "data": {"speaking": False}}, now=40)
+    assert model.view(now=44) is not None
+    assert model.view(now=46) is None  # `linger` desde que dejó de hablar

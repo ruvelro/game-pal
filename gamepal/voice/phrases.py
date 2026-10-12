@@ -49,14 +49,36 @@ class PhraseMatcher:
                     if distance <= budget and (best is None or distance < best[0]):
                         best = (distance, start + size, phrase)
         if best is None:
-            return None
+            anchored = self._anchored(words)
+            if anchored is None:
+                return None
+            best = (0, *anchored)
         rest = " ".join(original[best[1] :]).lstrip(",.:;!¡¿? ")
         return PhraseHit(best[2], rest)
 
-    def contains(self, transcript: str) -> str | None:
-        """Alguna frase en cualquier parte de una transcripción corta."""
-        text = f" {normalize(transcript)} "
+    def _anchored(self, words: list[str]) -> tuple[int, str] | None:
+        """La palabra larga de la frase casi exacta, con poco delante: Whisper oye «puede compañero» o «hoy es
+        compañero» por «oye compañero». La palabra distintiva basta; lo corto de delante se le perdona."""
         for phrase, target in self._phrases:
-            if f" {' '.join(target)} " in text:
+            anchor = target[-1]
+            if len(target) < 2 or len(anchor) < 6:
+                continue
+            for index in range(min(3, len(words))):
+                if Levenshtein.distance(anchor, words[index], score_cutoff=1) > 1:
+                    continue
+                before = words[:index]
+                if all(len(word) <= 5 for word in before):
+                    return index + 1, phrase
+        return None
+
+    def whole(self, transcript: str, extra: int = 1) -> str | None:
+        """Una frase que es todo lo dicho, o casi («para», «para ya», «vale, gracias»).
+
+        Las frases de parada son palabras corrientes: «para» sale en casi cualquier respuesta. Si contara en
+        cualquier parte, el micrófono que oye la propia voz de game-pal la cortaría a media frase.
+        """
+        words = [word for word in normalize(transcript).split() if word not in FILLERS]
+        for phrase, target in self._phrases:
+            if words[: len(target)] == target and len(words) <= len(target) + extra:
                 return phrase
         return None

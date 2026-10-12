@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import logging
+import sys
 import threading
+import types
 import wave
 from typing import Any, Protocol
 
@@ -25,10 +27,28 @@ class Stt(Protocol):
     def transcribe(self, audio: Audio, language: str | None, hotwords: str | None = None) -> str: ...
 
 
+def _without_pyav() -> None:
+    """faster-whisper importa PyAV solo para leer ficheros de audio; game-pal le da el audio ya en memoria.
+
+    PyAV trae su propia copia de FFmpeg, igual que OpenCV (el OCR). Con las dos cargadas, macOS avisa de clases
+    Objective-C duplicadas (AVFFrameReceiver…) que pueden causar fallos raros: así solo se carga la de OpenCV.
+    """
+    if "av" in sys.modules:
+        return
+    stub = types.ModuleType("av")
+
+    def missing(name: str) -> Any:
+        raise AttributeError(f"game-pal no carga PyAV (se pidió av.{name}): el audio va en memoria")
+
+    stub.__getattr__ = missing  # type: ignore[method-assign]
+    sys.modules["av"] = stub
+
+
 class WhisperStt:
     """faster-whisper en CPU (int8) o GPU. El modelo se descarga de Hugging Face la primera vez."""
 
     def __init__(self, model: str, download_root: str | None = None) -> None:
+        _without_pyav()
         from faster_whisper import WhisperModel
 
         self.name = f"whisper-{model}"
@@ -45,6 +65,10 @@ class WhisperStt:
                 beam_size=1,
                 condition_on_previous_text=False,
                 vad_filter=False,
+                # Sin reintentos a otras temperaturas: cuando duda, Whisper repetía la frase hasta seis veces
+                # (una frase de 2 s llegaba a tardar 9 s) y no acertaba más. Sin marcas de tiempo, va más rápido.
+                temperature=0.0,
+                without_timestamps=True,
                 # Los nombres del juego ayudan a Whisper a escribirlos bien.
                 hotwords=(hotwords or None) and hotwords[:MAX_HOTWORDS_CHARS],
             )
