@@ -192,10 +192,13 @@ class WindowsOverlay:
         cls.cbSize = ctypes.sizeof(WNDCLASSEXW)
         cls.lpfnWndProc = self._proc
         cls.hInstance = instance
-        cls.lpszClassName = "GamePalOverlay"
+        # Una clase por instancia: si se registrara una sola, una segunda instancia en el mismo proceso
+        # (los tests) heredaría el procedimiento de la primera, que ya puede no existir.
+        self._class = f"GamePalOverlay{id(self)}"
+        cls.lpszClassName = self._class
         user32.RegisterClassExW(ctypes.byref(cls))
         ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
-        self._hwnd = user32.CreateWindowExW(ex, "GamePalOverlay", "game-pal", WS_POPUP, 0, 0, 400, 100, None,
+        self._hwnd = user32.CreateWindowExW(ex, self._class, "game-pal", WS_POPUP, 0, 0, 400, 100, None,
                                             None, instance, None)  # fmt: skip
         if not self._hwnd:
             raise OSError("No se pudo crear la ventana del overlay")
@@ -297,10 +300,10 @@ class WindowsOverlay:
         cls.lpfnWndProc = self._chat_proc
         cls.hInstance = instance
         cls.hbrBackground = self._background
-        cls.lpszClassName = "GamePalChat"
+        cls.lpszClassName = f"{self._class}Chat"
         user32.RegisterClassExW(ctypes.byref(cls))
         ex = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW
-        self._chat = user32.CreateWindowExW(ex, "GamePalChat", "game-pal", WS_POPUP, 0, 0, 560, 480, None, None,
+        self._chat = user32.CreateWindowExW(ex, f"{self._class}Chat", "game-pal", WS_POPUP, 0, 0, 560, 480, None, None,
                                             instance, None)  # fmt: skip
         if not self._chat:
             raise OSError("No se pudo crear la ventana del chat")
