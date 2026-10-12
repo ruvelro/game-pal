@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   formatBytes,
+  isRemote,
   type AppConfig,
-  type AskResult,
   type Devices,
   type Hardware,
   type LocalServer,
@@ -11,6 +11,7 @@ import {
   type WindowSummary,
 } from "../api";
 import { CheckRow, CommandBox, useSetupInfo } from "../components/Checks";
+import { ConnectionTest, ServerKey } from "../components/ConnectionTest";
 import { Downloads as EngineDownloads, useEngine } from "../components/Engine";
 import { Preview } from "../components/Preview";
 import { StatusDownloads } from "../components/StatusDownloads";
@@ -128,39 +129,12 @@ function GameStep({
   );
 }
 
-function ModelTest({ config, save }: { config: AppConfig; save: (c: AppConfig) => Promise<boolean> }) {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<AskResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const run = async () => {
-    setBusy(true);
-    setResult(null);
-    setError(null);
-    try {
-      if (await save(config)) setResult(await api.post<AskResult>("/api/provider/ask", { prompt: t("setup.model.prompt") }));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="check-body">
-      <button className="primary" onClick={() => void run()} disabled={busy}>
-        {busy ? t("setup.model.testing") : t("setup.model.test")}
-      </button>
-      {result && (
-        <p className="ok-text">
-          «{result.text.trim()}» <span className="muted small">· {result.model}, {result.elapsed_ms} ms</span>
-        </p>
-      )}
-      {error && <p className="error-text">{error}</p>}
-    </div>
-  );
-}
-
+/** Un servidor que ya tiene el jugador: en este equipo, en otro de su red (Ollama, LM Studio, NVIDIA PAIR…) o por https. */
 function LocalModel({ config, setConfig }: { config: AppConfig; setConfig: SetConfig }) {
   const [servers, setServers] = useState<LocalServer[]>();
+  const [tested, setTested] = useState<string[]>();
+  const [serverKey, setServerKey] = useState("");
+  const [keyed, setKeyed] = useState(false);
   const discover = useCallback(
     () =>
       api
@@ -169,7 +143,16 @@ function LocalModel({ config, setConfig }: { config: AppConfig; setConfig: SetCo
         .catch(() => setServers([])),
     [],
   );
+  const loadKeys = useCallback(
+    () =>
+      api
+        .get<{ keys: Record<string, boolean> }>("/api/providers")
+        .then((data) => setKeyed(Boolean(data.keys.server)))
+        .catch(() => undefined),
+    [],
+  );
   useEffect(() => void discover(), [discover]);
+  useEffect(() => void loadKeys(), [loadKeys]);
   // Mientras no haya ningún servidor, se sigue buscando: así se detecta Ollama en cuanto se abre.
   useEffect(() => {
     if (servers?.length !== 0) return;
@@ -178,68 +161,110 @@ function LocalModel({ config, setConfig }: { config: AppConfig; setConfig: SetCo
   }, [servers, discover]);
 
   const provider = config.provider;
+  const remote = isRemote(provider.base_url);
   const current = servers?.find((s) => s.url === provider.base_url.replace(/\/+$/, ""));
+  const models = tested ?? current?.models;
   const choose = useCallback(
     (server: LocalServer, model?: string) => {
       const keep = model ?? (server.models.includes(provider.model) ? provider.model : (server.recommended ?? ""));
+      setTested(undefined);
       setConfig({ ...config, provider: { ...provider, base_url: server.url, model: keep } });
     },
     [config, provider, setConfig],
   );
-  // Si el servidor configurado no responde pero hay otro, se propone ese.
+  // Si el servidor configurado en este equipo no responde pero hay otro, se propone ese. Una dirección
+  // de otro equipo escrita por el jugador no se toca.
   useEffect(() => {
-    if (servers && servers.length > 0 && !current && servers[0]) choose(servers[0]);
-  }, [servers, current, choose]);
+    if (servers && servers.length > 0 && !current && !remote && servers[0]) choose(servers[0]);
+  }, [servers, current, remote, choose]);
+  const setUrl = (base_url: string) => {
+    setTested(undefined);
+    setConfig({ ...config, provider: { ...provider, base_url } });
+  };
+  const setModel = (model: string) => setConfig({ ...config, provider: { ...provider, model } });
 
-  if (servers === undefined) return <p className="muted">{t("setup.model.searching")}</p>;
-  if (servers.length === 0) {
-    return (
-      <div className="notice">
-        <span>{t("setup.model.none")}</span>
-        <ol className="steps-text">
-          <li>
-            {t("setup.model.none.1")}{" "}
-            <a href="https://ollama.com" target="_blank" rel="noreferrer noopener">
-              ollama.com
-            </a>
-          </li>
-          <li>
-            {t("setup.model.none.2")}
-            <CommandBox command="ollama pull qwen3:4b" />
-          </li>
-          <li>{t("setup.model.none.3")}</li>
-        </ol>
-      </div>
-    );
-  }
   return (
-    <div className="two-col tight">
-      <Field label={t("setup.model.server")}>
-        <select
-          value={current?.url ?? ""}
-          onChange={(e) => {
-            const server = servers.find((s) => s.url === e.target.value);
-            if (server) choose(server);
-          }}
-        >
-          {servers.map((s) => (
-            <option key={s.url} value={s.url}>
-              {s.name} · {s.models.length} {t("models.detect.count")}
-            </option>
+    <>
+      {servers === undefined && <p className="muted">{t("setup.model.searching")}</p>}
+      {servers && servers.length > 0 && (
+        <div className="row wrap">
+          <span className="muted small">{t("models.detected")}:</span>
+          {servers.map((server) => (
+            <button
+              key={server.url}
+              className={server.url === current?.url ? "chip active" : "chip"}
+              onClick={() => choose(server)}
+            >
+              {server.name} · {server.models.length} {t("models.detect.count")}
+            </button>
           ))}
-        </select>
-      </Field>
-      <Field label={t("setup.model.model")}>
-        <select value={provider.model} onChange={(e) => current && choose(current, e.target.value)}>
-          <option value="">—</option>
-          {current?.models.map((m) => (
-            <option key={m} value={m}>
-              {m === current.recommended ? `${m} · ${t("models.recommended")}` : m}
-            </option>
-          ))}
-        </select>
-      </Field>
-    </div>
+        </div>
+      )}
+      {servers?.length === 0 && !remote && (
+        <details className="notice">
+          <summary>{t("setup.model.none")}</summary>
+          <ol className="steps-text">
+            <li>
+              {t("setup.model.none.1")}{" "}
+              <a href="https://ollama.com" target="_blank" rel="noreferrer noopener">
+                ollama.com
+              </a>
+            </li>
+            <li>
+              {t("setup.model.none.2")}
+              <CommandBox command="ollama pull qwen3:4b" />
+            </li>
+            <li>{t("setup.model.none.3")}</li>
+          </ol>
+        </details>
+      )}
+      <div className="two-col tight">
+        <Field label={t("models.url")} hint={t("models.url.hint")}>
+          <input
+            value={provider.base_url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="http://192.168.1.20:11434/v1"
+            spellCheck={false}
+          />
+        </Field>
+        <Field label={t("setup.model.model")}>
+          {models && models.length > 0 ? (
+            <select value={provider.model} onChange={(e) => setModel(e.target.value)}>
+              <option value="">—</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m === current?.recommended ? `${m} · ${t("models.recommended")}` : m}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={provider.model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder={t("setup.model.model.hint")}
+              spellCheck={false}
+            />
+          )}
+        </Field>
+      </div>
+      {remote && <p className="notice small">{t("models.remote.privacy")}</p>}
+      <details className="advanced">
+        <summary>{t("models.server.key")}</summary>
+        <div className="advanced-body">
+          <ServerKey configured={keyed} value={serverKey} onChange={setServerKey} onSaved={() => void loadKeys()} />
+        </div>
+      </details>
+      <ConnectionTest
+        target="local"
+        baseUrl={provider.base_url}
+        model={provider.model}
+        serverKey={serverKey}
+        onModels={(list) => {
+          setTested(list);
+          if (!provider.model && list[0]) setModel(list[0]);
+        }}
+      />
+    </>
   );
 }
 
@@ -345,6 +370,7 @@ function CloudModel({ config, setConfig }: { config: AppConfig; setConfig: SetCo
         </a>
       )}
       {error && <p className="error-text small">{error}</p>}
+      {keys[cloud] && <ConnectionTest target={cloud} model={config.cloud[cloud].model} />}
     </>
   );
 }
@@ -443,6 +469,7 @@ function ManagedModel({
       )}
       <EngineDownloads live={live} engine={engine} />
       {error && <p className="error-text small">{error}</p>}
+      {applied && !missing && <ConnectionTest target="local" />}
     </>
   );
 }
@@ -513,10 +540,6 @@ function ModelStep({
       {mode === "managed" && <ManagedModel config={config} save={save} reload={reload} live={live} />}
       {mode === "external" && <LocalModel config={config} setConfig={setConfig} />}
       {mode === "cloud" && <CloudModel config={config} setConfig={setConfig} />}
-      {/* Con el motor sin instalar, probar solo probaría el modelo de antes. */}
-      {mode && (mode !== "managed" || config.provider.kind === "managed") && (
-        <ModelTest key={mode} config={config} save={save} />
-      )}
     </>
   );
 }

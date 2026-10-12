@@ -13,6 +13,9 @@ log = logging.getLogger(__name__)
 SERVICE = "game-pal"
 CloudName = Literal["openai", "anthropic", "openrouter"]
 CLOUDS: tuple[CloudName, ...] = ("openai", "anthropic", "openrouter")
+# Además de las nubes, la clave del servidor de modelos del jugador, si la pide (vLLM, LM Studio con clave…).
+SecretName = Literal["openai", "anthropic", "openrouter", "server"]
+KEYS: tuple[SecretName, ...] = (*CLOUDS, "server")
 
 
 class SecretStoreError(RuntimeError):
@@ -22,7 +25,7 @@ class SecretStoreError(RuntimeError):
 class SecretStore:
     """Envoltorio fino sobre keyring. Las pruebas usan MemorySecretStore."""
 
-    def get(self, name: CloudName) -> str | None:
+    def get(self, name: SecretName) -> str | None:
         try:
             import keyring
 
@@ -31,7 +34,7 @@ class SecretStore:
             log.warning("No se pudo leer la clave de %s: %s", name, type(exc).__name__)
             return None
 
-    def set(self, name: CloudName, value: str) -> None:
+    def set(self, name: SecretName, value: str) -> None:
         try:
             import keyring
 
@@ -42,7 +45,7 @@ class SecretStore:
                 "un llavero compatible con Secret Service (GNOME Keyring o KWallet)."
             ) from exc
 
-    def delete(self, name: CloudName) -> None:
+    def delete(self, name: SecretName) -> None:
         try:
             import keyring
 
@@ -51,18 +54,18 @@ class SecretStore:
             log.debug("No había clave de %s que borrar: %s", name, type(exc).__name__)
 
     def configured(self) -> dict[str, bool]:
-        return {name: bool(self.get(name)) for name in CLOUDS}
+        return {name: bool(self.get(name)) for name in KEYS}
 
 
 class MemorySecretStore(SecretStore):
     def __init__(self) -> None:
         self._values: dict[str, str] = {}
 
-    def get(self, name: CloudName) -> str | None:
+    def get(self, name: SecretName) -> str | None:
         return self._values.get(name)
 
-    def set(self, name: CloudName, value: str) -> None:
+    def set(self, name: SecretName, value: str) -> None:
         self._values[name] = value
 
-    def delete(self, name: CloudName) -> None:
+    def delete(self, name: SecretName) -> None:
         self._values.pop(name, None)

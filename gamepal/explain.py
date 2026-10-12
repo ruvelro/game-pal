@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from gamepal.checks import CLOUD_NAMES, server_name
+from gamepal.checks import CLOUD_NAMES, server_name, server_reply
 from gamepal.config import AppConfig
 from gamepal.providers.base import EMPTY_ANSWER, OUT_OF_ROOM
 
@@ -69,10 +69,15 @@ def explain_error(message: str, config: AppConfig) -> str:
             pull = f" (en Ollama: ollama pull {model})" if server == "Ollama" else ""
             return f"{server} no tiene el modelo «{model}». Descárgalo{pull} o elige otro {_MODELS_PAGE}."
         if status is not None and status >= 500:
+            reply = server_reply(message)
+            said = f": «{reply[1]}»" if reply and reply[1] != f"error {status}" else ""
             return (
-                f"{server} ha fallado al responder (error {status}). Puede que el modelo no quepa en memoria "
-                f"(prueba uno más pequeño {_MODELS_PAGE}) o que otro programa esté usando el puerto de {url}."
+                f"{server} ha fallado al responder (error {status}{said}). Puede que el modelo no quepa en memoria "
+                f"(prueba uno más pequeño {_MODELS_PAGE}), que el servidor use los modelos de otro equipo y ese "
+                f"equipo no esté conectado, o que otro programa esté usando el puerto de {url}."
             )
+        if status in (401, 403):
+            return f"{server} pide una clave. Escríbela {_MODELS_PAGE}, junto a la dirección del servidor."
 
     cloud = CLOUD_NAMES.get(who, "")
     if cloud:

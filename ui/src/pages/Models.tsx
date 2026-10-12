@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AppConfig, type LocalServer } from "../api";
+import { api, isRemote, type AppConfig, type LocalServer } from "../api";
 import { EnginePanel, useEngine } from "../components/Engine";
+import { ConnectionTest, ServerKey } from "../components/ConnectionTest";
 import { Advanced, Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { t, type Key } from "../i18n";
 import { useConfig, type LiveState } from "../store";
@@ -159,6 +160,7 @@ function CloudCard({
           </Advanced>
         </>
       )}
+      {configured && <ConnectionTest target={id} model={cloud.model} onModels={setModels} />}
       {error && <p className="error-text small">{error}</p>}
     </Card>
   );
@@ -300,7 +302,13 @@ function GenerationCard({ config, setConfig }: { config: AppConfig; setConfig: (
 
 export function Models({ live }: { live: LiveState }) {
   const { config, setConfig, save, error, saved, saving } = useConfig();
-  const [keys, setKeys] = useState<Record<Cloud, boolean>>({ openai: false, anthropic: false, openrouter: false });
+  const [keys, setKeys] = useState<Record<Cloud | "server", boolean>>({
+    openai: false,
+    anthropic: false,
+    openrouter: false,
+    server: false,
+  });
+  const [serverKey, setServerKey] = useState("");
   const [summary, setSummary] = useState("");
   const [localModels, setLocalModels] = useState<string[]>();
   const [localError, setLocalError] = useState<string | null>(null);
@@ -308,7 +316,7 @@ export function Models({ live }: { live: LiveState }) {
 
   const loadProviders = useCallback(() => {
     api
-      .get<{ keys: Record<Cloud, boolean>; summary: string }>("/api/providers")
+      .get<{ keys: Record<Cloud | "server", boolean>; summary: string }>("/api/providers")
       .then((data) => {
         setKeys(data.keys);
         setSummary(data.summary);
@@ -486,7 +494,10 @@ export function Models({ live }: { live: LiveState }) {
           </button>
         </div>
         {provider.kind === "managed" ? (
-          <ManagedModels config={config} setConfig={setConfig} live={live} />
+          <>
+            <ManagedModels config={config} setConfig={setConfig} live={live} />
+            <ConnectionTest target="local" />
+          </>
         ) : (
           <>
         <p className="muted small">{t("models.subtitle.local")}</p>
@@ -509,6 +520,18 @@ export function Models({ live }: { live: LiveState }) {
         {servers && servers.length > 0 && !current && !localModels && (
           <p className="muted small">{t("models.notresponding")}</p>
         )}
+        <Field label={t("models.url")} hint={t("models.url.hint")}>
+          <div className="row">
+            <input
+              value={provider.base_url}
+              onChange={(e) => updateLocal({ base_url: e.target.value })}
+              placeholder="http://192.168.1.20:11434/v1"
+              spellCheck={false}
+            />
+            <button onClick={() => void findLocal()}>{t("models.load")}</button>
+          </div>
+        </Field>
+        {isRemote(provider.base_url) && <p className="notice small">{t("models.remote.privacy")}</p>}
         <Field label={t("models.role.reasoning")}>
           <ModelPicker
             value={provider.model}
@@ -519,17 +542,15 @@ export function Models({ live }: { live: LiveState }) {
         </Field>
         {shownModels?.length === 0 && <p className="muted">{t("models.none")}</p>}
         {localError && <p className="error-text">{localError}</p>}
+        <ServerKey configured={Boolean(keys.server)} value={serverKey} onChange={setServerKey} onSaved={loadProviders} />
+        <ConnectionTest
+          target="local"
+          baseUrl={provider.base_url}
+          model={provider.model}
+          serverKey={serverKey}
+          onModels={setLocalModels}
+        />
         <Advanced>
-          <Field label={t("models.url")}>
-            <div className="row">
-              <input
-                value={provider.base_url}
-                onChange={(e) => updateLocal({ base_url: e.target.value })}
-                spellCheck={false}
-              />
-              <button onClick={() => void findLocal()}>{t("models.load")}</button>
-            </div>
-          </Field>
           <Field label={t("models.fast")} hint={t("models.fast.hint")}>
             <ModelPicker
               value={provider.fast_model}

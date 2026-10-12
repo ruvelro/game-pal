@@ -86,6 +86,7 @@ SETTINGS_PANES: dict[str, dict[str, str]] = {
     "darwin": {
         "screen-recording": _MAC_PRIVACY + "ScreenCapture",
         "accessibility": _MAC_PRIVACY + "Accessibility",
+        "input-monitoring": _MAC_PRIVACY + "ListenEvent",
         "microphone": _MAC_PRIVACY + "Microphone",
     },
     "win32": {"microphone": "ms-settings:privacy-microphone"},

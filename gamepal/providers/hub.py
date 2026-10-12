@@ -77,7 +77,12 @@ class ProviderHub:
             return LocalOpenAIProvider(
                 url, cfg.provider.model, api_key=key, timeout=max(cfg.provider.timeout_seconds, 180)
             )
-        return LocalOpenAIProvider(cfg.provider.base_url, cfg.provider.model, timeout=cfg.provider.timeout_seconds)
+        return LocalOpenAIProvider(
+            cfg.provider.base_url,
+            cfg.provider.model,
+            api_key=self.secrets.get("server"),
+            timeout=cfg.provider.timeout_seconds,
+        )
 
     async def aclose(self) -> None:
         for client in self._clients.values():

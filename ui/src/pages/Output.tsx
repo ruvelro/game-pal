@@ -1,5 +1,6 @@
 import { api, type AppConfig, type OutputKind } from "../api";
-import { Advanced, Card, Field } from "../components/ui";
+import { ComboInput } from "../components/ComboInput";
+import { Advanced, Card, Field, formatKey } from "../components/ui";
 import { t, type Key } from "../i18n";
 
 const KINDS: Array<[OutputKind, Key]> = [
@@ -31,6 +32,9 @@ export function OutputSections({
     });
   const preview = async () => {
     if (await save(config)) window.setTimeout(() => void api.post("/api/overlay/test"), 1200);
+  };
+  const openChat = async () => {
+    if (await save(config)) window.setTimeout(() => void api.post("/api/overlay/chat", { open: true }), 1200);
   };
 
   return (
@@ -69,6 +73,19 @@ export function OutputSections({
             </Field>
             <div>
               <button onClick={() => void preview()}>{t("output.overlay.test")}</button>
+            </div>
+            <Field
+              label={t("output.chat.key")}
+              hint={
+                output.overlay.chat_key
+                  ? t("output.chat.key.hint").replace("{key}", formatKey(output.overlay.chat_key))
+                  : t("output.chat.key.none")
+              }
+            >
+              <ComboInput value={output.overlay.chat_key} onChange={(chat_key) => overlay({ chat_key })} />
+            </Field>
+            <div>
+              <button onClick={() => void openChat()}>{t("output.chat.test")}</button>
             </div>
             <Advanced>
               <Field label={`${t("output.overlay.width")}: ${output.overlay.width} px`}>

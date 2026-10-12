@@ -72,6 +72,10 @@ async def test_requires_model() -> None:
         await _provider(httpx.MockTransport(lambda r: httpx.Response(200)), model="").chat([Message("user", "x")])
 
 
-def test_rejects_remote_hosts() -> None:
+def test_accepts_servers_on_the_home_network() -> None:
+    assert LocalOpenAIProvider("http://10.0.0.5:11434/v1").base_url == "http://10.0.0.5:11434/v1"
+
+
+def test_rejects_plain_http_outside_the_home_network() -> None:
     with pytest.raises(UnsafeUrlError):
-        LocalOpenAIProvider("http://10.0.0.5:11434/v1")
+        LocalOpenAIProvider("http://modelos.example.com/v1")

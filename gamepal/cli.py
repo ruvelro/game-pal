@@ -164,11 +164,12 @@ async def _serve(
 ) -> None:
     import uvicorn
 
+    from gamepal import permissions
     from gamepal.daemon import Daemon
     from gamepal.gui_server import create_app
     from gamepal.security import new_token
 
-    daemon = Daemon(paths)
+    daemon = Daemon(paths, permissions=permissions.request)
     port = _free_port(daemon.config.gui.port)
     token = new_token()
     vite: subprocess.Popen[bytes] | None = None

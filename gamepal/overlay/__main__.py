@@ -8,16 +8,25 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from typing import Protocol
 
 from gamepal.overlay.client import OverlayClient
-from gamepal.overlay.model import Rect, View
+from gamepal.overlay.model import ChatView, Rect, View
 
 log = logging.getLogger("gamepal.overlay")
 
 
 class Backend(Protocol):
     def render(self, view: View | None) -> None: ...
+
+    def render_chat(self, chat: ChatView | None) -> None:
+        """El chat sobre el juego: se muestra con el campo listo para escribir, o se oculta con None."""
+        ...
+
+    def bind_chat(self, submit: Callable[[str], None], close: Callable[[], None]) -> None:
+        """Qué hacer al pulsar Intro (enviar lo escrito) y Esc (cerrar el chat)."""
+        ...
 
     def screen(self) -> Rect | None:
         """Zona útil de la pantalla principal, con origen arriba a la izquierda. None: no se sabe."""
@@ -90,7 +99,8 @@ def main() -> int:
     except Exception:
         log.warning("No se pudo leer el tamaño de la pantalla", exc_info=True)
         screen = None
-    client = OverlayClient(http_url, ws_url, token, backend.render, screen)
+    client = OverlayClient(http_url, ws_url, token, backend.render, screen, backend.render_chat)
+    backend.bind_chat(client.submit, client.close_chat)
     worker = threading.Thread(target=client.run, name="overlay-client", daemon=True)
     worker.start()
     parent = os.environ.get("GAMEPAL_PARENT_PID", "")

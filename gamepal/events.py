@@ -146,6 +146,13 @@ class AnswerUpdate(Event):
     sources: list[dict[str, str]] = Field(default_factory=list)
 
 
+class ChatToggled(Event):
+    """Abrir o cerrar el chat sobre el juego. Sin `open`, lo alterna (el atajo de teclado)."""
+
+    topic: ClassVar[str] = "overlay.chat"
+    open: bool | None = None
+
+
 class SpeakingChanged(Event):
     topic: ClassVar[str] = "voice.speaking"
     speaking: bool

@@ -7,9 +7,9 @@ comprobación dice en lenguaje llano qué pasa y, si algo falla, qué hacer, con
 from __future__ import annotations
 
 import asyncio
-import ctypes
 import importlib.util
 import os
+import re
 import sys
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal
@@ -22,9 +22,11 @@ from gamepal import ui_build
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, WindowInfo, create_backend, match_window
 from gamepal.config import AppConfig, OcrBackendName, load_config, rapidocr_available
 from gamepal.paths import AppPaths, bundled_profiles_dir
+from gamepal.permissions import State
+from gamepal.permissions import state as permission_state
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import LocalOpenAIProvider, ProviderError
-from gamepal.security import validate_local_endpoint
+from gamepal.security import is_loopback_host, validate_model_server
 from gamepal.system import can_open_settings
 from gamepal.voice.audio import list_devices
 
@@ -85,16 +87,13 @@ def screen_capture_allowed() -> bool | None:
         return None
 
 
-def accessibility_trusted() -> bool | None:
-    """En macOS, si la app puede escuchar el teclado para los atajos globales."""
-    if sys.platform != "darwin":
-        return None
-    try:
-        lib = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
-        lib.AXIsProcessTrusted.restype = ctypes.c_bool
-        return bool(lib.AXIsProcessTrusted())
-    except (OSError, AttributeError):
-        return None
+def input_state() -> State:
+    """Si el sistema deja escuchar el teclado para los atajos globales (solo macOS lo limita)."""
+    return permission_state("input")
+
+
+def microphone_state() -> State:
+    return permission_state("microphone")
 
 
 def _wayland() -> bool:
@@ -284,8 +283,21 @@ def check_ocr(config: AppConfig, ready: str | None, error: str | None) -> Check:
     return Check(id="ocr", title=title, state="ok", detail=ready or backend)
 
 
+def _origin(url: str) -> tuple[str, int | None]:
+    """Equipo y puerto de una dirección; los nombres de este equipo cuentan como uno solo."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    return ("127.0.0.1" if is_loopback_host(host) else host), parts.port
+
+
+def same_server(a: str, b: str) -> bool:
+    return _origin(a) == _origin(b)
+
+
 def server_name(url: str) -> str:
-    port = urlsplit(url).port
+    host, port = _origin(url)
+    if host != "127.0.0.1":
+        return f"el servidor de {host}" if host else "el servidor"
     for name, known in KNOWN_SERVERS:
         if urlsplit(known).port == port:
             return name
@@ -310,9 +322,9 @@ IDENTITIES: tuple[tuple[str, str, Callable[[Any], bool]], ...] = (
 
 
 async def identify(url: str, transport: httpx.AsyncBaseTransport | None = None) -> str:
-    """Qué programa responde en esa dirección local, preguntándoselo."""
+    """Qué programa responde en esa dirección, preguntándoselo."""
     try:
-        validate_local_endpoint(url)
+        validate_model_server(url)
     except ValueError:
         return server_name(url)
     parts = urlsplit(url)
@@ -325,16 +337,45 @@ async def identify(url: str, transport: httpx.AsyncBaseTransport | None = None) 
                     return name
             except (httpx.HTTPError, ValueError):
                 continue
-    return f"el servidor del puerto {parts.port}"
+    host, port = _origin(url)
+    return f"el servidor del puerto {port}" if host == "127.0.0.1" else server_name(url)
 
 
-async def probe_local(url: str) -> tuple[str, ...]:
-    """Los modelos que ofrece un servidor local compatible con OpenAI."""
-    provider = LocalOpenAIProvider(url, timeout=PROBE_TIMEOUT_S)
+async def probe_local(url: str, api_key: str | None = None) -> tuple[str, ...]:
+    """Los modelos que ofrece un servidor compatible con OpenAI, en este equipo o en otro de la red."""
+    provider = LocalOpenAIProvider(url, api_key=api_key, timeout=PROBE_TIMEOUT_S)
     try:
         return (await provider.capabilities()).models
     finally:
         await provider.aclose()
+
+
+_REPLY = re.compile(r"respondió (\d{3}): ?(.*)", re.DOTALL)
+
+
+def server_reply(error: str) -> tuple[int, str] | None:
+    """Código y mensaje con que contestó un servidor, sacados de un ProviderError. None: no contestó."""
+    match = _REPLY.search(error)
+    if match is None:
+        return None
+    return int(match.group(1)), match.group(2).strip() or f"error {match.group(1)}"
+
+
+class KeyedProbe:
+    """probe_local que, al preguntar al servidor configurado, le da su clave si el jugador guardó una."""
+
+    def __init__(self, key: Callable[[], str | None], url: Callable[[], str]) -> None:
+        self._key = key
+        self._url = url
+
+    async def __call__(self, url: str) -> tuple[str, ...]:
+        key = await asyncio.to_thread(self._key) if same_server(url, self._url()) else None
+        return await probe_local(url, key)
+
+
+def real_probe(probe: Probe) -> bool:
+    """Si la sonda habla con servidores de verdad (los tests usan una falsa)."""
+    return probe is probe_local or isinstance(probe, KeyedProbe)
 
 
 async def discover_servers(
@@ -345,9 +386,8 @@ async def discover_servers(
     Prueba los conocidos y, con `include`, también una dirección propia del jugador.
     """
     probe = probe or probe_local
-    skip_port = urlsplit(skip).port if skip else None
-    candidates = [(name, url) for name, url in KNOWN_SERVERS if urlsplit(url).port != skip_port]
-    if include and all(urlsplit(url).port != urlsplit(include).port for _, url in KNOWN_SERVERS):
+    candidates = [(name, url) for name, url in KNOWN_SERVERS if not (skip and same_server(url, skip))]
+    if include and not any(same_server(url, include) for _, url in KNOWN_SERVERS):
         candidates.insert(0, (server_name(include), include))
 
     async def one(url: str) -> tuple[str, ...] | None:
@@ -358,7 +398,7 @@ async def discover_servers(
 
     found = await asyncio.gather(*(one(url) for _, url in candidates))
     servers = [(name, url, models) for (name, url), models in zip(candidates, found, strict=True) if models is not None]
-    if probe is probe_local:
+    if real_probe(probe):
         # Con servidores de verdad, se les pregunta qué son: en el puerto de LM Studio puede haber otro programa.
         names = await asyncio.gather(*(identify(url) for _, url, _ in servers))
         servers = [(name, url, models) for name, (_, url, models) in zip(names, servers, strict=True)]
@@ -397,7 +437,7 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
     name = server_name(url)
     try:
         models = await probe(url)
-        if probe is probe_local:
+        if real_probe(probe):
             name = await identify(url)
     except (ProviderError, ValueError) as exc:
         others = await discover_servers(probe, skip=url)
@@ -411,16 +451,40 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
                 fix=f"Hay otro servidor en marcha: {names}. "
                 + (AUTO_PICK if not config.provider.model else "Elígelo en la página Modelos."),
             )
-        if "respondió" in str(exc):
-            # Algo escucha en ese puerto pero no es un servidor de modelos que funcione.
+        reply = server_reply(str(exc))
+        if reply is not None:
+            status, message = reply
+            if status in (401, 403):
+                return Check(
+                    id="model",
+                    title=title,
+                    state="error",
+                    detail=f"{name} pide una clave ({message})",
+                    fix="Escribe la clave del servidor en la página Modelos, junto a su dirección.",
+                )
+            # Algo contesta en esa dirección, pero con un error: otro programa, o un servidor sin modelo listo.
             return Check(
                 id="model",
                 title=title,
                 state="error",
-                detail=f"En {url} responde otro programa, no {name}",
+                detail=f"{url} responde con un error: {message}",
                 fix=(
-                    f"Algo ocupa el puerto de {name} y contesta con error. Si tienes {name}, cierra ese programa "
-                    f"y vuelve a abrir {name}; si no, elige otro servidor en la página Modelos."
+                    "Si es tu servidor, comprueba que tiene un modelo cargado y, si usa los modelos de otro "
+                    "equipo, que ese equipo está encendido y conectado. Si no, puede que otro programa ocupe "
+                    "ese puerto: elige otro servidor en la página Modelos y pruébalo con «Probar conexión»."
+                ),
+            )
+        if not is_loopback_host(urlsplit(url).hostname):
+            port = urlsplit(url).port or (443 if url.startswith("https") else 80)
+            return Check(
+                id="model",
+                title=title,
+                state="error",
+                detail=f"No consigo conectar con {url}",
+                fix=(
+                    "Comprueba que ese equipo está encendido y en la misma red, que el servidor acepta "
+                    "conexiones de otros equipos (Ollama: OLLAMA_HOST=0.0.0.0; LM Studio: «Serve on Local "
+                    f"Network») y que su cortafuegos deja pasar el puerto {port}."
                 ),
             )
         if name == "Ollama":
@@ -537,6 +601,22 @@ def check_voice(config: AppConfig, devices: Callable[[], dict[str, list[str]]] |
             detail="No encuentro ningún micrófono",
             fix="Conecta uno o elige otro en la página Voz.",
         )
+    if voice.enabled and microphone_state() == "denied":
+        where = (
+            _mac_privacy("Micrófono")
+            if sys.platform == "darwin"
+            else "Abre Configuración › Privacidad y seguridad › Micrófono y deja que las aplicaciones de escritorio "
+            "lo usen; luego vuelve a arrancar game-pal."
+        )
+        return Check(
+            id="voice",
+            title=title,
+            state="error",
+            required=False,
+            detail="El sistema no deja usar el micrófono",
+            fix=where,
+            settings="microphone" if can_open_settings("microphone") else "",
+        )
     detail = f"Micrófono: {voice.input_device or 'el predeterminado'}" if voice.enabled else "Solo respuestas habladas"
     fix = _mac_privacy("Micrófono") if voice.enabled and sys.platform == "darwin" else ""
     if fix:
@@ -554,17 +634,20 @@ def check_hotkeys(config: AppConfig) -> Check:
         keys.append(f"{ptt.key} para hablar")
     if proactive.enabled and proactive.mute_key:
         keys.append(f"{proactive.mute_key} para silenciar avisos")
+    overlay = config.output.overlay
+    if overlay.enabled and overlay.chat_key:
+        keys.append(f"{overlay.chat_key} para el chat")
     if not keys:
         return Check(id="hotkeys", title=title, state="off", required=False, detail="Ninguno activo")
-    if accessibility_trusted() is False:
+    if input_state() in ("denied", "undetermined"):
         return Check(
             id="hotkeys",
             title=title,
             state="warn",
             required=False,
             detail="macOS no deja escuchar el teclado",
-            fix=_mac_privacy("Accesibilidad (y Monitorización de entrada)"),
-            settings="accessibility",
+            fix=_mac_privacy("Monitorización de entrada"),
+            settings="input-monitoring",
         )
     if _wayland():
         return Check(
@@ -627,7 +710,8 @@ async def doctor_checks(paths: AppPaths, *, probe: Probe | None = None) -> list[
     else:
         secrets = SecretStore()
         has_key = lambda name: bool(secrets.get(name))  # type: ignore[arg-type]  # noqa: E731
-        checks.append(await check_models(config, has_key, probe))
+        keyed = KeyedProbe(lambda: secrets.get("server"), lambda: config.provider.base_url)
+        checks.append(await check_models(config, has_key, probe or keyed))
     checks.append(check_voice(config))
     checks.append(check_hotkeys(config))
     return checks

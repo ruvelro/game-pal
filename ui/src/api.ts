@@ -325,6 +325,7 @@ export interface OutputConfig {
     opacity: number;
     font_scale: number;
     linger_seconds: number;
+    chat_key: string;
   };
   proactive: { enabled: boolean; mute_key: string; min_interval_seconds: number };
 }
@@ -400,6 +401,24 @@ export interface LocalServer {
   url: string;
   models: string[];
   recommended: string | null;
+}
+
+export type ConnectionStepId = "address" | "connect" | "server" | "model" | "reply";
+
+export interface ConnectionStep {
+  id: ConnectionStepId;
+  ok: boolean;
+  detail: string;
+  fix: string;
+  ms: number | null;
+}
+
+export interface ConnectionReport {
+  ok: boolean;
+  target: string;
+  model: string;
+  models: string[];
+  steps: ConnectionStep[];
 }
 
 export interface WindowSummary {
@@ -503,3 +522,13 @@ export interface EngineStatus {
 
 export const formatBytes = (bytes: number) =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+
+/** Si la dirección apunta a otro equipo: lo que preguntes y lo que se lee en pantalla viaja hasta él. */
+export function isRemote(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    return !["localhost", "127.0.0.1", "::1"].includes(host) && !host.startsWith("127.");
+  } catch {
+    return false;
+  }
+}

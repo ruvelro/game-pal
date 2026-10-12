@@ -11,7 +11,7 @@ from pathlib import Path
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig
 from gamepal.downloads import MB, FolderProgress, describe
-from gamepal.events import StatusChanged
+from gamepal.events import ChatToggled, StatusChanged
 from gamepal.perception.vocabulary import Vocabulary
 from gamepal.voice.audio import Microphone, Speaker, tone
 from gamepal.voice.controller import VoiceController
@@ -200,6 +200,10 @@ class VoiceService:
                     )  # fmt: skip
 
                 hotkeys.bind(proactive.mute_key, bind_loop(loop, toggle))
+                bound = True
+            overlay = config.output.overlay
+            if overlay.enabled and overlay.chat_key:
+                hotkeys.bind(overlay.chat_key, bind_loop(loop, lambda: self._bus.publish(ChatToggled())))
                 bound = True
             if bound:
                 hotkeys.start()
