@@ -39,6 +39,10 @@ STOP_MAX_SECONDS = 2.5
 EARLY_MIN_SPEECH = 0.6
 EARLY_PAUSE = 0.25
 EARLY_AFTER = 2.0
+# Silencio que cierra una frase: corto para la frase clave, más largo para la pregunta, que se piensa al
+# hablar («¿podemos con…» se quedaba a medias con 0,7 s).
+PHRASE_PAUSE = 0.7
+QUESTION_PAUSE = 1.1
 StateName = Literal["off", "idle", "armed", "recording", "transcribing", "error"]
 
 
@@ -78,9 +82,15 @@ class VoiceController:
         self._armed_until = 0.0
         self._ptt = False
         self._work: asyncio.Queue[tuple[Utterance, str, int]] = asyncio.Queue(maxsize=4)
-        # Frase en curso ya comprobada al vuelo, y la última en la que se oyó la frase clave así.
+        # Frase en curso ya comprobada al vuelo (y cuánto audio se miró), y el resultado de esa comprobación.
         self._early_checked = 0
+        self._early_seconds = 0.0
         self._early_hit = 0
+        self._early_miss = 0
+        # Si en lo oído al vuelo ya iba algo de pregunta detrás de la frase clave.
+        self._early_rest = False
+        # Una pregunta que Whisper dejó a medias («¿podemos con…»): se completa con la frase siguiente.
+        self._partial = ""
         self.state: StateName = "idle"
 
     def _set(self, state: StateName, detail: str = "") -> None:
@@ -138,7 +148,9 @@ class VoiceController:
         ):
             return
         self._early_checked = seg.segment
-        self._enqueue(Utterance(seg.snapshot(WAKE_HEAD_SECONDS)), "early", seg.segment)
+        head = seg.snapshot(WAKE_HEAD_SECONDS)
+        self._early_seconds = len(head) / 16000
+        self._enqueue(Utterance(head), "early", seg.segment)
 
     async def run(self) -> None:
         worker = asyncio.create_task(self._transcriber())
@@ -148,6 +160,7 @@ class VoiceController:
                 frame = await self._frames.get()
                 probability = self._vad.probability(frame)
                 segment = self._segmenter.segment
+                self._segmenter.set_hangover(QUESTION_PAUSE if self.state == "armed" else PHRASE_PAUSE)
                 utterance = self._segmenter.feed(frame, probability)
                 if utterance is None:
                     self._check_early()
@@ -202,17 +215,31 @@ class VoiceController:
             text = await self._transcribe(utterance.audio, self._hotwords())
             self._set("idle")
             log.info("Pregunta transcrita en %.1f s: %r", time.perf_counter() - started, text)
-            self._ask(text, "push_to_talk" if kind == "push_to_talk" else "voice")
+            self._question(text, "push_to_talk" if kind == "push_to_talk" else "voice")
             return
         if kind == "wake_full":
             # El aviso ya sonó al detectar la frase clave al vuelo.
             await self._wake_and_question(utterance, cued=True)
             return
 
+        if kind == "wake" and segment in (self._early_hit, self._early_miss):
+            # Ya se miró al vuelo. Si lo que quedó por oír es poco, no se vuelve a transcribir: repetirlo
+            # retrasaba la pregunta que venía detrás hasta 2 s.
+            short = utterance.seconds <= self._early_seconds + 0.5
+            if segment == self._early_hit:
+                # Solo se ahorra si al vuelo se oyó la frase clave sola: si ya asomaba la pregunta, va entera.
+                if self._early_rest or not short:
+                    await self._wake_and_question(utterance, cued=True)
+                return
+            if short:
+                return
+
         # Las frases clave como pista ayudan a que Whisper las escriba bien.
         hint = ", ".join(self._wake.phrases + self._stop.phrases)
-        head = utterance.audio[: int(WAKE_HEAD_SECONDS * 16000)]
-        text = await self._transcribe(head, hint, wake=True)
+        # Para la frase clave basta el principio; para cortarle mientras habla hace falta todo, porque la
+        # orden del jugador llega al final, mezclada con su propia voz.
+        audio = utterance.audio if kind == "interrupt" else utterance.audio[: int(WAKE_HEAD_SECONDS * 16000)]
+        text = await self._transcribe(audio, hint, wake=True)
         if not text:
             return
         hit = self._wake.match_start(text)
@@ -221,12 +248,18 @@ class VoiceController:
                 # Aún se está hablando: se avisa ya y el resto de la frase será la pregunta.
                 log.info("Frase clave detectada al vuelo: %r", text)
                 self._early_hit = segment
+                self._early_rest = bool(hit.rest.split())
                 self._arm()
+            else:
+                self._early_miss = segment
             return
-        stop = self._stop.whole(text) if utterance.seconds <= STOP_MAX_SECONDS else None
-        if kind == "interrupt" and (hit is not None or stop):
-            self._bus.publish(SpeechStopped(reason="voice"))
-            log.info("Respuesta interrumpida por voz: %r", text)
+        if kind == "interrupt":
+            log.info("Oído mientras hablaba: %r", text)
+            short = utterance.seconds <= STOP_MAX_SECONDS
+            stop = (self._stop.whole(text) if short else None) or self._stop.ends(text)
+            if hit is not None or stop:
+                self._bus.publish(SpeechStopped(reason="voice"))
+                log.info("Respuesta interrumpida por voz: %r", text)
         if hit is None:
             return
         log.info("Frase clave detectada: %r", text)
@@ -248,15 +281,31 @@ class VoiceController:
         if len(rest.split()) >= 2:
             self._set("idle")
             log.info("Pregunta transcrita en %.1f s: %r", time.perf_counter() - started, rest)
-            self._ask(rest, "voice")
+            self._question(rest, "voice")
             return
         # Solo la frase clave: se espera la pregunta en la frase siguiente.
         self._set("idle")
         self._arm(cue=not cued)
 
+    def _question(self, text: str, source: Literal["voice", "push_to_talk"]) -> None:
+        """Lo transcrito tras la frase clave: se pregunta, se espera el final o se descarta."""
+        text = f"{self._partial} {text.strip()}".strip() if self._partial else text.strip()
+        self._partial = ""
+        if text.endswith(("...", "…")) and len(text.split()) < 8:
+            # Whisper marca así lo que quedó a medias: se espera a que el jugador termine.
+            self._partial = text.rstrip(".… ")
+            log.info("Pregunta a medias, se espera el resto: %r", self._partial)
+            self._arm(cue=False)
+            return
+        self._ask(text, source)
+
     def _ask(self, text: str, source: Literal["voice", "push_to_talk"]) -> None:
         text = text.strip()
-        if len(text) < 2 or not any(ch.isalnum() for ch in text):
+        words = [word for word in text.split() if any(ch.isalnum() for ch in word)]
+        # Una sola palabra sin pregunta («Nada.», «Vale.») no es una pregunta: se oyó a alguien de pasada.
+        if not words or (len(words) == 1 and "?" not in text):
+            if text:
+                log.info("Se descarta, no parece una pregunta: %r", text)
             self._cue(False)
             return
         self._bus.publish(QuestionAsked(id=uuid.uuid4().hex[:12], text=text, source=source))

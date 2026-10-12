@@ -12,16 +12,24 @@ import logging
 import re
 from dataclasses import dataclass
 from html import unescape
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
+
+from rapidfuzz import process
+from rapidfuzz.distance import Levenshtein
 
 from gamepal.knowledge.extract import html_to_document
 from gamepal.knowledge.fetch import Fetcher, FetchError
+from gamepal.perception.text import normalize
 from gamepal.security import validate_remote_endpoint
 
 log = logging.getLogger(__name__)
 
 MAX_CANDIDATES = 50  # títulos por petición que admite la API de MediaWiki
 MAX_PAGES = 2
+# Índice de títulos para encontrar lo que Whisper escribe casi bien («árbules frutales», «minicaja de música»).
+MAX_INDEX_REQUESTS = 20
+FUZZY_MIN_SIMILARITY = 0.88
+FUZZY_MIN_CHARS = 8
 MAX_PAGE_CHARS = 1800
 RATE_PER_HOST = 4.0
 
@@ -32,6 +40,11 @@ class WikiPage:
     url: str
     text: str
     language: str
+
+
+def _key(title: str) -> str:
+    """Para comparar títulos: sin tildes, mayúsculas ni espacios («Mini caja de música» = «minicaja de musica»)."""
+    return normalize(title).replace(" ", "")
 
 
 def _bare_text(html: str) -> str:
@@ -72,6 +85,9 @@ class WikiLookup:
         self._titles: dict[tuple[str, str], tuple[str, str] | None] = {}
         self._pages: dict[tuple[str, str], WikiPage | None] = {}
         self._translations: dict[tuple[str, str], str | None] = {}
+        # Títulos de cada wiki, sin tildes ni espacios → título real. Se cargan una vez, en segundo plano.
+        self._index: dict[str, dict[str, str]] = {}
+        self._indexing: dict[str, asyncio.Task[dict[str, str]]] = {}
 
     async def aclose(self) -> None:
         await self._fetcher.aclose()
@@ -96,6 +112,15 @@ class WikiLookup:
                 chosen.append(hit)
             if len(chosen) >= MAX_PAGES:
                 break
+        if len(chosen) < MAX_PAGES and wikis:
+            # Lo que no está tal cual puede estar casi: se busca en el índice de títulos de la wiki del juego.
+            lang, api = wikis[0]
+            for name in sorted(names, key=len, reverse=True):
+                title = self._fuzzy(api, name)
+                if title is not None and all(title != other[2] for other in chosen):
+                    chosen.append((api, lang, title, self._url(api, title)))
+                if len(chosen) >= MAX_PAGES:
+                    break
         pages = await asyncio.gather(*(self._page(api, lang, title, url) for api, lang, title, url in chosen))
         found: list[WikiPage] = []
         for page in pages:
@@ -133,6 +158,59 @@ class WikiLookup:
                 same = title == alias.get(name, name)
                 self._translations[(language, name)] = local.get(title) if same else None
         return self._known(names, language)
+
+    async def prefetch(self, language: str) -> None:
+        """Carga el índice de títulos de la wiki del juego, para no esperarlo al preguntar."""
+        wikis = self._order(language)
+        if wikis:
+            await self._title_index(wikis[0][1])
+
+    async def _title_index(self, api: str) -> dict[str, str]:
+        if api in self._index:
+            return self._index[api]
+        if api not in self._indexing:
+            self._indexing[api] = asyncio.create_task(self._load_titles(api))
+        try:
+            self._index[api] = await self._indexing[api]
+        except FetchError as exc:
+            log.info("No se pudo cargar el índice de %s: %s", api, exc)
+            self._indexing.pop(api, None)
+            return {}
+        return self._index[api]
+
+    async def _load_titles(self, api: str) -> dict[str, str]:
+        titles: dict[str, str] = {}
+        params = {"action": "query", "list": "allpages", "apnamespace": "0", "aplimit": "500", "format": "json",
+                  "formatversion": "2"}  # fmt: skip
+        for _ in range(MAX_INDEX_REQUESTS):
+            data = await self._fetcher.get_json(f"{api}?{urlencode(params)}")
+            for page in (data.get("query", {}) if isinstance(data, dict) else {}).get("allpages", []):
+                titles.setdefault(_key(page["title"]), page["title"])
+            more = data.get("continue") if isinstance(data, dict) else None
+            if not isinstance(more, dict):
+                break
+            params.update({key: str(value) for key, value in more.items()})
+        log.info("Índice de la wiki cargado: %d títulos", len(titles))
+        return titles
+
+    def _fuzzy(self, api: str, name: str) -> str | None:
+        """El título más parecido a un nombre mal escrito. Sin índice cargado aún, lo pide y no espera."""
+        index = self._index.get(api)
+        if index is None:
+            if api not in self._indexing:
+                self._indexing[api] = asyncio.create_task(self._load_titles(api))
+            return None
+        key = _key(name)
+        if len(key) < FUZZY_MIN_CHARS:
+            return None
+        match = process.extractOne(
+            key, index.keys(), scorer=Levenshtein.normalized_similarity, score_cutoff=FUZZY_MIN_SIMILARITY
+        )
+        return index[match[0]] if match else None
+
+    @staticmethod
+    def _url(api: str, title: str) -> str:
+        return api.split("/mediawiki/")[0] + "/" + quote(title.replace(" ", "_"))
 
     def _known(self, names: list[str], language: str) -> dict[str, str]:
         return {n: local for n in names if (local := self._translations.get((language, n)))}

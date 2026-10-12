@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from rapidfuzz.distance import Levenshtein
@@ -63,7 +64,9 @@ class PhraseMatcher:
             anchor = target[-1]
             if len(target) < 2 or len(anchor) < 6:
                 continue
-            for index in range(min(3, len(words))):
+            # Delante tiene que haber algo («oye»): «compañero» a secas al empezar una frase es demasiado común
+            # («compañero, está listo» lo activó en una prueba).
+            for index in range(1, min(3, len(words))):
                 if Levenshtein.distance(anchor, words[index], score_cutoff=1) > 1:
                     continue
                 before = words[:index]
@@ -79,6 +82,24 @@ class PhraseMatcher:
         """
         words = [word for word in normalize(transcript).split() if word not in FILLERS]
         for phrase, target in self._phrases:
-            if words[: len(target)] == target and len(words) <= len(target) + extra:
+            if len(target) <= len(words) <= len(target) + extra and all(
+                _close(said, wanted) for said, wanted in zip(words, target, strict=False)
+            ):
                 return phrase
         return None
+
+    def ends(self, transcript: str) -> str | None:
+        """Una frase que es la última oración de lo dicho: «…para invierno. Para.».
+
+        Mientras game-pal habla, el micrófono oye su voz y la del jugador en una sola frase; la orden del jugador
+        llega al final y Whisper la separa con un punto. Ninguna respuesta acaba en «Para.» sin más.
+        """
+        sentences = [part for part in re.split(r"[.!?¡¿…]+", transcript) if normalize(part)]
+        return self.whole(sentences[-1]) if len(sentences) > 1 else None
+
+
+def _close(said: str, wanted: str) -> bool:
+    """La misma palabra, o casi si es larga: «parar» por «para», «gracia» por «gracias»."""
+    if len(wanted) < 4:
+        return said == wanted
+    return Levenshtein.distance(said, wanted, score_cutoff=1) <= 1

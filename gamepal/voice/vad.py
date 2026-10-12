@@ -115,6 +115,10 @@ class Segmenter:
         self._voiced = self._silence = 0
         self.active = self.forced = False
 
+    def set_hangover(self, seconds: float) -> None:
+        """Cuánto silencio cierra una frase. Al esperar una pregunta conviene más: se piensa al hablar."""
+        self._hang_frames = max(1, round(seconds / FRAME_SECONDS))
+
     @property
     def speech_seconds(self) -> float:
         return self._voiced * FRAME_SECONDS

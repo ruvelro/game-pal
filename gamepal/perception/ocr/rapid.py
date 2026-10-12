@@ -12,6 +12,8 @@ from gamepal.capture.base import RGBImage
 from gamepal.events import TextLine
 from gamepal.perception.ocr.base import normalized_box, reading_order
 
+OCR_THREADS = 2
+
 
 class RapidOcrEngine:
     name = "rapidocr"
@@ -21,7 +23,16 @@ class RapidOcrEngine:
 
         logging.getLogger("RapidOCR").setLevel(logging.ERROR)
         # El texto de los juegos va en horizontal: el clasificador de orientación solo añade latencia.
-        self._engine: Any = RapidOCR(params={"Global.log_level": "error", "Global.use_cls": False})
+        self._engine: Any = RapidOCR(
+            params={
+                "Global.log_level": "error",
+                "Global.use_cls": False,
+                # Por defecto usa todos los núcleos: con el juego en marcha dejaba sin CPU a la transcripción y a
+                # la voz. Con dos hilos lee igual de bien, algo más despacio.
+                "EngineConfig.onnxruntime.intra_op_num_threads": OCR_THREADS,
+                "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+            }
+        )
         self._min_confidence = min_confidence
         # ONNX Runtime admite llamadas concurrentes, pero el pipeline de RapidOCR guarda estado.
         self._lock = threading.Lock()
