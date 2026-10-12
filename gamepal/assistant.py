@@ -33,6 +33,8 @@ log = logging.getLogger(__name__)
 
 MAX_OCR_CHARS = 2500
 HISTORY_TURNS = 4
+# Al contestar a game-pal sin frase clave, la conversación que va con la pregunta.
+CONVERSATION_TURNS = 3
 # Cómo empieza una pregunta que sigue a la anterior («¿y cuánto cuesta?») y palabras que se refieren a lo ya dicho.
 FOLLOW_UP_STARTS = {"y", "e", "and", "pero", "but", "entonces", "then", "también", "tambien", "also"}
 FOLLOW_UP_WORDS = {"eso", "esa", "ese", "esos", "esas", "ello", "otra", "otro", "otras", "otros", "it", "that",
@@ -98,7 +100,8 @@ SCREENSHOT_QUALITY = 80
 # Preguntas sobre lo que se ve: con ellas va la captura (con PAIR, una captura nueva suma unos 2 s).
 _ABOUT_SCREEN = re.compile(
     r"\b(aqu[ií]|ah[ií]|est[oae]s?|es[oae]s?|pantalla|ves|veo|ver|hay|delante|alrededor|cerca|d[oó]nde estoy|"
-    r"qu[eé] hago|qu[eé] puedo hacer|qu[eé] me (recomiendas|aconsejas)|here|this|these|that|screen|see|around)\b",
+    r"qu[eé] hago|qu[eé] (puedo |tengo que )?hacer|qu[eé] me (recomiendas|aconsejas)|izquierda|derecha|arriba|"
+    r"abajo|here|this|these|that|screen|see|around)\b",
     re.IGNORECASE,
 )
 
@@ -480,10 +483,16 @@ class Assistant:
         route = await self._route(question.text)
         client: Provider = provider
         messages = [Message("system", self._system())]
-        # Las respuestas con datos solo llevan la conversación si la pregunta sigue a la anterior, y entonces
-        # solo el último turno; su pregunta también sirve para buscar los datos («¿y dónde se compra?»).
-        follow_up = is_follow_up(question.text)
-        history = list(self._history) if route == "quick" else list(self._history)[-1:] if follow_up else []
+        # La conversación va con la pregunta solo si la sigue: contesta a game-pal sin repetir la frase clave
+        # o parece una continuación («¿y dónde se compra?»). Una pregunta nueva va sin ella: el modelo copiaba
+        # los errores de las respuestas anteriores. Su pregunta también sirve para buscar los datos.
+        follow_up = question.follow_up or is_follow_up(question.text)
+        if route == "quick":
+            history = list(self._history)
+        elif question.follow_up:
+            history = list(self._history)[-CONVERSATION_TURNS:]
+        else:
+            history = list(self._history)[-1:] if follow_up else []
         for turn in history:
             messages += [Message("user", turn.question), Message("assistant", turn.answer)]
         search = f"{question.text}\n{history[-1].question}" if follow_up and history else question.text
@@ -502,8 +511,9 @@ class Assistant:
             knowledge, sources = self._knowledge_block(hits, pages)
             context = "\n\n".join(part for part in (self._context(screen, read), facts, knowledge) if part)
             text = f"{context}\n\n{question.text}" if context else question.text
-            # La captura, si la pregunta va de lo que se ve o si no hay ficha que la responda.
-            image, seer = await self._screenshot() if about_screen(question.text) or not sources else (None, None)
+            # La captura, solo si la pregunta va de lo que se ve: con PAIR añade 4-6 s antes de la primera palabra,
+            # y a «¿qué puedo pescar hoy?» no le sirve.
+            image, seer = await self._screenshot() if about_screen(question.text) else (None, None)
             if image is not None and seer is not None:
                 # Con la captura responde el modelo que ve: sabe dónde está el jugador aunque no haya texto.
                 client, model = seer, None

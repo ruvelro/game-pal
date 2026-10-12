@@ -91,6 +91,8 @@ class VoiceController:
         self._early_rest = False
         # Una pregunta que Whisper dejó a medias («¿podemos con…»): se completa con la frase siguiente.
         self._partial = ""
+        # Escuchando sin frase clave tras una respuesta: lo que se diga sigue la conversación.
+        self._following = False
         self.state: StateName = "idle"
 
     def _set(self, state: StateName, detail: str = "") -> None:
@@ -165,7 +167,10 @@ class VoiceController:
                 if utterance is None:
                     self._check_early()
                 if self.state == "armed" and time.monotonic() > self._armed_until and not self._segmenter.active:
-                    self._cue(False)
+                    # Si no se dijo nada tras una respuesta, se deja de escuchar sin pitido: no se pidió nada.
+                    if not self._following:
+                        self._cue(False)
+                    self._following = False
                     self._set("idle")
                 if utterance is None or utterance.forced:
                     continue
@@ -201,6 +206,19 @@ class VoiceController:
         log.debug("Transcripción de %.1f s en %.2f s: %r", len(audio) / 16000, time.perf_counter() - started, text)
         return text
 
+    def _near_miss(self, text: str) -> None:
+        """Lo que casi era la frase clave queda en el registro: sin ello no se sabe por qué no respondió."""
+        if self._wake.near(text):
+            log.info("Casi frase clave (no se activa): %r", text)
+
+    def follow_up(self, seconds: float) -> None:
+        """Tras una respuesta, escucha unos segundos sin frase clave para seguir la conversación."""
+        if seconds <= 0 or self.state != "idle" or self._ptt:
+            return
+        self._following = True
+        self._armed_until = time.monotonic() + seconds
+        self._set("armed", "follow_up")
+
     def _arm(self, cue: bool = True) -> None:
         self._armed_until = time.monotonic() + self._listen_seconds
         if self.state != "armed":
@@ -225,13 +243,14 @@ class VoiceController:
         if kind == "wake" and segment in (self._early_hit, self._early_miss):
             # Ya se miró al vuelo. Si lo que quedó por oír es poco, no se vuelve a transcribir: repetirlo
             # retrasaba la pregunta que venía detrás hasta 2 s.
-            short = utterance.seconds <= self._early_seconds + 0.5
             if segment == self._early_hit:
                 # Solo se ahorra si al vuelo se oyó la frase clave sola: si ya asomaba la pregunta, va entera.
-                if self._early_rest or not short:
+                if self._early_rest or utterance.seconds > self._early_seconds + 0.5:
                     await self._wake_and_question(utterance, cued=True)
                 return
-            if short:
+            # Si al vuelo no se oyó, solo se ahorra si ya se había oído todo: con «oye… compañero» la pausa
+            # cortaba la comprobación tras «oye», y lo que faltaba se perdía.
+            if utterance.seconds <= self._early_seconds + 0.15:
                 return
 
         # Las frases clave como pista ayudan a que Whisper las escriba bien.
@@ -252,6 +271,7 @@ class VoiceController:
                 self._arm()
             else:
                 self._early_miss = segment
+                self._near_miss(text)
             return
         if kind == "interrupt":
             log.info("Oído mientras hablaba: %r", text)
@@ -261,6 +281,7 @@ class VoiceController:
                 self._bus.publish(SpeechStopped(reason="voice"))
                 log.info("Respuesta interrumpida por voz: %r", text)
         if hit is None:
+            self._near_miss(text)
             return
         log.info("Frase clave detectada: %r", text)
         if len(hit.rest.split()) >= 2 or utterance.seconds > WAKE_HEAD_SECONDS:
@@ -289,6 +310,9 @@ class VoiceController:
 
     def _question(self, text: str, source: Literal["voice", "push_to_talk"]) -> None:
         """Lo transcrito tras la frase clave: se pregunta, se espera el final o se descarta."""
+        hit = self._wake.match_start(text)
+        if hit is not None and hit.rest:
+            text = hit.rest  # «oye compañero, …» al seguir la conversación: la frase clave sobra
         text = f"{self._partial} {text.strip()}".strip() if self._partial else text.strip()
         self._partial = ""
         if text.endswith(("...", "…")) and len(text.split()) < 8:
@@ -303,9 +327,12 @@ class VoiceController:
         text = text.strip()
         words = [word for word in text.split() if any(ch.isalnum() for ch in word)]
         # Una sola palabra sin pregunta («Nada.», «Vale.») no es una pregunta: se oyó a alguien de pasada.
-        if not words or (len(words) == 1 and "?" not in text):
+        # Salvo si se contesta a game-pal («¿Quieres que te ayude?» «Sí.»).
+        if not words or (len(words) == 1 and "?" not in text and not self._following):
+            self._following = False
             if text:
                 log.info("Se descarta, no parece una pregunta: %r", text)
             self._cue(False)
             return
-        self._bus.publish(QuestionAsked(id=uuid.uuid4().hex[:12], text=text, source=source))
+        follow_up, self._following = self._following, False
+        self._bus.publish(QuestionAsked(id=uuid.uuid4().hex[:12], text=text, source=source, follow_up=follow_up))

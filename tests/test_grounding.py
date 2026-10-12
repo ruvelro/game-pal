@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from gamepal.assistant import Assistant, is_follow_up, plain_text, question_terms
+from gamepal.assistant import Assistant, Turn, is_follow_up, plain_text, question_terms
 from gamepal.bus import EventBus
 from gamepal.checks import identify
 from gamepal.config import AppConfig, load_config
@@ -403,3 +403,18 @@ def test_crop_table_is_valid_json_friendly(stardew: LoadedProfile) -> None:
     parsnip = next(c for c in crops if c["names"]["en"] == "Parsnip")
     assert (parsnip["growth_days"], parsnip["names"]["es"]) == (4, "Chirivía")
     json.dumps(crops)  # solo datos simples
+
+
+async def test_answering_back_carries_the_conversation(stardew: LoadedProfile, reference: Reference) -> None:
+    # Contestar a game-pal sin frase clave («¿Quieres que te diga cuáles?» «Sí») sigue la conversación.
+    provider = Recorder("Chirivías y coliflores.")
+    assistant = Assistant(
+        EventBus(), config=lambda: AppConfig(), provider=lambda: provider, profile=lambda: stardew,
+        screen=lambda: None, read=lambda: None, reference=lambda: reference,
+    )  # fmt: skip
+    assistant._history.extend(
+        [Turn("¿Qué planto?", "Depende del día. ¿Quieres que te diga cuáles?"), Turn("¿Y cuánto tardan?", "4 días.")]
+    )
+    await assistant._answer_question(QuestionAsked(id="q", text="Sí, dímelos", source="voice", follow_up=True))
+    roles = [m.role for m in provider.calls[-1]]
+    assert roles == ["system", "user", "assistant", "user", "assistant", "user"]

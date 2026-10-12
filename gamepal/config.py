@@ -178,6 +178,9 @@ class VoiceConfig(_Model):
     stop_phrases: list[str] = Field(
         default_factory=lambda: ["gracias", "para", "calla", "cállate", "basta", "silencio", "thanks", "stop"]
     )
+    # Tras responder, sigue escuchando estos segundos sin frase clave, para seguir la conversación (0: no).
+    # Si la respuesta acaba en pregunta, unos segundos más.
+    follow_up_seconds: float = Field(default=6.0, ge=0, le=20)
     # Sensibilidad del detector de voz (probabilidad mínima de habla).
     vad_threshold: float = Field(default=0.5, ge=0.1, le=0.95)
 
