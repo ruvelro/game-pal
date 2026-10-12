@@ -4,6 +4,10 @@
 
 ### Para jugar
 
+- Conversación seguida: tras responder, sigue escuchando unos segundos sin frase clave (más si acaba preguntando), y lo que digas lleva la conversación anterior. Se ajusta en Voz › «follow_up_seconds».
+- Al reconocer el juego lo dice sobre él («He reconocido Stardew Valley. Para preguntarme, di «oye compañero»…»).
+- «Oye compañero» con una pausa en medio ya no se pierde, y lo que casi era la frase clave queda en el registro.
+- El modelo se precalienta también para la visión y lo reintenta si falla; la captura va solo con preguntas sobre lo que se ve.
 - Mira la pantalla al responder: si el modelo ve imágenes (como Qwen 3.6 en NVIDIA PAIR), se activa solo y las preguntas sobre lo que se ve («¿qué hago aquí?», «¿qué árboles son esos?») van con una captura.
 - Responde a lo que se pregunta: el estado de la partida guardada es contexto, no algo que resumir en cada respuesta.
 - Encuentra las fichas de la wiki aunque Whisper escriba el nombre casi bien («árbules frutales», «minicaja de música»).

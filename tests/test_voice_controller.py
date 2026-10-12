@@ -2,11 +2,13 @@
 
 import asyncio
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 
 from gamepal.bus import EventBus, Subscription
 from gamepal.events import Event, QuestionAsked, SpeechStopped
+from gamepal.perception.vocabulary import Vocabulary
 from gamepal.voice.controller import VoiceController
 from gamepal.voice.vad import FRAME, FRAME_SECONDS, Audio
 
@@ -163,3 +165,68 @@ async def test_question_heard_on_the_fly_is_not_lost_when_little_follows() -> No
         task.cancel()
     assert isinstance(question, QuestionAsked)
     assert question.text == "qué bendición me conviene?"
+
+
+async def test_after_an_answer_it_listens_without_the_wake_phrase() -> None:
+    bus = EventBus()
+    controller, cues, queue = make(bus, ScriptedStt(lambda s: "nada"), ScriptedStt(lambda s: "Sí."))
+    async with bus.subscribe({"assistant.question"}) as sub:
+        task = asyncio.create_task(controller.run())
+        await asyncio.sleep(0)
+        controller.follow_up(5)
+        assert controller.state == "armed"
+        for chunk in frames((VOICE, 0.6), (QUIET, 1.4)):
+            await queue.put(chunk)
+            await asyncio.sleep(0.001)
+        [answer] = await received(sub)
+        task.cancel()
+    assert isinstance(answer, QuestionAsked)
+    # Una palabra vale cuando se contesta a game-pal, y la pregunta va marcada para llevar la conversación.
+    assert answer.text == "Sí."
+    assert answer.follow_up
+    assert cues == []  # sin pitidos: se sigue la conversación
+
+
+async def test_follow_up_ends_quietly_when_nothing_is_said() -> None:
+    bus = EventBus()
+    controller, cues, queue = make(bus, ScriptedStt(lambda s: ""), ScriptedStt(lambda s: ""))
+    task = asyncio.create_task(controller.run())
+    await asyncio.sleep(0)
+    controller.follow_up(0.05)
+    await asyncio.sleep(0.1)
+    for chunk in frames((QUIET, 0.3)):
+        await queue.put(chunk)
+    await asyncio.sleep(0.05)
+    task.cancel()
+    assert controller.state == "idle"
+    assert cues == []  # no se pidió nada: no hay pitido de «cancelado»
+
+
+async def test_voice_service_listens_once_the_answer_has_been_spoken(tmp_path: Path) -> None:
+    from gamepal.events import AnswerUpdate, SpeakingChanged
+    from gamepal.voice.service import VoiceService
+
+    bus = EventBus()
+    service = VoiceService(bus, tmp_path, vocabulary=Vocabulary, toggle_proactive=lambda: False)
+    calls: list[float] = []
+
+    class Controller:
+        def follow_up(self, seconds: float) -> None:
+            calls.append(seconds)
+
+    class Speech:
+        speaking = True
+
+    service.controller = Controller()  # type: ignore[assignment]
+    service.speech = Speech()  # type: ignore[assignment]
+    task = asyncio.create_task(service._follow_ups(6))
+    await asyncio.sleep(0.01)
+    bus.publish(QuestionAsked(id="q", text="¿Qué planto?", source="voice"))
+    bus.publish(AnswerUpdate(id="q", kind="question", text="Chirivías. ¿Te digo dónde?", done=True,
+                             outputs=["voice"]))  # fmt: skip
+    await asyncio.sleep(0.01)
+    assert calls == []  # aún habla: si escuchara ya, se oiría a sí mismo
+    bus.publish(SpeakingChanged(speaking=False))
+    await asyncio.sleep(0.01)
+    assert calls == [9.0]  # acaba en pregunta: unos segundos más
+    task.cancel()

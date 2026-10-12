@@ -11,7 +11,7 @@ from pathlib import Path
 from gamepal.bus import EventBus
 from gamepal.config import AppConfig
 from gamepal.downloads import MB, FolderProgress, describe
-from gamepal.events import ChatToggled, StatusChanged
+from gamepal.events import AnswerUpdate, ChatToggled, QuestionAsked, SpeakingChanged, SpeechStopped, StatusChanged
 from gamepal.perception.vocabulary import Vocabulary
 from gamepal.voice.audio import Microphone, Speaker, tone
 from gamepal.voice.controller import VoiceController
@@ -23,6 +23,8 @@ from gamepal.voice.tts import PiperTts, SystemTts, Tts, espeak_data_dir, piper_w
 from gamepal.voice.vad import EnergyVad, SileroVad, Vad
 
 log = logging.getLogger(__name__)
+
+FOLLOW_UP_QUESTION_BONUS = 3.0
 
 MAX_HOTWORDS = 60
 # Tamaño aproximado de cada modelo de Whisper (CTranslate2), para mostrar el progreso de la descarga.
@@ -113,6 +115,35 @@ class VoiceService:
                     return ", ".join(dict.fromkeys(names))
         return ", ".join(dict.fromkeys(names))
 
+    async def _follow_ups(self, seconds: float) -> None:
+        """Al acabar una respuesta a algo dicho en voz alta, se sigue escuchando unos segundos."""
+        spoken: set[str] = set()  # preguntas hechas hablando, por id
+        pending: float | None = None  # segundos de escucha cuando termine de hablar
+        topics = {"assistant.question", "assistant.answer", "voice.speaking", "voice.stopped"}
+        async with self._bus.subscribe(topics) as sub:
+            async for event in sub:
+                controller = self.controller
+                if isinstance(event, QuestionAsked):
+                    if event.source != "text":
+                        spoken = {*list(spoken)[-8:], event.id}
+                elif isinstance(event, AnswerUpdate) and event.done and event.id in spoken:
+                    if event.error or controller is None:
+                        continue
+                    # Si la respuesta acaba en pregunta, se le da algo más de tiempo para pensar la respuesta.
+                    window = seconds + (FOLLOW_UP_QUESTION_BONUS if event.text.rstrip().endswith("?") else 0)
+                    # Se espera a que acabe de hablar: si se escuchara antes, se oiría a sí mismo como pregunta.
+                    speaking = self.speech is not None and "voice" in event.outputs and self.speech.speaking
+                    if speaking:
+                        pending = window
+                    else:
+                        controller.follow_up(window)
+                elif isinstance(event, SpeakingChanged) and not event.speaking and pending is not None:
+                    if controller is not None:
+                        controller.follow_up(pending)
+                    pending = None
+                elif isinstance(event, SpeechStopped):
+                    pending = None  # se le mandó callar: no se sigue escuchando
+
     def busy(self) -> bool:
         """Si está escuchando una pregunta, transcribiéndola o hablando: lo demás debe dejarle la CPU."""
         controller = self.controller
@@ -133,6 +164,9 @@ class VoiceService:
                     self._tasks.append(asyncio.create_task(self.speech.run(), name="speech"))
             if config.voice.enabled:
                 await self._start_input(config, loop)
+                if config.voice.follow_up_seconds > 0:
+                    seconds = config.voice.follow_up_seconds
+                    self._tasks.append(asyncio.create_task(self._follow_ups(seconds), name="follow-up"))
             self._start_hotkeys(config, loop)
             self._status("ready", self._summary(config))
         except Exception as exc:

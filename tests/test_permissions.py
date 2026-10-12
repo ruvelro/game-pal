@@ -43,3 +43,24 @@ async def test_without_a_way_to_ask_nothing_is_asked(app_paths: AppPaths, repo_p
     daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore())
     await daemon.ask_permissions()
     daemon.activity.close()
+
+
+async def test_the_recognized_game_is_announced_once(app_paths: AppPaths, repo_profiles: Path) -> None:
+    from gamepal.events import AnswerUpdate, WindowSeen
+
+    save_config(
+        AppConfig.model_validate({"profile": "stardew-valley", "voice": {"enabled": True}}), app_paths.config_file
+    )
+    daemon = Daemon(app_paths, backend_factory=FakeBackend, bundled_dir=repo_profiles, secrets=MemorySecretStore())
+    daemon._load_profile()
+    seen = WindowSeen(title="Stardew Valley", process="Stardew Valley", width=1280, height=720, foreground=True)
+    async with daemon.bus.subscribe({"assistant.answer"}) as sub:
+        daemon._announce_game(seen)
+        daemon._announce_game(seen)  # la segunda vez, nada
+        event = await sub.get()
+    assert isinstance(event, AnswerUpdate)
+    assert event.text.startswith("He reconocido Stardew Valley.")
+    assert "«oye compañero»" in event.text
+    assert "Ctrl+Alt+C" in event.text
+    assert "overlay" in event.outputs
+    daemon.activity.close()

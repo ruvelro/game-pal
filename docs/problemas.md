@@ -60,6 +60,8 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **No entiende dónde estoy ni lo que hay alrededor.** Sin un modelo que vea imágenes, game-pal solo sabe lo que está escrito en pantalla, y en la granja no hay texto. Si tu modelo ve (Qwen 3.5 o 3.6, Gemma 3…), game-pal lo usa solo; si no, elige uno en Modelos › Opciones avanzadas › Modelo con visión. Las preguntas sobre lo que se ve («¿qué hago aquí?») van entonces con una captura.
 
+**«Oye compañero» no siempre responde.** En el registro, las líneas «Casi frase clave» muestran lo que Whisper entendió cuando no se activó. Si salen a menudo, prueba Whisper «small» en Voz › Transcripción: entiende mejor el español y tarda algo más (en un Mac con Apple Silicon, menos de un segundo más por frase). Y si la voz de game-pal sale por los altavoces, el micrófono la oye: con auriculares va mejor.
+
 **No sabe qué objeto llevo en la mano.** game-pal lee el texto de la pantalla, y el objeto seleccionado no aparece escrito. Dile cuál es («tengo un ramo de flores, ¿a quién se lo doy?») o abre el inventario y pasa el ratón por encima para que salga su nombre.
 
 **La primera vez tarda en activarse la voz.** Se descargan los modelos de voz (unos 140 MB con Whisper base). La GUI muestra una barra con el progreso.

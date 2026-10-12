@@ -74,6 +74,16 @@ class PhraseMatcher:
                     return index + 1, phrase
         return None
 
+    def near(self, transcript: str) -> bool:
+        """Si se parece a la frase clave sin llegar a serlo: su palabra larga, con hasta dos letras mal, al
+        principio. Solo para el registro: ayuda a ver qué entiende Whisper cuando no responde."""
+        words = normalize(transcript).split()[:4]
+        for _, target in self._phrases:
+            anchor = target[-1]
+            if len(anchor) >= 6 and any(Levenshtein.distance(anchor, word, score_cutoff=2) <= 2 for word in words):
+                return True
+        return False
+
     def whole(self, transcript: str, extra: int = 1) -> str | None:
         """Una frase que es todo lo dicho, o casi («para», «para ya», «vale, gracias»).
 

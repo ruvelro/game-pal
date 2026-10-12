@@ -126,6 +126,8 @@ class QuestionAsked(Event):
     id: str
     text: str
     source: Literal["voice", "text", "push_to_talk"]
+    # Respuesta a lo que acaba de decir game-pal, sin frase clave: sigue la misma conversación.
+    follow_up: bool = False
 
 
 class AnswerUpdate(Event):

@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 from gamepal.activity import ActivityStore
 from gamepal.assistant import Assistant
 from gamepal.autodetect import choose_local_model, game_is_open, model_sees, next_profile
@@ -18,7 +20,7 @@ from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_back
 from gamepal.capture.base import RGBImage
 from gamepal.checks import KeyedProbe, Probe, real_probe
 from gamepal.config import AppConfig, load_config, save_config
-from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
+from gamepal.events import AnswerUpdate, ScreenDetected, ScreenRead, StatusChanged, WindowSeen
 from gamepal.evidence.service import EvidenceService
 from gamepal.hardware import HardwareInfo, detect
 from gamepal.keystore import SecretStore
@@ -36,7 +38,7 @@ from gamepal.perception.watcher import ScreenWatcher, Target
 from gamepal.permissions import Need, needed
 from gamepal.permissions import state as permission_state
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
-from gamepal.providers import Message, Provider, ProviderError, create_provider
+from gamepal.providers import ImagePart, Message, Provider, ProviderError, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
 from gamepal.reference import Reference, Today
 from gamepal.runtime.catalog import bundled_catalog
@@ -46,10 +48,19 @@ from gamepal.voice.service import VoiceService
 
 log = logging.getLogger(__name__)
 
+
+def format_key(combo: str) -> str:
+    """«<ctrl>+<alt>+c» → «Ctrl+Alt+C», como lo enseña la GUI."""
+    parts = [part.strip("<>") for part in combo.split("+")]
+    return "+".join(part.upper() if len(part) == 1 else part.capitalize() for part in parts)
+
+
 # Cada cuánto se mira qué juego está abierto y, mientras falte, si ya hay un modelo local.
 AUTODETECT_INTERVAL_S = 5.0
 MODEL_RETRY_TICKS = 6
 WARM_UP_TIMEOUT_S = 180.0
+WARM_UP_ATTEMPTS = 3
+WARM_UP_RETRY_S = 10.0
 
 
 @dataclass
@@ -160,6 +171,8 @@ class Daemon:
         self.overlay: OverlayProcess | None = None
         self._voice_started = False
         self._warming: asyncio.Task[None] | None = None
+        # Juego ya anunciado en esta sesión (id del perfil).
+        self._announced: str | None = None
         self._vision_checked: tuple[str, str] | None = None
         # Si los atajos pudieron escuchar el teclado al arrancar la voz (en macOS hace falta un permiso).
         self._input_ready = True
@@ -236,12 +249,40 @@ class Daemon:
                 await self._listener
 
     async def _remember_reads(self) -> None:
-        async with self.bus.subscribe({"perception"}, maxsize=8) as sub:
+        async with self.bus.subscribe({"perception", "capture.window"}, maxsize=8) as sub:
             async for event in sub:
                 if isinstance(event, ScreenRead):
                     self.last_read = event
                 elif isinstance(event, ScreenDetected):
                     self.current_screen = event if event.screen_id else None
+                elif isinstance(event, WindowSeen) and event.foreground:
+                    self._announce_game(event)
+
+    def _announce_game(self, window: WindowSeen) -> None:
+        """La primera vez que ve el juego, lo dice sobre él: así se sabe que lo ha reconocido y cómo preguntar."""
+        loaded = self.c.profile
+        if loaded is None or self._announced == loaded.profile.id:
+            return
+        self._announced = loaded.profile.id
+        voice, overlay = self.config.voice, self.config.output.overlay
+        ways = []
+        if voice.enabled and voice.wake.enabled and voice.wake.phrases:
+            ways.append(f"di «{voice.wake.phrases[0]}»")
+        if overlay.enabled and overlay.chat_key:
+            ways.append(f"pulsa {format_key(overlay.chat_key)} para escribirme")
+        how = f" Para preguntarme, {' o '.join(ways)}." if ways else ""
+        if loaded.profile.id == "generic":
+            label = window.title or window.process or "el juego"
+            text = f"Estoy mirando «{label}». No tengo un perfil para este juego, pero leo la pantalla.{how}"
+        else:
+            text = f"He reconocido {loaded.profile.name}.{how}"
+        log.info("Juego reconocido: %s", loaded.profile.name)
+        self.bus.publish(
+            AnswerUpdate(
+                id=f"game-{loaded.profile.id}", kind="proactive", title="game-pal", text=text, done=True,
+                outputs=["overlay", "text"],
+            )
+        )  # fmt: skip
 
     # Detección automática -------------------------------------------------------------------
 
@@ -279,14 +320,21 @@ class Daemon:
             return
         if self.config.provider.kind != "managed" and not real_probe(self.probe):
             return
-        started = time.perf_counter()
-        try:
-            client = self.hub.client("local")
-            await asyncio.wait_for(client.chat([Message("user", "Hola")], max_tokens=1), WARM_UP_TIMEOUT_S)
-        except (ProviderError, TimeoutError) as exc:
-            log.info("No se pudo precalentar el modelo: %s", exc)
+        # Con visión, también se carga la parte que ve: la primera pregunta con captura tardaba aún más.
+        sees = self.vision_enabled() and self.config.provider.vision_model == self.config.provider.model
+        images = (ImagePart.from_rgb(np.zeros((64, 64, 3), dtype=np.uint8)),) if sees else ()
+        for attempt in range(WARM_UP_ATTEMPTS):
+            started = time.perf_counter()
+            try:
+                client = self.hub.client("local")
+                request = client.chat([Message("user", "Hola", images=images)], max_tokens=1)
+                await asyncio.wait_for(request, WARM_UP_TIMEOUT_S)
+            except (ProviderError, TimeoutError) as exc:
+                log.info("No se pudo precalentar el modelo (intento %d): %s", attempt + 1, exc or type(exc).__name__)
+                await asyncio.sleep(WARM_UP_RETRY_S)
+                continue
+            log.info("Modelo listo (precalentado en %.1f s)", time.perf_counter() - started)
             return
-        log.info("Modelo listo (precalentado en %.1f s)", time.perf_counter() - started)
 
     async def autodetect_model(self) -> str | None:
         """Si no hay modelo local elegido, elige servidor y modelo entre los que estén en marcha."""
@@ -554,8 +602,11 @@ class Daemon:
             create_provider(self.config.provider)  # valida la dirección del servidor local
             self.c.provider = self.hub.route("reasoning")
             self.c.errors.pop("provider", None)
-            if self._warming is None or self._warming.done():
-                self._warming = asyncio.create_task(self._warm_up(), name="warm-up")
+            # Si cambia el modelo a medio precalentar (al activarse la visión, por ejemplo), se empieza de nuevo:
+            # el cliente anterior ya está cerrado y la petición fallaba.
+            if self._warming is not None and not self._warming.done():
+                self._warming.cancel()
+            self._warming = asyncio.create_task(self._warm_up(), name="warm-up")
             self.bus.publish(StatusChanged(component="provider", state="idle", detail=self.routing_summary()))
         except Exception as exc:
             self.c.provider = None
