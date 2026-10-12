@@ -100,6 +100,9 @@ class OverlayModel:
     screen: Rect = field(default_factory=lambda: Rect(0, 0, 1920, 1080))
     card: Card | None = None
     voice: str = "idle"
+    # Mientras habla, la tarjeta no se va: con respuestas largas, el texto acababa antes que la voz.
+    speaking: bool = False
+    spoke_until: float = 0.0
     chat_open: bool = False
     chat: list[ChatEntry] = field(default_factory=list)
     _chat_ids: list[str] = field(default_factory=list)
@@ -120,6 +123,10 @@ class OverlayModel:
             self.game = Rect(int(data.get("left", 0)), int(data.get("top", 0)), int(data["width"]), int(data["height"]))
         elif topic == "voice.state":
             self.voice = str(data.get("state", "idle"))
+        elif topic == "voice.speaking":
+            self.speaking = bool(data.get("speaking"))
+            if not self.speaking:
+                self.spoke_until = now
         elif topic == "overlay.chat":
             wanted = data.get("open")
             self.chat_open = (not self.chat_open) if wanted is None else bool(wanted)
@@ -200,7 +207,8 @@ class OverlayModel:
             # Con el chat abierto, la respuesta ya se ve en él: la tarjeta sobraría.
             return None
         card = self.card
-        if card is not None and card.done and now - card.done_at > self.linger:
+        expired = card is not None and card.done and now - max(card.done_at, self.spoke_until) > self.linger
+        if expired and not self.speaking:
             self.card = card = None
         status = STATUS_TEXT[self.language].get(self.voice, "")
         if card is not None and not card.text and not card.error and not card.done:

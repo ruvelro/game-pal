@@ -40,7 +40,8 @@ def _setup_logging(paths: AppPaths, verbose: bool) -> None:
     )
     handlers.append(file_handler)
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s", handlers=handlers)
-    for noisy in ("httpx", "httpcore", "uvicorn.access"):
+    # Cada petición de una descarga y cada trozo de audio de Whisper llenaban el registro y tapaban lo útil.
+    for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "faster_whisper", "uvicorn.access"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

@@ -106,6 +106,8 @@ class Segmenter:
         self._silence = 0
         self.active = False
         self.forced = False
+        # Cuenta las frases: sirve para saber si una comprobación hecha al vuelo es de la frase en curso.
+        self.segment = 0
 
     def reset(self) -> None:
         self._pre.clear()
@@ -113,11 +115,27 @@ class Segmenter:
         self._voiced = self._silence = 0
         self.active = self.forced = False
 
+    @property
+    def speech_seconds(self) -> float:
+        return self._voiced * FRAME_SECONDS
+
+    @property
+    def silence_seconds(self) -> float:
+        return self._silence * FRAME_SECONDS
+
+    def snapshot(self, max_seconds: float | None = None) -> Audio:
+        """Lo grabado hasta ahora en la frase en curso (o su principio), sin cerrarla."""
+        frames = self._frames
+        if max_seconds is not None:
+            frames = frames[: max(1, round(max_seconds / FRAME_SECONDS))]
+        return np.concatenate(frames).astype(np.float32) if frames else np.zeros(0, dtype=np.float32)
+
     def force_start(self) -> None:
         """Push-to-talk: empieza a grabar ya, haya voz o no."""
         self._frames = list(self._pre)
         self._voiced = self._silence = 0
         self.active = self.forced = True
+        self.segment += 1
 
     def force_end(self) -> Utterance | None:
         if not self.active:
@@ -131,6 +149,7 @@ class Segmenter:
             self._pre.append(frame)
             if probability >= self.threshold:
                 self.active = True
+                self.segment += 1
                 self._frames = list(self._pre)
                 self._voiced, self._silence = 1, 0
             return None

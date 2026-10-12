@@ -4,6 +4,14 @@
 
 ### Para jugar
 
+- La frase clave se reconoce al vuelo, en la primera pausa, sin esperar a que acabes de hablar: el aviso de «te escucho» llega enseguida y la pregunta puede ir en la misma frase.
+- Whisper ya no reintenta cuando duda (una frase de 2 s llegaba a tardar 9 s) y, para la frase clave, solo transcribe el principio de lo dicho.
+- «Para» y «gracias» solo callan a game-pal si es todo lo que dices: su propia voz, oída por el micrófono, cortaba las respuestas a media frase y apagaba el overlay.
+- La voz suena seguida: un solo flujo de audio para toda la respuesta, con más margen, en vez de uno por frase.
+- La tarjeta del overlay no se va mientras game-pal sigue hablando.
+- Las fichas de la wiki se buscan en paralelo y, si tardan más de 3,5 s, se responde sin ellas (antes se esperaba hasta 8 s).
+- El registro guarda cada pregunta, cuánto tardó cada parte y la respuesta, para poder revisar una partida; ya no se llena con las descargas.
+- macOS ya no avisa de clases de FFmpeg duplicadas: Whisper no carga PyAV, que no necesita.
 - Chat encima del juego: Ctrl+Alt+C (o el botón de Inicio) abre el historial de preguntas y avisos con un campo para escribir, sin salir de la partida. Intro envía, Esc cierra y el teclado vuelve al juego.
 
 ### Modelos

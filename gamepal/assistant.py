@@ -88,7 +88,9 @@ KEYWORDS_PROMPT = (
 MAX_KNOWLEDGE_CHARS = 1100
 Retriever = Callable[[str], Awaitable[list[Hit]]]
 Lookup = Callable[[list[str], str], Awaitable[list[WikiPage]]]
-LOOKUP_TIMEOUT_S = 8.0
+# Las fichas ayudan, pero no pueden retrasar la respuesta: pasado este tiempo se responde sin ellas y la
+# búsqueda sigue en segundo plano, así la siguiente pregunta ya las tiene.
+LOOKUP_TIMEOUT_S = 3.5
 # Los títulos de una ficha en pantalla van en letra más grande: se prueban primero las líneas más altas.
 MAX_SCREEN_TITLES = 10
 STOPWORDS = frozenset((
@@ -196,6 +198,8 @@ class Assistant:
         self._fast_enabled = fast_enabled or (lambda: bool(self._config().provider.fast_model))
         self._task: asyncio.Task[None] | None = None
         self._history: deque[Turn] = deque(maxlen=HISTORY_TURNS)
+        # Búsquedas de fichas que siguen tras agotarse su tiempo: se guardan para que no se pierdan a medias.
+        self._lookups: set[asyncio.Future[list[WikiPage]]] = set()
         self._last_proactive = 0.0
         self._screen_fired: dict[str, float] = {}
         self._entry: tuple[str, int] | None = None
@@ -366,14 +370,19 @@ class Assistant:
         pages: list[WikiPage] = []
         if self._lookup is not None:
             names = candidates(question_terms(text), seen[:MAX_SCREEN_TITLES], entities)
+            started = time.perf_counter()
+            search = asyncio.ensure_future(self._lookup(names, config.game_language))
+            self._lookups.add(search)
+            search.add_done_callback(self._lookups.discard)
             try:
-                pages = await asyncio.wait_for(self._lookup(names, config.game_language), LOOKUP_TIMEOUT_S)
+                pages = await asyncio.wait_for(asyncio.shield(search), LOOKUP_TIMEOUT_S)
             except TimeoutError:
-                log.info("La búsqueda de fichas tardó demasiado")
+                log.info("La búsqueda de fichas pasó de %.1f s: se responde sin ellas", LOOKUP_TIMEOUT_S)
             except Exception:
                 log.exception("La búsqueda de fichas falló")
-        if pages:
-            log.info("Fichas de la wiki para la respuesta: %s", ", ".join(page.title for page in pages))
+            if pages:
+                titles = ", ".join(page.title for page in pages)
+                log.info("Fichas de la wiki en %.1f s: %s", time.perf_counter() - started, titles)
         return "\n\n".join(blocks), pages
 
     @staticmethod
@@ -419,6 +428,10 @@ class Assistant:
         return "quick" if route == "quick" else "reasoned"
 
     async def _answer_question(self, question: QuestionAsked) -> None:
+        # Al registro (solo en este equipo): lo preguntado, lo que tardó cada parte y lo respondido. Sin esto,
+        # tras una prueba no hay forma de saber por qué una respuesta fue lenta o mala.
+        log.info("Pregunta (%s): %r", question.source, question.text)
+        started = time.perf_counter()
         provider, config = self._provider(), self._config()
         outputs = list(config.output.answers)
         if question.source == "text":
@@ -455,9 +468,14 @@ class Assistant:
             max_tokens = config.generation.answer_tokens
         # Las respuestas rápidas nunca piensan; las razonadas, si el jugador lo deja.
         think = config.generation.think_budget() if route == "reasoned" else 0
+        prepared = time.perf_counter() - started
         answer = await self._stream(
             question.id, "question", question.text, outputs, messages, model, max_tokens, route, sources, client,
             think,
+        )  # fmt: skip
+        log.info(
+            "Respuesta en %.1f s (datos %.1f s, %s, %d fuentes): %r",
+            time.perf_counter() - started, prepared, route, len(sources), answer,
         )  # fmt: skip
         if answer:
             self._history.append(Turn(question.text, answer))
@@ -518,13 +536,17 @@ class Assistant:
 
         self._bus.publish(update())
         shown = ""
+        started = time.perf_counter()
         try:
             async for delta in provider.chat_stream(messages, model=model, max_tokens=max_tokens, think=think):
+                if not text and delta:
+                    log.info("Primeras palabras del modelo a los %.1f s", time.perf_counter() - started)
                 text += delta
                 clean = plain_text(text)
                 self._bus.publish(update(delta=clean[len(shown) :] if clean.startswith(shown) else "", text=clean))
                 shown = clean
         except asyncio.CancelledError:
+            log.info("Respuesta cortada a los %.1f s: %r", time.perf_counter() - started, plain_text(text))
             self._bus.publish(update(text=plain_text(text), done=True, error="cancelada"))
             raise
         except AnswerCutShort as exc:
