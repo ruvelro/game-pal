@@ -1,6 +1,6 @@
 [project]
 name = "game-pal"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Compañero de juego con IA: mira la pantalla, te escucha y te aconseja. Local, privado y para cualquier juego."
 readme = "README.md"
 license = "MIT"
@@ -46,6 +46,8 @@ dependencies = [
     "anthropic>=0.70",
     "keyring>=25.0",
     "defusedxml>=0.7",
+    # Bandeja del sistema de la app instalada
+    "pystray>=0.19.5",
     # Conocimiento
     "trafilatura>=2.0",
     "pypdf>=5.0",
@@ -73,6 +75,11 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "types-pyyaml>=6.0",
+]
+
+# Solo para empaquetar la app instalable (scripts/build.py).
+build = [
+    "pyinstaller>=6.11",
 ]
 
 [build-system]
@@ -108,7 +115,7 @@ packages = ["gamepal"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*", "trafilatura.*", "tokenizers.*", "huggingface_hub.*", "pypdf.*", "lxml.*", "keyring.*", "defusedxml.*"]
+module = ["mss.*", "rapidocr.*", "Quartz.*", "AppKit.*", "Foundation.*", "Vision.*", "ScreenCaptureKit.*", "Xlib.*", "objc.*", "sounddevice.*", "faster_whisper.*", "piper.*", "pynput.*", "sdl2.*", "onnxruntime.*", "PyObjCTools.*", "trafilatura.*", "tokenizers.*", "huggingface_hub.*", "pypdf.*", "lxml.*", "keyring.*", "defusedxml.*", "pystray.*"]
 ignore_missing_imports = true
 
 # pywinrt solo se instala en Windows; el motor lo usa como Any para que los tipos no dependan del sistema.

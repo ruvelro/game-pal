@@ -52,7 +52,9 @@ class OcrConfig(_Model):
 
 
 class ProviderConfig(_Model):
-    kind: Literal["local-openai"] = "local-openai"
+    # local-openai: un servidor del jugador (Ollama, LM Studio…). managed: el motor que gestiona game-pal,
+    # y entonces model, fast_model y vision_model son ids del catálogo de modelos.
+    kind: Literal["local-openai", "managed"] = "local-openai"
     base_url: str = "http://127.0.0.1:11434/v1"
     model: str = ""
     # Modelo con visión para pantallas dudosas. Vacío: la visión queda desactivada.
@@ -60,6 +62,16 @@ class ProviderConfig(_Model):
     # Modelo pequeño y rápido para decidir cómo responder y para respuestas breves. Vacío: no se usa.
     fast_model: str = ""
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+
+
+class RuntimeConfig(_Model):
+    """Motor llama.cpp gestionado."""
+
+    # Variante del motor (id del catálogo) o auto: la mejor para este equipo.
+    variant: str = "auto"
+    context: int = Field(default=8192, ge=2048, le=262144)
+    # Modelos cargados a la vez como máximo; el resto se carga al pedirlo.
+    models_max: int = Field(default=2, ge=1, le=8)
 
 
 Role = Literal["reasoning", "fast", "vision"]
@@ -231,6 +243,8 @@ class AppConfig(_Model):
     version: int = CONFIG_VERSION
     # El asistente de primer uso se muestra hasta que el jugador lo termina o lo salta.
     setup_completed: bool = False
+    # Nivel de hardware elegido en el asistente (0-3). Vacío: sin elegir.
+    hardware_tier: int | None = Field(default=None, ge=0, le=3)
     profile: str = "generic"
     # Cambia solo al perfil del juego que esté abierto. Elegir un perfil a mano lo desactiva.
     auto_detect_game: bool = True
@@ -247,6 +261,7 @@ class AppConfig(_Model):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
@@ -278,6 +293,10 @@ def load_config(path: Path) -> AppConfig:
 
 def migrate(raw: dict[str, Any]) -> dict[str, Any]:
     """Pone al día una configuración guardada por una versión anterior."""
+    # Las primeras versiones del asistente lo llamaban setup_done.
+    if "setup_done" in raw:
+        legacy = raw.pop("setup_done")
+        raw.setdefault("setup_completed", legacy)
     version = raw.get("version", 1)
     if isinstance(version, int) and version < 2:
         # La versión 1 guardaba «pensar» activado por defecto; ahora va desactivado (respuestas en segundos).

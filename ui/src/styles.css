@@ -403,7 +403,8 @@ input[type="range"] {
   background: transparent;
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
   width: auto;
   flex: none;
   accent-color: var(--mint);
@@ -1231,7 +1232,7 @@ button.danger:hover:not(:disabled) {
 
 /* Descargas en curso */
 
-.downloads {
+.status-downloads {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1241,7 +1242,7 @@ button.danger:hover:not(:disabled) {
   background: var(--panel);
 }
 
-.download {
+.status-download {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1279,4 +1280,131 @@ button.danger:hover:not(:disabled) {
   .bar.indeterminate span {
     animation: none;
   }
+}
+
+/* Motor local, niveles de hardware y descargas del catálogo */
+
+.between {
+  justify-content: space-between;
+}
+
+.hw-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.hw-facts dt {
+  color: var(--muted);
+}
+
+.hw-facts dd {
+  margin: 0;
+}
+
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+button.tier {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  min-height: 120px;
+}
+
+button.tier.selected {
+  border-color: var(--mint);
+  box-shadow: 0 0 0 1px var(--mint) inset;
+}
+
+.check.option {
+  align-items: flex-start;
+  padding: 6px 0;
+}
+
+.check.option input {
+  margin-top: 4px;
+}
+
+.small-chip {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  margin-left: 6px;
+}
+
+.chip-static.ok {
+  color: var(--mint);
+  border-color: color-mix(in srgb, var(--mint) 40%, transparent);
+}
+
+.plain {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.downloads {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.download .progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.download .progress span {
+  display: block;
+  height: 100%;
+  background: var(--mint);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.download.error .progress span {
+  background: var(--bad);
+}
+
+button.small-button {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
+.engine {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+pre.log {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.catalog td {
+  vertical-align: top;
+}
+
+.downloads > button {
+  justify-self: start;
 }

@@ -119,3 +119,24 @@ def test_committed_schema_is_up_to_date(repo_profiles: Path) -> None:
     assert committed == GameProfile.model_json_schema(), (
         "Regenera con: uv run game-pal schema --out profiles/profile.schema.json"
     )
+
+
+def test_new_profile_scaffold(tmp_path: Path, repo_profiles: Path) -> None:
+    from gamepal.profiles.lint import lint
+    from gamepal.profiles.loader import ProfileError
+    from gamepal.profiles.scaffold import create_profile
+
+    folder = create_profile(tmp_path, "hollow-knight", "Hollow Knight", process="hollow_knight",
+                            schema=repo_profiles / "profile.schema.json")  # fmt: skip
+    loaded = load_profile(folder)
+    assert loaded.profile.name == "Hollow Knight"
+    assert loaded.profile.game.process == ["hollow_knight"]
+    assert lint(loaded) == []
+    assert "Hollow Knight" in (loaded.read_prompt("advisor") or "")
+    with pytest.raises(ProfileError, match="Ya existe"):
+        create_profile(tmp_path, "hollow-knight", "Otra vez")
+    with pytest.raises(ProfileError, match="minúsculas"):
+        create_profile(tmp_path, "Mal Id", "x")
+    # Un nombre con comillas o dos puntos no rompe el YAML.
+    tricky = create_profile(tmp_path, "tricky", 'Juego: "el regreso"')
+    assert load_profile(tricky).profile.name == 'Juego: "el regreso"'

@@ -52,20 +52,32 @@ class ProviderHub:
         secrets: SecretStore,
         activity: ActivityStore | None,
         factories: dict[str, Callable[[AppConfig, str | None], Provider]] | None = None,
+        local_endpoint: Callable[[], tuple[str, str] | None] | None = None,
     ) -> None:
         self._bus = bus
+        self._local_endpoint = local_endpoint or (lambda: None)
         self._config = config
         self.secrets = secrets
         self.activity = activity
         self._factories = factories or {
-            "local": lambda cfg, _key: LocalOpenAIProvider(
-                cfg.provider.base_url, cfg.provider.model, timeout=cfg.provider.timeout_seconds
-            ),
+            "local": self._local,
             "openai": lambda cfg, key: OpenAIProvider(key or "", timeout=cfg.provider.timeout_seconds),
             "anthropic": lambda cfg, key: AnthropicProvider(key or "", timeout=max(cfg.provider.timeout_seconds, 60)),
             "openrouter": lambda cfg, key: OpenRouterProvider(key or "", timeout=cfg.provider.timeout_seconds),
         }
         self._clients: dict[str, Provider] = {}
+
+    def _local(self, cfg: AppConfig, _key: str | None) -> Provider:
+        if cfg.provider.kind == "managed":
+            endpoint = self._local_endpoint()
+            if endpoint is None:
+                raise ProviderError("El motor local no está en marcha; revisa la página Modelos")
+            url, key = endpoint
+            # La carga de un modelo grande en el primer uso puede tardar: margen extra.
+            return LocalOpenAIProvider(
+                url, cfg.provider.model, api_key=key, timeout=max(cfg.provider.timeout_seconds, 180)
+            )
+        return LocalOpenAIProvider(cfg.provider.base_url, cfg.provider.model, timeout=cfg.provider.timeout_seconds)
 
     async def aclose(self) -> None:
         for client in self._clients.values():

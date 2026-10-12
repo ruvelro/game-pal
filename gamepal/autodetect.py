@@ -58,7 +58,8 @@ async def choose_local_model(
     config: AppConfig, memory_gb: float | None, probe: Probe | None = None
 ) -> ModelChoice | None:
     """Servidor y modelo locales cuando aún no hay modelo elegido."""
-    if config.provider.model:
+    # Con el motor gestionado por game-pal, el modelo lo elige el asistente desde el catálogo.
+    if config.provider.model or config.provider.kind != "local-openai":
         return None
     probe = probe or probe_local
     url = config.provider.base_url

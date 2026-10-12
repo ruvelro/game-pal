@@ -55,3 +55,12 @@ def bundled_profiles_dir() -> Path:
     if installed.is_dir():
         return installed
     return package_dir.parent / "profiles"
+
+
+def module_command(module: str) -> list[str]:
+    """Orden para lanzar un módulo de game-pal como proceso aparte, también desde la app empaquetada."""
+    import sys
+
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--run-module", module]
+    return [sys.executable, "-m", module]

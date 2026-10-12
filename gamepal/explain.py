@@ -47,6 +47,14 @@ def explain_error(message: str, config: AppConfig) -> str:
         url = config.provider.base_url
         server = server_name(url)
         model = config.provider.model
+        if config.provider.kind == "managed":
+            if "no hay modelo seleccionado" in lowered:
+                return f"Aún no has elegido el modelo de IA. Instala uno {_MODELS_PAGE} o con el asistente."
+            if status is not None or "no se pudo contactar" in lowered:
+                return (
+                    "El motor de game-pal ha fallado al responder. Si pasa a menudo, prueba un modelo más "
+                    f"pequeño {_MODELS_PAGE}."
+                )
         if "no hay modelo seleccionado" in lowered:
             return (
                 f"Aún no has elegido el modelo de IA. Elígelo {_MODELS_PAGE}; si {server} ya está abierto, "

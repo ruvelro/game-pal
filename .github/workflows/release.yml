@@ -1,0 +1,109 @@
+name: Release
+
+# Una etiqueta v* compila los instaladores en los cuatro sistemas, los firma con una atestación de
+# procedencia (Sigstore, a través de GitHub) y crea un borrador de versión con sus sumas SHA-256.
+# En un pull request que toque el empaquetado solo se compila y se prueba, sin publicar nada.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "scripts/build.py"
+      - "scripts/smoke.py"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Instalador · ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: Linux x64, app: dist/game-pal/game-pal }
+          - { os: macos-latest, label: macOS ARM, app: dist/game-pal.app/Contents/MacOS/game-pal }
+          - { os: windows-latest, label: Windows x64, app: dist/game-pal/game-pal.exe }
+          - { os: windows-11-arm, label: Windows ARM64, app: dist/game-pal/game-pal.exe }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false  # sin cachés en una compilación que se publica
+      - name: Compilar la GUI
+        working-directory: ui
+        run: npm ci && npm run build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+      - name: Instalar dependencias
+        run: uv sync --locked --python 3.12 --no-dev --group build --all-extras
+      - name: Preparar appimagetool (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/sh\nexec %s/appimagetool --appimage-extract-and-run "$@"\n' "$PWD" > "$HOME/.local/bin/appimagetool"
+          chmod +x "$HOME/.local/bin/appimagetool"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sudo apt-get update -q && sudo apt-get install -yq libportaudio2 libxcb-cursor0
+      - name: Preparar Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+          }
+      - name: Empaquetar
+        run: uv run python scripts/build.py
+      - name: Prueba de humo
+        run: uv run python scripts/smoke.py ${{ matrix.app }}
+      - name: Atestación de procedencia (Sigstore)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/release/game-pal-*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: game-pal-${{ runner.os }}-${{ runner.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Borrador de versión
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: release
+          merge-multiple: true
+      - name: Sumas SHA-256 y borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          cat SHA256SUMS-*.txt | sort -k2 > SHA256SUMS.txt
+          rm SHA256SUMS-*.txt
+          sha256sum -c SHA256SUMS.txt
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "game-pal $TAG" \
+            --notes "Instaladores de game-pal $TAG. Comprueba la descarga con SHA256SUMS.txt o con: gh attestation verify <fichero> --repo $GITHUB_REPOSITORY" \
+            ./*

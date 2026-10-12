@@ -1,24 +1,36 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  formatBytes,
   type AppConfig,
   type AskResult,
   type Devices,
+  type Hardware,
   type LocalServer,
   type ProfileSummary,
   type WindowSummary,
 } from "../api";
 import { CheckRow, CommandBox, useSetupInfo } from "../components/Checks";
-import { Downloads } from "../components/Downloads";
+import { Downloads as EngineDownloads, useEngine } from "../components/Engine";
 import { Preview } from "../components/Preview";
+import { StatusDownloads } from "../components/StatusDownloads";
 import { Field, formatKey } from "../components/ui";
 import { LANGUAGES, t, type Key } from "../i18n";
 import { useConfig, type LiveState } from "../store";
 
 type Cloud = "openai" | "anthropic" | "openrouter";
 type SetConfig = (config: AppConfig) => void;
+type Save = (config: AppConfig) => Promise<boolean>;
+// Dónde funciona el modelo: el motor que instala game-pal, un servidor que ya tiene el jugador o la nube.
+type Mode = "managed" | "external" | "cloud";
 
 const STEPS: Key[] = ["setup.step.game", "setup.step.model", "setup.step.check", "setup.step.voice"];
+const TIERS: Array<[number, Key, Key]> = [
+  [0, "setup.tier.0", "setup.tier.0.hint"],
+  [1, "setup.tier.1", "setup.tier.1.hint"],
+  [2, "setup.tier.2", "setup.tier.2.hint"],
+  [3, "setup.tier.3", "setup.tier.3.hint"],
+];
 const CLOUDS: Array<[Cloud, string, string]> = [
   ["anthropic", "Anthropic (Claude)", "https://platform.claude.com/settings/keys"],
   ["openai", "OpenAI", "https://platform.openai.com/api-keys"],
@@ -337,41 +349,174 @@ function CloudModel({ config, setConfig }: { config: AppConfig; setConfig: SetCo
   );
 }
 
+/** El motor llama.cpp de game-pal: nivel según el equipo, descarga verificada y listo. */
+function ManagedModel({
+  config,
+  save,
+  reload,
+  live,
+}: {
+  config: AppConfig;
+  save: Save;
+  reload: () => Promise<unknown>;
+  live: LiveState;
+}) {
+  const { engine, reload: reloadEngine, error, setError } = useEngine(live);
+  const [hardware, setHardware] = useState<Hardware | null>(null);
+  const [tier, setTier] = useState<number | null>(config.hardware_tier);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api
+      .get<Hardware>("/api/hardware")
+      .then((data) => {
+        setHardware(data);
+        setTier((current) => current ?? data.tier);
+      })
+      .catch(() => undefined);
+  }, []);
+  if (!engine || tier === null) return <p className="muted">{t("setup.pc.detecting")}</p>;
+
+  const idsFor = (level: number) => {
+    const preset = engine.tiers.find((p) => p.tier === level);
+    return [...new Set([preset?.reasoning, preset?.fast, preset?.vision].filter((x): x is string => Boolean(x)))];
+  };
+  // Lo que falta por descargar para un nivel: sus modelos y el motor, si no están ya.
+  const sizeOf = (level: number) =>
+    engine.models.filter((m) => idsFor(level).includes(m.id) && !m.installed).reduce((sum, m) => sum + m.size, 0) +
+    (engine.installed ? 0 : engine.runtime_size);
+  const missing = sizeOf(tier);
+  const applied = config.provider.kind === "managed" && config.hardware_tier === tier;
+  const gpu = hardware?.gpus.map((g) => (g.vram_gb ? `${g.name} (${g.vram_gb} GB)` : g.name)).join(", ");
+
+  const install = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      // Primero lo pendiente de guardar; luego el nivel (modelos, voz y enrutado) y la descarga.
+      if (!(await save(config))) return;
+      await api.post<AppConfig>("/api/setup/tier", { tier, engine: "managed" });
+      await reload();
+      if (missing) await api.post("/api/engine/install", { models: idsFor(tier) });
+      reloadEngine();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {hardware && (
+        <p className="small muted">
+          {hardware.cpu} · {hardware.ram_gb} GB · {gpu || t("setup.pc.nogpu")}
+        </p>
+      )}
+      <div className="tier-grid" role="radiogroup" aria-label={t("setup.tier.title")}>
+        {TIERS.map(([level, label, hint]) => (
+          <button
+            key={level}
+            role="radio"
+            aria-checked={tier === level}
+            className={`tier ${tier === level ? "selected" : ""}`}
+            onClick={() => setTier(level)}
+          >
+            <strong>{t(label)}</strong>
+            <span className="small muted">{t(hint)}</span>
+            <span className="small">
+              {sizeOf(level) ? `${t("setup.tier.download")} ${formatBytes(sizeOf(level))}` : t("setup.tier.installed")}
+            </span>
+            {hardware?.tier === level && <span className="chip-static ok small-chip">{t("setup.tier.recommended")}</span>}
+          </button>
+        ))}
+      </div>
+      {hardware && <p className="small muted">{hardware.reason}</p>}
+      {applied && !missing ? (
+        <p className="ok-text">{t("setup.models.ready")}</p>
+      ) : (
+        <div className="check-body">
+          <button className="primary" disabled={busy || engine.busy} onClick={() => void install()}>
+            {missing ? `${t("setup.models.download")} (${formatBytes(missing)})` : t("setup.model.use")}
+          </button>
+          {missing > 0 && <span className="small muted">{t("setup.models.hint")}</span>}
+        </div>
+      )}
+      <EngineDownloads live={live} engine={engine} />
+      {error && <p className="error-text small">{error}</p>}
+    </>
+  );
+}
+
 function ModelStep({
   config,
   setConfig,
   save,
+  reload,
+  live,
 }: {
   config: AppConfig;
   setConfig: SetConfig;
-  save: (c: AppConfig) => Promise<boolean>;
+  save: Save;
+  reload: () => Promise<unknown>;
+  live: LiveState;
 }) {
-  const [mode, setMode] = useState<"local" | "cloud">(
-    config.routing.reasoning.provider === "local" ? "local" : "cloud",
-  );
-  const toLocal = () => {
-    setMode("local");
-    const route = { provider: "local" as const, fallback: "none" as const };
-    setConfig({ ...config, routing: { reasoning: route, fast: route, vision: route } });
+  const initial: Mode | null =
+    config.routing.reasoning.provider !== "local"
+      ? "cloud"
+      : config.provider.kind === "managed"
+        ? "managed"
+        : config.provider.model
+          ? "external"
+          : null;
+  const [mode, setMode] = useState<Mode | null>(initial);
+  // Sin nada elegido aún: si ya hay un servidor en marcha se usa ese; si no, se propone instalar el motor.
+  useEffect(() => {
+    if (mode !== null) return;
+    api
+      .get<{ servers: LocalServer[] }>("/api/providers/local/discover")
+      .then((data) => setMode(data.servers.length ? "external" : "managed"))
+      .catch(() => setMode("managed"));
+  }, [mode]);
+
+  const local = { provider: "local" as const, fallback: "none" as const };
+  const toExternal = () => {
+    setMode("external");
+    const provider =
+      config.provider.kind === "managed"
+        ? { ...config.provider, kind: "local-openai" as const, model: "", fast_model: "", vision_model: "" }
+        : config.provider;
+    setConfig({ ...config, provider, routing: { reasoning: local, fast: local, vision: local } });
   };
+  const OPTIONS: Array<[Mode, Key, () => void]> = [
+    ["managed", "setup.model.managed", () => setMode("managed")],
+    ["external", "setup.model.external", toExternal],
+    ["cloud", "setup.model.cloud", () => setMode("cloud")],
+  ];
+  const hint: Record<Mode, Key> = {
+    managed: "setup.engine.managed.hint",
+    external: "setup.engine.external.hint",
+    cloud: "setup.engine.cloud.hint",
+  };
+
   return (
     <>
       <h1>{t("setup.model.title")}</h1>
       <p className="muted">{t("setup.model.text")}</p>
-      <div className="row wrap">
-        <button className={mode === "local" ? "chip active" : "chip"} onClick={toLocal}>
-          {t("setup.model.local")}
-        </button>
-        <button className={mode === "cloud" ? "chip active" : "chip"} onClick={() => setMode("cloud")}>
-          {t("setup.model.cloud")}
-        </button>
+      <div className="row wrap" role="radiogroup" aria-label={t("setup.model.title")}>
+        {OPTIONS.map(([id, label, choose]) => (
+          <button key={id} role="radio" aria-checked={mode === id} className={mode === id ? "chip active" : "chip"} onClick={choose}>
+            {t(label)}
+          </button>
+        ))}
       </div>
-      {mode === "local" ? (
-        <LocalModel config={config} setConfig={setConfig} />
-      ) : (
-        <CloudModel config={config} setConfig={setConfig} />
+      {mode && <p className="small muted">{t(hint[mode])}</p>}
+      {mode === "managed" && <ManagedModel config={config} save={save} reload={reload} live={live} />}
+      {mode === "external" && <LocalModel config={config} setConfig={setConfig} />}
+      {mode === "cloud" && <CloudModel config={config} setConfig={setConfig} />}
+      {/* Con el motor sin instalar, probar solo probaría el modelo de antes. */}
+      {mode && (mode !== "managed" || config.provider.kind === "managed") && (
+        <ModelTest key={mode} config={config} save={save} />
       )}
-      <ModelTest key={mode} config={config} save={save} />
     </>
   );
 }
@@ -433,8 +578,30 @@ function VoiceStep({
   const hint = t("setup.voice.input.hint")
     .replace("{phrase}", voice.wake.phrases[0] ?? "")
     .replace("{key}", formatKey(voice.push_to_talk.key));
-  const test = async () => {
-    if (await save(config)) await api.post("/api/voice/say", { text: t("voice.tts.sample") }).catch(() => undefined);
+  const [mic, setMic] = useState<{ peak_db: number; heard: boolean } | null>(null);
+  const [listening, setListening] = useState(false);
+  const [sound, setSound] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const testMic = async () => {
+    setError(null);
+    setListening(true);
+    try {
+      if (await save(config)) setMic(await api.post<{ peak_db: number; heard: boolean }>("/api/voice/mic-test"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setListening(false);
+    }
+  };
+  const testSpeaker = async () => {
+    setError(null);
+    try {
+      if (!(await save(config))) return;
+      const result = await api.post<{ mode: string }>("/api/voice/speaker-test");
+      setSound(t(result.mode === "voice" ? "setup.voice.spoke" : "setup.voice.beeped"));
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   return (
@@ -473,9 +640,25 @@ function VoiceStep({
           <strong>{t("setup.voice.output")}</strong>
         </span>
       </label>
+      {voice.enabled && (
+        <div className="row wrap">
+          <button onClick={() => void testMic()} disabled={listening}>
+            {listening ? t("setup.voice.listening") : t("setup.voice.mic")}
+          </button>
+          {mic && (
+            <span className={mic.heard ? "ok-text" : "error-text"}>
+              {mic.heard ? t("setup.voice.heard") : t("setup.voice.silent")} ({mic.peak_db} dBFS)
+            </span>
+          )}
+        </div>
+      )}
+      <div className="row wrap">
+        <button onClick={() => void testSpeaker()}>{t("setup.voice.speaker")}</button>
+        {sound && <span className="small muted">{sound}</span>}
+      </div>
+      {error && <p className="error-text small">{error}</p>}
       {(voice.enabled || speaks) && (
         <div className="row wrap">
-          <button onClick={() => void test()}>{t("setup.voice.test")}</button>
           {status && (
             <span className="muted small">
               <span className={`dot ${status.state === "error" ? "bad" : status.state === "ready" ? "ok" : "busy"}`} />{" "}
@@ -529,10 +712,10 @@ export function Setup({ live, onDone }: { live: LiveState; onDone: () => void })
           </li>
         ))}
       </ol>
-      <Downloads live={live} />
+      <StatusDownloads live={live} />
       <section className="card setup-card">
         {step === 0 && <GameStep config={config} setConfig={setConfig} reload={reload} />}
-        {step === 1 && <ModelStep {...props} />}
+        {step === 1 && <ModelStep {...props} reload={reload} live={live} />}
         {step === 2 && <CheckStep live={live} />}
         {step === 3 && <VoiceStep {...props} live={live} />}
       </section>

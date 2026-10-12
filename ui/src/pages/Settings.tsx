@@ -1,7 +1,28 @@
-import type { AppConfig } from "../api";
+import { useState } from "react";
+import { api, type AppConfig } from "../api";
 import { Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { t } from "../i18n";
 import { useConfig } from "../store";
+
+function Lifecycle({ onSetup }: { onSetup: () => void }) {
+  const [closed, setClosed] = useState(false);
+  if (closed) return <p className="muted">{t("settings.closed")}</p>;
+  return (
+    <Card title={t("settings.app")}>
+      <div className="row wrap">
+        <button onClick={() => void api.post("/api/setup/done", { done: false }).then(onSetup)}>{t("setup.reopen")}</button>
+        <button
+          className="danger"
+          onClick={() => {
+            if (window.confirm(t("settings.quit.confirm"))) void api.post("/api/shutdown").then(() => setClosed(true));
+          }}
+        >
+          {t("settings.quit")}
+        </button>
+      </div>
+    </Card>
+  );
+}
 
 export function Settings({ onSetup }: { onSetup: () => void }) {
   const { config, setConfig, error, saved, saving } = useConfig();
@@ -12,11 +33,7 @@ export function Settings({ onSetup }: { onSetup: () => void }) {
 
   return (
     <>
-      <PageHeader
-        title={t("settings.title")}
-        subtitle={t("settings.subtitle")}
-        actions={<button onClick={onSetup}>{t("setup.reopen")}</button>}
-      />
+      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
       <Card>
         <div className="two-col tight">
           <Field label={t("settings.ocr")}>
@@ -89,6 +106,7 @@ export function Settings({ onSetup }: { onSetup: () => void }) {
         </label>
         <SaveStatus saving={saving} saved={saved} error={error} />
       </Card>
+      <Lifecycle onSetup={onSetup} />
     </>
   );
 }

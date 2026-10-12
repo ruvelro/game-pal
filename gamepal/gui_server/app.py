@@ -13,7 +13,7 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -35,10 +35,12 @@ from gamepal.perception.classifier import classify
 from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
 from gamepal.providers import Message, ProviderError
+from gamepal.runtime.llama import EngineError
+from gamepal.runtime.setup import apply_tier
 from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
 from gamepal.system import can_open_settings, open_settings, total_memory_gb
 from gamepal.ui_build import STATIC_DIR
-from gamepal.voice.audio import list_devices
+from gamepal.voice.audio import list_devices, measure_input, play_test_tone
 from gamepal.voice.models import PIPER_DEFAULT_VOICES
 
 log = logging.getLogger(__name__)
@@ -104,7 +106,27 @@ class AskRequest(BaseModel):
     include_screen: bool = False
 
 
-def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
+class InstallRequest(BaseModel):
+    models: list[str] = Field(default_factory=list, max_length=12)
+    runtime: bool = True
+
+
+class TierRequest(BaseModel):
+    tier: int = Field(ge=0, le=3)
+    engine: Literal["managed", "external", "cloud"] = "managed"
+
+
+class SetupDoneRequest(BaseModel):
+    done: bool = True
+
+
+def create_app(
+    daemon: Daemon,
+    token: str,
+    port: int,
+    shutdown: Callable[[], None] | None = None,
+    show: Callable[[], object] | None = None,
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # El daemon vive en el mismo bucle de eventos que el servidor.
@@ -127,6 +149,24 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token no válido")
 
     auth = [Depends(require_token)]
+    last_show = [0.0]
+
+    # Sin token: solo sirven para que una segunda instancia de game-pal pida abrir la GUI de esta.
+    @app.get("/api/instance")
+    async def instance() -> dict[str, str]:
+        return {"app": "game-pal", "version": __version__}
+
+    @app.post("/api/instance/show")
+    async def instance_show(request: Request) -> dict[str, bool]:
+        # Un navegador siempre manda Origin en un POST entre sitios: así una web no puede usarlo.
+        if request.headers.get("origin") is not None or show is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No permitido")
+        now = time.monotonic()
+        if now - last_show[0] < 2:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Espera un momento")
+        last_show[0] = now
+        await asyncio.to_thread(show)
+        return {"ok": True}
 
     @app.get("/api/status", dependencies=auth)
     async def get_status() -> dict[str, Any]:
@@ -172,9 +212,21 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             from gamepal.providers import create_provider
 
             probe = create_provider(config.provider)
-            await probe.aclose()
+            if probe is not None:
+                await probe.aclose()
         except (ValidationError, UnsafeUrlError, ProviderError, json.JSONDecodeError) as exc:
             raise HTTPException(422, str(exc)) from exc
+        catalog = daemon.engine.catalog
+        if config.runtime.variant != "auto" and catalog.runtime.variant(config.runtime.variant) is None:
+            raise HTTPException(422, f"Variante del motor desconocida: {config.runtime.variant}")
+        if config.provider.kind == "managed":
+            for field in ("model", "fast_model", "vision_model"):
+                model_id = getattr(config.provider, field)
+                entry = catalog.model(model_id) if model_id else None
+                if model_id and entry is None:
+                    raise HTTPException(422, f"El modelo {model_id} no está en el catálogo")
+                if field == "vision_model" and entry is not None and not entry.vision:
+                    raise HTTPException(422, f"{entry.name} no puede leer imágenes")
         for profile_id, folder in config.game_dirs.items():
             if folder and not expand_path(folder).is_dir():
                 raise HTTPException(422, f"La carpeta del juego para '{profile_id}' no existe: {folder}")
@@ -640,6 +692,80 @@ def create_app(daemon: Daemon, token: str, port: int) -> FastAPI:
             "voices": PIPER_DEFAULT_VOICES,
             "proactive_muted": daemon.assistant.proactive_muted,
         }
+
+    # Equipo, motor local y asistente de primer uso ----------------------------------------------
+
+    @app.get("/api/hardware", dependencies=auth)
+    async def hardware() -> dict[str, Any]:
+        return await daemon.engine.describe_hardware()
+
+    @app.get("/api/engine", dependencies=auth)
+    async def engine_status() -> dict[str, Any]:
+        return await daemon.engine.status()
+
+    @app.post("/api/engine/install", dependencies=auth)
+    async def engine_install(body: InstallRequest) -> dict[str, bool]:
+        try:
+            await daemon.engine.install(body.models, runtime=body.runtime)
+        except EngineError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return {"ok": True}
+
+    @app.post("/api/engine/cancel", dependencies=auth)
+    async def engine_cancel() -> dict[str, bool]:
+        daemon.engine.cancel()
+        return {"ok": True}
+
+    @app.post("/api/engine/restart", dependencies=auth)
+    async def engine_restart() -> dict[str, Any]:
+        await daemon.engine.sync(force=True)
+        return daemon.engine.runtime.status()
+
+    @app.delete("/api/engine/models/{model_id}", dependencies=auth)
+    async def engine_remove(model_id: str) -> dict[str, bool]:
+        try:
+            await daemon.engine.remove(model_id)
+        except EngineError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return {"ok": True}
+
+    @app.post("/api/setup/tier", dependencies=auth)
+    async def setup_tier(body: TierRequest) -> dict[str, Any]:
+        config = apply_tier(daemon.config, daemon.engine.catalog, body.tier, body.engine)
+        await daemon.apply(config)
+        return config.model_dump(mode="json")
+
+    @app.post("/api/setup/done", dependencies=auth)
+    async def setup_done(body: SetupDoneRequest) -> dict[str, bool]:
+        await daemon.apply(daemon.config.model_copy(update={"setup_completed": body.done}))
+        return {"ok": True}
+
+    @app.post("/api/voice/mic-test", dependencies=auth)
+    async def mic_test() -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(measure_input, daemon.config.voice.input_device, 3.0)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"No se pudo usar el micrófono: {exc}") from exc
+
+    @app.post("/api/voice/speaker-test", dependencies=auth)
+    async def speaker_test() -> dict[str, str]:
+        speech = daemon.voice.speech
+        if speech is not None:
+            speech.say("Hola, soy game-pal. Así sonarán mis consejos." if daemon.config.output_language == "es"
+                       else "Hi, I'm game-pal. This is how my advice will sound.")  # fmt: skip
+            return {"mode": "voice"}
+        try:
+            await asyncio.to_thread(play_test_tone, "", daemon.config.voice.tts.volume)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"No se pudo reproducir sonido: {exc}") from exc
+        return {"mode": "tone"}
+
+    @app.post("/api/shutdown", dependencies=auth)
+    async def shutdown_app() -> dict[str, bool]:
+        if shutdown is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "No se puede cerrar desde aquí")
+        asyncio.get_running_loop().call_later(0.3, shutdown)
+        return {"ok": True}
 
     @app.post("/api/overlay/test", dependencies=auth)
     async def overlay_test() -> dict[str, bool]:

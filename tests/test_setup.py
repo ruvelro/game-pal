@@ -257,3 +257,44 @@ def test_errors_are_explained(raw: str, expected: str) -> None:
     config = AppConfig()
     config.provider.model = "qwen3:8b"
     assert expected in explain_error(raw, config)
+
+
+def test_old_setup_flag_is_migrated(app_paths: AppPaths) -> None:
+    from gamepal.config import load_config
+
+    app_paths.config_file.write_text("setup_done: true\n", encoding="utf-8")
+    assert load_config(app_paths.config_file).setup_completed is True
+
+
+class FakeRuntime:
+    """Lo mínimo de LlamaRuntime que usa check_engine."""
+
+    def __init__(self, installed: list[str]) -> None:
+        from types import SimpleNamespace
+
+        self._installed = [SimpleNamespace(id=i, name=i.title()) for i in installed]
+        self.catalog = SimpleNamespace(model=lambda model_id: None)
+
+    def installed_models(self) -> list[object]:
+        return self._installed
+
+
+def test_engine_check() -> None:
+    from gamepal.checks import check_engine
+
+    config = AppConfig()
+    config.provider.kind = "managed"
+    config.provider.model = "gemma-4-e4b"
+    assert "ningún modelo" in check_engine(config, FakeRuntime([])).detail  # type: ignore[arg-type]
+    assert "no está instalado" in check_engine(config, FakeRuntime(["qwen-3.5-2b"])).detail  # type: ignore[arg-type]
+    ok = check_engine(config, FakeRuntime(["gemma-4-e4b"]))  # type: ignore[arg-type]
+    assert ok.state == "ok"
+    failed = check_engine(config, FakeRuntime(["gemma-4-e4b"]), "out of memory")  # type: ignore[arg-type]
+    assert failed.state == "error"
+    assert "no arrancó" in failed.detail
+
+
+def test_engine_errors_are_explained() -> None:
+    config = AppConfig()
+    config.provider.kind = "managed"
+    assert "motor de game-pal" in explain_error("local respondió 500: crash", config)

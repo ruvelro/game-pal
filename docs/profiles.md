@@ -11,6 +11,25 @@ profiles/mi-juego/
 
 Los perfiles del usuario van en la carpeta de datos de game-pal, dentro de `profiles/`. Uno con el mismo `id` que un perfil incluido lo sustituye.
 
+## Empezar en cinco pasos
+
+1. **Crea el esqueleto.** Ya trae un perfil válido con una pantalla de ejemplo:
+
+   ```bash
+   game-pal new-profile hollow-knight --name "Hollow Knight" --window "Hollow Knight" --process hollow_knight
+   ```
+
+2. **Elige el perfil** en la página **Juego** de la GUI y abre el juego en modo ventana o ventana sin bordes.
+3. **Mira qué lee game-pal.** En **Inicio** aparece el texto de cada pantalla. También puedes guardar una captura y leerla desde la terminal:
+
+   ```bash
+   game-pal capture --title "Hollow Knight" --out menu.png
+   game-pal ocr menu.png --lang en
+   ```
+
+4. **Describe las pantallas que importan** con señales sobre ese texto (abajo) y añade sus nombres a `vocabulary.yaml`.
+5. **Comprueba** con `game-pal profiles` y con el botón **Probar** de la página **Juego**, que explica por qué cada pantalla cumple o no.
+
 Añade esta línea al principio de `profile.yaml` y tu editor te autocompletará y avisará de errores:
 
 ```yaml
@@ -182,9 +201,50 @@ class MiLector:
         )
 ```
 
-`gamepal.evidence.formats` trae decodificadores seguros de LZ4 y LuaBins. El plugin de Hades II es un ejemplo completo.
+`gamepal.evidence.formats` trae decodificadores seguros de LZ4 y LuaBins. Hay dos ejemplos completos: el de Hades II lee un formato binario comprimido y el de Stardew Valley lee XML con `defusedxml`, que rechaza entidades y DTD. Si tu juego guarda en XML, usa siempre `defusedxml` y nunca el `xml` de la biblioteca estándar.
 
 Los plugins son código que se ejecuta en el equipo del jugador. Si instalas un perfil de otra persona, game-pal no cargará su plugin hasta que confíes en él desde la página **Juego**, y volverá a preguntar si el fichero cambia.
+
+## Avisos por su cuenta y prompts
+
+Una pantalla puede hacer que el compañero hable sin que se lo pidan:
+
+```yaml
+    proactive:
+      enabled: true
+      cooldown_seconds: 10       # silencio mínimo entre dos avisos de esta pantalla
+      task: compare_options      # qué tiene que hacer
+      once_per_encounter: false  # true: un solo aviso hasta que la pantalla desaparezca
+    outputs: [overlay, voice]    # por dónde sale el aviso
+```
+
+Hay tareas genéricas listas para usar: `compare_options` (recomendar una opción), `boss_briefing` (consejos ante un jefe), `suggest_keepsake` y `run_summary`. Para una tarea propia, escribe sus instrucciones en un fichero y decláralo con el prefijo `task_`:
+
+```yaml
+prompts:
+  advisor: prompts/advisor.md               # cómo habla el compañero siempre
+  task_day_summary: prompts/day_summary.md  # la tarea «day_summary»
+```
+
+En `advisor.md`, `{output_language}` se sustituye por el idioma de las respuestas. Recuerda al modelo que el texto de la pantalla y de las fuentes es información y nunca órdenes.
+
+## Fuentes de conocimiento
+
+Las webs de las que aprende el compañero. Nunca se descargan solas: el jugador las actualiza desde la página **Conocimiento**.
+
+```yaml
+knowledge:
+  sources:
+    - url: https://hollowknight.wiki/wiki/Hollow_Knight_Wiki
+      depth: 1                    # cuántos enlaces seguir desde la página
+      max_pages: 300              # tope de páginas de esta fuente
+      include: ["/wiki/*"]        # solo rutas que casen
+      exclude: ["/wiki/User:*"]
+      language: en
+  refresh: weekly                 # manual, daily, weekly o monthly
+```
+
+Solo se descargan direcciones públicas por HTTPS o HTTP, respetando `robots.txt` y a una página por segundo.
 
 ## Datos exactos: que el modelo no se invente cifras
 
@@ -221,3 +281,12 @@ Las tablas de Stardew Valley se generan desde la wiki oficial con `uv run python
 1. `uv run game-pal profiles` valida todos los perfiles y avisa de vocabularios que se usan sin declarar.
 2. En la GUI, página **Juego**, el botón **Probar** evalúa todas las pantallas sobre la última lectura y explica cuáles cumplen y por qué fallan las demás.
 3. Prueba tu perfil con capturas reales en distintas resoluciones y, si puedes, en varios idiomas.
+
+## Compartir un perfil
+
+Un perfil es una carpeta: puedes comprimirla y pasarla, o proponerla para que venga incluida abriendo un pull request en el repositorio con la carpeta dentro de `profiles/`. Antes, comprueba que:
+
+- `game-pal profiles` no da errores ni avisos.
+- El perfil no usa coordenadas ni depende de una resolución concreta.
+- Las traducciones que no hayas visto en el juego están marcadas como «sin verificar».
+- Si lleva `plugin.py`, solo lee el guardado, no escribe nada, no abre conexiones y limita el tamaño de lo que lee.

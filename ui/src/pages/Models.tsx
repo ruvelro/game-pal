@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AppConfig, type LocalServer } from "../api";
+import { EnginePanel, useEngine } from "../components/Engine";
 import { Advanced, Card, Field, PageHeader, SaveStatus } from "../components/ui";
 import { t, type Key } from "../i18n";
-import { useConfig } from "../store";
+import { useConfig, type LiveState } from "../store";
 
 type Cloud = "openai" | "anthropic" | "openrouter";
 type ProviderName = "local" | Cloud;
@@ -163,6 +164,47 @@ function CloudCard({
   );
 }
 
+function ManagedModels({
+  config,
+  setConfig,
+  live,
+}: {
+  config: AppConfig;
+  setConfig: (c: AppConfig) => void;
+  live: LiveState;
+}) {
+  const { engine, reload } = useEngine(live);
+  const installed = engine?.models.filter((m) => m.installed) ?? [];
+  const provider = config.provider;
+  const update = (patch: Partial<typeof provider>) => setConfig({ ...config, provider: { ...provider, ...patch } });
+  const picker = (field: "model" | "fast_model" | "vision_model", vision = false) => (
+    <select value={provider[field]} onChange={(e) => update({ [field]: e.target.value })}>
+      <option value="">{field === "model" ? "—" : t("models.none.option")}</option>
+      {installed
+        .filter((m) => !vision || m.vision)
+        .map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+    </select>
+  );
+  return (
+    <>
+      <EnginePanel live={live} onChange={reload} />
+      <Field label={t("models.role.reasoning")}>{picker("model")}</Field>
+      <Advanced>
+        <Field label={t("models.fast")} hint={t("models.fast.hint")}>
+          {picker("fast_model")}
+        </Field>
+        <Field label={t("models.vision")} hint={t("models.vision.hint")}>
+          {picker("vision_model", true)}
+        </Field>
+      </Advanced>
+    </>
+  );
+}
+
 const LENGTHS: Array<[number, Key]> = [
   [300, "gen.length.300"],
   [500, "gen.length.500"],
@@ -256,7 +298,7 @@ function GenerationCard({ config, setConfig }: { config: AppConfig; setConfig: (
   );
 }
 
-export function Models() {
+export function Models({ live }: { live: LiveState }) {
   const { config, setConfig, save, error, saved, saving } = useConfig();
   const [keys, setKeys] = useState<Record<Cloud, boolean>>({ openai: false, anthropic: false, openrouter: false });
   const [summary, setSummary] = useState("");
@@ -425,6 +467,28 @@ export function Models() {
       </Card>
 
       <Card title={t("models.local.title")}>
+        <div className="row wrap" role="radiogroup" aria-label={t("models.local.title")}>
+          <button
+            role="radio"
+            aria-checked={provider.kind === "managed"}
+            className={provider.kind === "managed" ? "chip active" : "chip"}
+            onClick={() => updateLocal({ kind: "managed", model: "", fast_model: "", vision_model: "" })}
+          >
+            {t("engine.kind.managed")}
+          </button>
+          <button
+            role="radio"
+            aria-checked={provider.kind === "local-openai"}
+            className={provider.kind === "local-openai" ? "chip active" : "chip"}
+            onClick={() => updateLocal({ kind: "local-openai", model: "", fast_model: "", vision_model: "" })}
+          >
+            {t("engine.kind.external")}
+          </button>
+        </div>
+        {provider.kind === "managed" ? (
+          <ManagedModels config={config} setConfig={setConfig} live={live} />
+        ) : (
+          <>
         <p className="muted small">{t("models.subtitle.local")}</p>
         <div className="row wrap">
           <span className="muted small">{t("models.detected")}:</span>
@@ -480,7 +544,9 @@ export function Models() {
               onChange={(vision_model) => updateLocal({ vision_model })}
             />
           </Field>
-        </Advanced>
+            </Advanced>
+          </>
+        )}
       </Card>
 
       <GenerationCard config={config} setConfig={setConfig} />

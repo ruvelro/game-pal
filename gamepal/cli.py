@@ -13,9 +13,11 @@ import socket
 import subprocess
 import sys
 import textwrap
+import threading
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 from gamepal import __version__, ui_build
 from gamepal.paths import AppPaths, bundled_profiles_dir, default_paths
@@ -52,6 +54,48 @@ def _free_port(preferred: int) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.bind(("127.0.0.1", 0))
         return int(probe.getsockname()[1])
+
+
+INSTANCE_FILE = "instance.json"
+
+
+def _running_instance(paths: AppPaths) -> int | None:
+    """Puerto de un game-pal que ya está en marcha, si lo hay."""
+    import httpx
+
+    try:
+        port = int(json.loads((paths.data_dir / INSTANCE_FILE).read_text(encoding="utf-8"))["port"])
+        response = httpx.get(f"http://127.0.0.1:{port}/api/instance", timeout=2, trust_env=False)
+        if response.status_code == 200 and response.json().get("app") == "game-pal":
+            return port
+    except (OSError, ValueError, KeyError, httpx.HTTPError):
+        pass
+    return None
+
+
+def _show_running(port: int) -> bool:
+    import httpx
+
+    try:
+        return httpx.post(f"http://127.0.0.1:{port}/api/instance/show", timeout=3, trust_env=False).is_success
+    except httpx.HTTPError:
+        return False
+
+
+class Controller:
+    """Lo que la bandeja puede hacer con el servidor, que vive en otro hilo y otro bucle."""
+
+    def __init__(self) -> None:
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.server: object | None = None
+        self.daemon: object | None = None
+        self.url = ""
+
+    def call(self, action: Callable[[], object]) -> None:
+        loop = self.loop
+        if loop is not None and not loop.is_closed():
+            with contextlib.suppress(RuntimeError):  # el bucle puede cerrarse justo entre medias
+                loop.call_soon_threadsafe(action)
 
 
 def _say(message: str) -> None:
@@ -115,7 +159,9 @@ async def _when_ready(daemon: Daemon, port: int, url: str, should_open: bool, de
         _say("Vuelve a comprobarlo con «game-pal doctor».")
 
 
-async def _serve(paths: AppPaths, open_browser: bool | None, dev: Path | None) -> None:
+async def _serve(
+    paths: AppPaths, open_browser: bool | None, dev: Path | None, controller: Controller | None = None
+) -> None:
     import uvicorn
 
     from gamepal.daemon import Daemon
@@ -125,26 +171,96 @@ async def _serve(paths: AppPaths, open_browser: bool | None, dev: Path | None) -
     daemon = Daemon(paths)
     port = _free_port(daemon.config.gui.port)
     token = new_token()
-    app = create_app(daemon, token, port)
-    server = uvicorn.Server(
-        uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False, ws_max_size=65536)
-    )
-    _say(f"game-pal {__version__}: arrancando en http://127.0.0.1:{port}…")
     vite: subprocess.Popen[bytes] | None = None
     dev_port: int | None = None
     if dev is not None:
         dev_port = _free_port(DEV_PORT)
         vite = ui_build.start_dev_server(dev, daemon_port=port, port=dev_port)
-        _say(f"Modo desarrollo: Vite en http://127.0.0.1:{dev_port}, con recarga en caliente.")
     url = f"http://127.0.0.1:{dev_port or port}/#token={token}"
+    app = create_app(
+        daemon, token, port,
+        shutdown=lambda: setattr(server, "should_exit", True),
+        show=lambda: webbrowser.open(url),
+    )  # fmt: skip
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", access_log=False, ws_max_size=65536)
+    )
+    if controller is not None:
+        controller.loop, controller.server, controller.daemon, controller.url = (
+            asyncio.get_running_loop(),
+            server,
+            daemon,
+            url,
+        )
+    _say(f"game-pal {__version__}: arrancando en http://127.0.0.1:{port}…")
+    if dev_port is not None:
+        _say(f"Modo desarrollo: Vite en http://127.0.0.1:{dev_port}, con recarga en caliente.")
+    instance = paths.data_dir / INSTANCE_FILE
+    # Solo el puerto: el token nunca se escribe en disco.
+    instance.write_text(json.dumps({"port": port}), encoding="utf-8")
     should_open = daemon.config.gui.open_browser if open_browser is None else open_browser
     ready = asyncio.create_task(_when_ready(daemon, port, url, should_open, dev_port))
     try:
         await server.serve()
     finally:
         ready.cancel()
+        with contextlib.suppress(OSError):
+            instance.unlink()
         if vite is not None:
             ui_build.stop_dev_server(vite)
+
+
+def _run_with_tray(paths: AppPaths, open_browser: bool | None) -> int:
+    from gamepal.tray import Tray, TrayActions
+
+    controller = Controller()
+    failure: list[BaseException] = []
+
+    def serve() -> None:
+        try:
+            asyncio.run(_serve(paths, open_browser, None, controller))
+        except BaseException as exc:
+            failure.append(exc)
+        finally:
+            tray.stop()
+
+    def daemon() -> Any:
+        return controller.daemon
+
+    def toggle_pause() -> None:
+        d = daemon()
+        if d is not None:
+            controller.call(d.resume if d.c.watcher and d.c.watcher.paused else d.pause)
+
+    def open_gui() -> None:
+        if controller.url:
+            webbrowser.open(controller.url)
+
+    def toggle_mute() -> None:
+        d = daemon()
+        if d is not None:
+            controller.call(d._toggle_proactive)
+
+    tray = Tray(
+        TrayActions(
+            open_gui=open_gui,
+            toggle_pause=toggle_pause,
+            toggle_mute=toggle_mute,
+            quit=lambda: controller.call(lambda: setattr(controller.server, "should_exit", True)),
+            paused=lambda: bool(daemon() and daemon().c.watcher and daemon().c.watcher.paused),
+            muted=lambda: bool(daemon() and daemon().assistant.proactive_muted),
+        )
+    )
+    thread = threading.Thread(target=serve, name="game-pal-server")
+    thread.start()
+    tray.run()  # bloquea el hilo principal hasta Salir o hasta que el servidor termine
+    if controller.server is not None:
+        controller.call(lambda: setattr(controller.server, "should_exit", True))
+    thread.join(timeout=30)
+    if failure:
+        log.error("El servidor terminó con un error", exc_info=failure[0])
+        return 1
+    return 0
 
 
 def cmd_run(args: argparse.Namespace, paths: AppPaths) -> int:
@@ -156,6 +272,11 @@ def cmd_run(args: argparse.Namespace, paths: AppPaths) -> int:
         print(f"La configuración de {paths.config_file} no es válida:\n{exc}", file=sys.stderr)
         print("Corrígela o bórrala: game-pal creará una nueva con los valores por defecto.", file=sys.stderr)
         return 1
+    port = _running_instance(paths)
+    if port is not None:
+        # Ya hay un game-pal abierto: se le pide que abra su GUI en lugar de arrancar otro.
+        print(f"game-pal ya está en marcha en el puerto {port}; se abre su ventana.", file=sys.stderr)
+        return 0 if _show_running(port) else 1
     dev: Path | None = None
     if args.dev:
         dev = ui_build.source_dir()
@@ -171,6 +292,12 @@ def cmd_run(args: argparse.Namespace, paths: AppPaths) -> int:
         warning = ui_build.ensure_ui(_say)
         if warning:
             _say(f"Aviso: {warning}")
+    tray = args.tray if args.tray is not None else bool(getattr(sys, "frozen", False))
+    if tray and dev is None:
+        try:
+            return _run_with_tray(paths, args.open)
+        except ImportError:
+            log.warning("No hay bandeja del sistema disponible; se sigue sin ella")
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_serve(paths, args.open, dev))
     return 0
@@ -269,6 +396,18 @@ def cmd_profiles(args: argparse.Namespace, paths: AppPaths) -> int:
     return 1 if errors else 0
 
 
+def cmd_new_profile(args: argparse.Namespace, paths: AppPaths) -> int:
+    from gamepal.profiles.scaffold import create_profile
+
+    folder = create_profile(
+        paths.user_profiles_dir, args.id, args.name or args.id.replace("-", " ").title(),
+        window=args.window, process=args.process, schema=bundled_profiles_dir() / "profile.schema.json",
+    )  # fmt: skip
+    print(f"Perfil creado en {folder}")
+    print("Edita profile.yaml y vocabulary.yaml, y compruébalo con: game-pal profiles")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace, paths: AppPaths) -> int:
     from gamepal.profiles import GameProfile
 
@@ -289,6 +428,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="arranca game-pal y abre la GUI (por defecto)")
     run.add_argument("--open", dest="open", action="store_true", default=None, help="abrir el navegador")
     run.add_argument("--no-open", dest="open", action="store_false", help="no abrir el navegador")
+    run.add_argument("--tray", dest="tray", action="store_true", default=None, help="icono en la bandeja del sistema")
+    run.add_argument("--no-tray", dest="tray", action="store_false", help="sin icono en la bandeja")
     run.add_argument("--dev", action="store_true", help="GUI desde Vite con recarga en caliente (desarrollo)")
     run.set_defaults(func=cmd_run)
 
@@ -312,6 +453,13 @@ def build_parser() -> argparse.ArgumentParser:
     ocr.set_defaults(func=cmd_ocr)
 
     sub.add_parser("profiles", help="lista y valida los perfiles de juego").set_defaults(func=cmd_profiles)
+
+    new = sub.add_parser("new-profile", help="crea el esqueleto de un perfil de juego nuevo")
+    new.add_argument("id", help="identificador: minúsculas, dígitos y guiones (p. ej. hollow-knight)")
+    new.add_argument("--name", help="nombre del juego")
+    new.add_argument("--window", help="título de su ventana")
+    new.add_argument("--process", help="nombre del ejecutable, sin extensión")
+    new.set_defaults(func=cmd_new_profile)
 
     schema = sub.add_parser("schema", help="exporta el JSON Schema de los perfiles")
     schema.add_argument("--out")

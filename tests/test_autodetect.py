@@ -10,6 +10,7 @@ from gamepal.checks import Probe
 from gamepal.config import AppConfig, KnowledgeConfig, OcrConfig, OutputConfig, OverlayConfig, load_config, save_config
 from gamepal.daemon import Daemon
 from gamepal.gui_server import create_app
+from gamepal.hardware import HardwareInfo
 from gamepal.keystore import MemorySecretStore
 from gamepal.paths import AppPaths
 from gamepal.profiles import LoadedProfile, ProfileStore
@@ -110,6 +111,7 @@ def running(app_paths: AppPaths, repo_profiles: Path) -> Iterator[tuple[TestClie
         backend_factory=FakeBackend,
         bundled_dir=repo_profiles,
         secrets=MemorySecretStore(),
+        hardware=lambda: HardwareInfo("linux", "x64", "cpu", 8, 16.0, [], vulkan=False),
         probe=servers({OLLAMA: ("nomic-embed-text", "qwen3:4b")}),
     )
     with TestClient(create_app(daemon, "t", 47998), base_url="http://127.0.0.1:47998") as test_client:
@@ -139,3 +141,9 @@ def test_autodetect_switches_to_the_open_game(running: tuple[TestClient, Daemon]
     assert load_config(app_paths.config_file).profile == "stardew-valley"
     # Ya está en el perfil del juego abierto: no hay nada más que cambiar.
     assert client.post("/api/setup/autodetect", headers=AUTH).json()["changes"] == []
+
+
+async def test_managed_engine_is_left_alone() -> None:
+    config = AppConfig()
+    config.provider.kind = "managed"
+    assert await choose_local_model(config, 16, servers({OLLAMA: ("qwen3:8b",)})) is None

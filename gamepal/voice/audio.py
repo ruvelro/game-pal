@@ -154,3 +154,30 @@ def tone(rising: bool = True, rate: int = 22050, seconds: float = 0.18) -> tuple
     wave = np.sin(2 * np.pi * np.cumsum(freq) / rate)
     envelope = np.minimum(1, np.minimum(t, seconds - t) / 0.02)
     return (0.25 * wave * envelope).astype(np.float32), rate
+
+
+def measure_input(device: str = "", seconds: float = 3.0) -> dict[str, float | bool]:
+    """Graba unos segundos y devuelve el nivel en dBFS, para comprobar el micrófono en el asistente."""
+    import sounddevice as sd
+
+    frames = int(SAMPLE_RATE * seconds)
+    audio = sd.rec(frames, samplerate=SAMPLE_RATE, channels=1, dtype="float32", device=_device_index(device, "input"))
+    sd.wait()
+    samples = np.asarray(audio, dtype=np.float64).reshape(-1)
+    peak = float(np.max(np.abs(samples))) if samples.size else 0.0
+    rms = float(np.sqrt(np.mean(samples**2))) if samples.size else 0.0
+
+    def db(value: float) -> float:
+        return round(20 * float(np.log10(max(value, 1e-6))), 1)
+
+    # Por encima de -45 dBFS de pico hay voz o ruido claro; por debajo, el micrófono no capta nada.
+    return {"peak_db": db(peak), "rms_db": db(rms), "heard": db(peak) > -45}
+
+
+def play_test_tone(device: str = "", volume: float = 0.9) -> None:
+    import sounddevice as sd
+
+    up, rate = tone(True)
+    down, _ = tone(False)
+    sd.play(np.concatenate([up, down]) * volume, rate, device=_device_index(device, "output"))
+    sd.wait()

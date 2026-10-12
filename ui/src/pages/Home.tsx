@@ -13,6 +13,7 @@ const CARDS: Array<[Component, Parameters<typeof t>[0]]> = [
   ["capture", "card.capture"],
   ["ocr", "card.ocr"],
   ["provider", "card.provider"],
+  ["runtime", "card.runtime"],
   ["profile", "card.profile"],
   ["voice", "card.voice"],
   ["overlay", "card.overlay"],

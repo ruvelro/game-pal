@@ -12,6 +12,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Las acciones van fijadas por commit: una etiqueta movida no puede cambiar lo que se ejecuta.
 jobs:
   python:
     name: Python · ${{ matrix.label }}
@@ -25,10 +26,10 @@ jobs:
           - { os: windows-latest, label: Windows x64 }
           - { os: windows-11-arm, label: Windows ARM64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
       - name: Instalar dependencias
@@ -47,13 +48,32 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  audit:
+    name: Dependencias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Vulnerabilidades conocidas (Python)
+        run: |
+          uv export --format requirements-txt --no-dev --all-extras --frozen --no-emit-project -q > requirements-audit.txt
+          uvx pip-audit -r requirements-audit.txt --require-hashes --disable-pip
+      - name: Vulnerabilidades conocidas (GUI)
+        working-directory: ui
+        run: npm audit --omit=dev --audit-level=high

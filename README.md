@@ -16,7 +16,7 @@ Cada juego es un **perfil**: una carpeta con unas reglas en YAML y las webs de d
 
 - **Multiplataforma**: Windows (x64 y ARM64), macOS (Apple Silicon) y Linux.
 - **Local primero**: OCR, visión, razonamiento, voz y búsqueda en tu equipo. Niveles de hardware desde un portátil modesto hasta una GPU grande.
-- **Cualquier modelo**: Ollama, LM Studio, llama.cpp o cualquier endpoint compatible, además de OpenAI, Anthropic y OpenRouter.
+- **Cualquier modelo**: el motor local que game-pal instala solo (llama.cpp con Gemma 4 y Qwen 3.5), tu propio servidor (Ollama, LM Studio…) u OpenAI, Anthropic y OpenRouter.
 - **Cualquier juego**: perfiles declarativos sin coordenadas fijas; conocimiento cargado por URL y actualizable con un botón.
 - **Multiidioma**: idioma del juego, del jugador y de las respuestas configurables por separado.
 - **Tres formas de pedir consejo**: palabra clave, push-to-talk (teclado o mando) y modo proactivo.
@@ -26,13 +26,42 @@ Cada juego es un **perfil**: una carpeta con unas reglas en YAML y las webs de d
 - **GUI** para configurarlo y controlarlo todo sin tocar ficheros.
 - **Seguridad por defecto**: claves en el almacén de credenciales del sistema, solo loopback, sin telemetría.
 
+## Instalar
+
+Descarga el instalador de tu sistema desde [Releases](https://github.com/ruvelro/game-pal/releases):
+
+| Sistema | Fichero |
+| --- | --- |
+| Windows x64 / ARM64 | `game-pal-…-windows-x64-setup.exe` o `…-arm64-setup.exe` (también hay zip portable) |
+| macOS (Apple Silicon) | `game-pal-…-macos-arm64.dmg` |
+| Linux x64 | `game-pal-…-linux-x64.AppImage` (o el tar.gz) |
+
+Al abrirlo por primera vez, un asistente de cuatro pasos te guía: el juego (lo reconoce solo si tiene perfil), el modelo de IA (puede descargar el motor local y modelos verificados según tu equipo, usar el servidor que ya tengas o la nube), una comprobación de que todo funciona y la voz. game-pal vive después en la bandeja del sistema (en la barra de menús en macOS).
+
+Los instaladores aún no llevan firma de código de Apple ni de Microsoft:
+
+- **macOS**: la primera vez, haz clic derecho sobre game-pal › Abrir, o permítelo en Ajustes del Sistema › Privacidad y seguridad.
+- **Windows**: si SmartScreen avisa, pulsa «Más información» › «Ejecutar de todas formas».
+
+Para comprobar que una descarga es la publicada aquí, usa `SHA256SUMS.txt` o la atestación de procedencia:
+
+```bash
+gh attestation verify game-pal-0.1.0-macos-arm64.dmg --repo ruvelro/game-pal
+```
+
 ## Estado
 
-En desarrollo. Ya funciona: captura de la ventana del juego, lectura del texto, reconocimiento de pantallas por perfil (con Hades II y Stardew Valley incluidos), preguntas por voz con frase clave o pulsando una tecla o un botón del mando, respuestas habladas y sobre el juego, avisos por su cuenta en los momentos clave, conocimiento sacado de wikis y documentos con fuentes citadas, lectura del guardado de Hades II y Stardew Valley para saber cómo vas, memoria opcional entre sesiones, OpenAI, Claude y OpenRouter opcionales por tarea con un panel de actividad, y una GUI para controlarlo todo. Todavía no hay versión instalable.
+Versión 0.1, la primera utilizable:
 
-La especificación completa está en [docs/spec.md](docs/spec.md).
+- **Ver**: captura de la ventana del juego y lectura del texto, con reconocimiento de pantallas por perfil (Hades II y Stardew Valley incluidos).
+- **Hablar**: preguntas por voz con frase clave o pulsando una tecla o un botón del mando, con respuestas habladas y sobre el juego, y avisos por su cuenta en los momentos clave.
+- **Saber y recordar**: conocimiento sacado de wikis y documentos con fuentes citadas, lectura del guardado de Hades II y Stardew Valley, y memoria opcional entre sesiones.
+- **Modelos**: motor local gestionado, OpenAI, Claude y OpenRouter opcionales por tarea, y un panel de actividad.
+- **Usarlo**: un asistente de primer uso e instaladores para los tres sistemas.
 
-## Probarlo
+La especificación completa está en [docs/spec.md](docs/spec.md) y los cambios de cada versión en [CHANGELOG.md](CHANGELOG.md).
+
+## Desde el código
 
 Necesitas [uv](https://docs.astral.sh/uv/) y, para compilar la GUI la primera vez, [Node.js 22](https://nodejs.org) o superior. Después:
 
@@ -46,11 +75,11 @@ Instala lo que falte, compila la GUI y la abre en el navegador. La primera vez, 
 uv run game-pal doctor
 ```
 
-Para dar consejos necesita un modelo de IA: lo más sencillo es instalar [Ollama](https://ollama.com) y descargar uno con `ollama pull qwen3:4b`. game-pal encuentra solo Ollama, LM Studio, llama.cpp o MLX y elige un modelo que quepa en tu equipo. También vale una clave de OpenAI, Claude u OpenRouter.
+Para el modelo de IA no hace falta nada más: el asistente puede descargar el motor llama.cpp y un modelo verificado adecuado a tu equipo. Si ya tienes Ollama, LM Studio, llama.cpp o MLX, game-pal los encuentra solo y elige un modelo que quepa. También vale una clave de OpenAI, Claude u OpenRouter.
 
 Tampoco hace falta elegir el juego: si tiene perfil, game-pal lo reconoce al abrirlo. Los idiomas se toman del sistema la primera vez.
 
-Si algo falla, mira [docs/problemas.md](docs/problemas.md). Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md).
+Si algo falla, mira [docs/problemas.md](docs/problemas.md). Más detalles en [docs/development.md](docs/development.md). Para enseñarle un juego nuevo, mira [docs/profiles.md](docs/profiles.md) o empieza con `uv run game-pal new-profile mi-juego`.
 
 ## Contribuir
 

@@ -30,6 +30,7 @@ from gamepal.voice.audio import list_devices
 
 if TYPE_CHECKING:
     from gamepal.daemon import Daemon
+    from gamepal.runtime.llama import LlamaRuntime
 
 CheckState = Literal["ok", "warn", "error", "off"]
 
@@ -477,6 +478,35 @@ async def check_models(config: AppConfig, has_key: Callable[[str], bool], probe:
     return Check(id="model", title=title, state="ok", detail=f"{chosen} en {name}")
 
 
+def check_engine(config: AppConfig, runtime: LlamaRuntime, error: str | None = None) -> Check:
+    """El motor llama.cpp que gestiona game-pal, con los modelos de su catálogo."""
+    title = "Modelo de IA"
+    fix = "Instálalo en la página Modelos o con el asistente (Avanzado › Abrir el asistente de configuración)."
+    installed = {m.id: m for m in runtime.installed_models()}
+    if not installed:
+        return Check(
+            id="model", title=title, state="error", detail="El motor de game-pal no tiene ningún modelo", fix=fix
+        )
+    chosen = installed.get(config.provider.model)
+    if chosen is None:
+        entry = runtime.catalog.model(config.provider.model)
+        name = entry.name if entry else config.provider.model or "—"
+        return Check(id="model", title=title, state="error", detail=f"El modelo «{name}» no está instalado", fix=fix)
+    if error:
+        return Check(
+            id="model",
+            title=title,
+            state="error",
+            detail=f"El motor de game-pal no arrancó: {error[:300]}",
+            fix="Vuelve a arrancar game-pal. Si sigue fallando, prueba un modelo más pequeño en la página Modelos.",
+        )
+    return Check(id="model", title=title, state="ok", detail=f"{chosen.name} en el motor de game-pal")
+
+
+def _uses_engine(config: AppConfig) -> bool:
+    return config.routing.reasoning.provider == "local" and config.provider.kind == "managed"
+
+
 def check_voice(config: AppConfig, devices: Callable[[], dict[str, list[str]]] | None = None) -> Check:
     title = "Voz"
     voice = config.voice
@@ -589,8 +619,15 @@ async def doctor_checks(paths: AppPaths, *, probe: Probe | None = None) -> list[
 
     problem = ocr_problem(config.ocr.backend)
     checks.append(check_ocr(config, None if problem else config.ocr.backend, problem))
-    secrets = SecretStore()
-    checks.append(await check_models(config, lambda name: bool(secrets.get(name)), probe))  # type: ignore[arg-type]
+    if _uses_engine(config):
+        from gamepal.runtime.catalog import bundled_catalog
+        from gamepal.runtime.llama import LlamaRuntime
+
+        checks.append(check_engine(config, LlamaRuntime(paths.data_dir / "engine", paths.log_dir, bundled_catalog())))
+    else:
+        secrets = SecretStore()
+        has_key = lambda name: bool(secrets.get(name))  # type: ignore[arg-type]  # noqa: E731
+        checks.append(await check_models(config, has_key, probe))
     checks.append(check_voice(config))
     checks.append(check_hotkeys(config))
     return checks
@@ -601,12 +638,16 @@ async def daemon_checks(daemon: Daemon, *, probe: Probe | None = None) -> list[C
     c, config = daemon.c, daemon.config
     probe = probe or daemon.probe
     windows, foreground, list_error = await _windows(c.backend)
-    checks = [
+    if _uses_engine(config):
+        runtime = daemon.engine.runtime
+        model = check_engine(config, runtime, (runtime.detail or "error") if runtime.state == "error" else None)
+    else:
+        model = await check_models(config, lambda name: bool(daemon.secrets.get(name)), probe)  # type: ignore[arg-type]
+    return [
         check_capture(c.backend, c.errors.get("capture") or list_error, windows),
         check_game(config, c.profile, c.errors.get("profile"), windows, foreground),
         check_ocr(config, c.ocr.name if c.ocr else None, c.errors.get("ocr")),
-        await check_models(config, lambda name: bool(daemon.secrets.get(name)), probe),  # type: ignore[arg-type]
+        model,
         check_voice(config),
         check_hotkeys(config),
     ]
-    return checks

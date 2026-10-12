@@ -156,7 +156,8 @@ export type Component =
   | "hotkeys"
   | "knowledge"
   | "save"
-  | "memory";
+  | "memory"
+  | "runtime";
 export type State = "idle" | "starting" | "running" | "paused" | "waiting" | "error" | "ready";
 
 export interface StatusEvent {
@@ -251,6 +252,8 @@ export interface BusMessage {
 export interface AppConfig {
   version: number;
   setup_completed: boolean;
+  hardware_tier: number | null;
+  runtime: { variant: string; context: number; models_max: number };
   profile: string;
   auto_detect_game: boolean;
   window_title: string | null;
@@ -270,7 +273,7 @@ export interface AppConfig {
   };
   ocr: { backend: "rapidocr" | "apple-vision" | "windows-ocr" | "none"; min_confidence: number };
   provider: {
-    kind: "local-openai";
+    kind: "local-openai" | "managed";
     base_url: string;
     model: string;
     vision_model: string;
@@ -438,3 +441,65 @@ export function connectEvents(onMessage: (message: BusMessage) => void, onState:
     socket?.close();
   };
 }
+
+export interface Hardware {
+  os: "windows" | "macos" | "linux";
+  arch: "x64" | "arm64";
+  cpu: string;
+  cores: number;
+  ram_gb: number;
+  gpus: Array<{ name: string; vendor: string; vram_gb: number | null; integrated: boolean }>;
+  unified: boolean;
+  model_memory_gb: number;
+  tier: number;
+  reason: string;
+}
+
+export interface CatalogModel {
+  id: string;
+  name: string;
+  license: string;
+  roles: Array<"reasoning" | "fast" | "vision">;
+  size: number;
+  vision: boolean;
+  description: string;
+  installed: boolean;
+}
+
+export interface TierPreset {
+  tier: number;
+  reasoning: string;
+  fast: string;
+  vision: string;
+  stt: string;
+  context: number;
+  models_max: number;
+}
+
+export interface DownloadProgress {
+  item: string;
+  label: string;
+  received: number;
+  total: number;
+  state: "queued" | "running" | "verifying" | "done" | "error" | "cancelled";
+  error: string;
+}
+
+export interface EngineStatus {
+  state: "missing" | "stopped" | "starting" | "running" | "error";
+  detail: string;
+  port: number | null;
+  tag: string;
+  variant: string | null;
+  variants: string[];
+  installed: boolean;
+  runtime_size: number;
+  models: CatalogModel[];
+  running_models: string[];
+  tiers: TierPreset[];
+  downloads: DownloadProgress[];
+  busy: boolean;
+}
+
+export const formatBytes = (bytes: number) =>
+  bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;

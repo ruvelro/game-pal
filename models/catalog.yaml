@@ -1,0 +1,124 @@
+# Catálogo de modelos y del motor local que game-pal sabe descargar y lanzar.
+#
+# Todo va fijado: la versión de llama.cpp, la revisión de cada repositorio de Hugging Face y el
+# SHA-256 de cada fichero. Una descarga que no casa con su hash se descarta. Para actualizar una
+# entrada hay que cambiar a la vez la revisión, el tamaño y el hash.
+version: 1
+
+runtime:
+  name: llama.cpp
+  # b11429 es la compilación que publica la versión estable v0.6.0.
+  tag: b11429
+  url: https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}
+  license: MIT
+  variants:
+    - { id: macos-arm64, os: macos, arch: arm64, accel: metal,
+        asset: llama-b11429-bin-macos-arm64.tar.gz, size: 11971406,
+        sha256: 740288ec6887be94280a5dfa25b5e23a78285cab104519e6c7e218904ee82459 }
+    - { id: win-vulkan-x64, os: windows, arch: x64, accel: vulkan,
+        asset: llama-b11429-bin-win-vulkan-x64.zip, size: 33337769,
+        sha256: 1bfe78ad9168b79fa02bf67f6af9f5e17a966d824d77238517f7bef12ac73b36 }
+    - { id: win-cpu-x64, os: windows, arch: x64, accel: cpu,
+        asset: llama-b11429-bin-win-cpu-x64.zip, size: 19398918,
+        sha256: 1283323272b04cd07905816a597a0da810918102de958f4ff6f7bbaa70ed2efe }
+    - { id: win-cpu-arm64, os: windows, arch: arm64, accel: cpu,
+        asset: llama-b11429-bin-win-cpu-arm64.zip, size: 12229035,
+        sha256: ee0f631a9e58b146ff50714099d9cb498906af3143a773b580093a9214a8d1e5 }
+    - { id: win-vulkan-arm64, os: windows, arch: arm64, accel: vulkan,
+        asset: llama-b11429-bin-win-vulkan-arm64.zip, size: 25880280,
+        sha256: 739747b9912d19525977b0346a02087037eec487fea7b58c2826324407e588ce }
+    - { id: linux-vulkan-x64, os: linux, arch: x64, accel: vulkan,
+        asset: llama-b11429-bin-ubuntu-vulkan-x64.tar.gz, size: 31636673,
+        sha256: 632c4e98feba2b94407a2130e3133e0c3aefb0ea1ab41337e926d8bfafdd0b74 }
+    - { id: linux-cpu-x64, os: linux, arch: x64, accel: cpu,
+        asset: llama-b11429-bin-ubuntu-x64.tar.gz, size: 17693462,
+        sha256: f6d25dde8f51133143d1453da4fd5f73b145127177612a283bf7995957af3392 }
+    - { id: linux-cpu-arm64, os: linux, arch: arm64, accel: cpu,
+        asset: llama-b11429-bin-ubuntu-arm64.tar.gz, size: 13682895,
+        sha256: ed44c0f79c3d02424f62bdc87e106318b0b89f49050e2e80c5f352723d14e00b }
+
+models:
+  - id: qwen3.5-0.8b
+    name: Qwen 3.5 0.8B
+    family: qwen
+    license: Apache-2.0
+    roles: [fast]
+    description: Diminuto y rápido. Decide cómo responder y contesta lo sencillo.
+    files:
+      - { repo: ggml-org/Qwen3.5-0.8B-GGUF, revision: 8fea620810c4afa23dd6443f999a48574c1611a3,
+          path: Qwen3.5-0.8B-Q8_0.gguf, size: 833592096,
+          sha256: 37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f }
+
+  - id: qwen3.5-2b
+    name: Qwen 3.5 2B
+    family: qwen
+    license: Apache-2.0
+    roles: [reasoning, fast]
+    description: Texto ligero para equipos modestos. Sin visión.
+    files:
+      - { repo: unsloth/Qwen3.5-2B-GGUF, revision: f6d5376be1edb4d416d56da11e5397a961aca8ae,
+          path: Qwen3.5-2B-Q4_K_M.gguf, size: 1280835840,
+          sha256: aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223 }
+
+  - id: gemma-4-e2b
+    name: Gemma 4 E2B
+    family: gemma
+    license: Apache-2.0
+    roles: [reasoning, vision]
+    description: Pequeño, multiidioma y con visión.
+    files:
+      - { repo: ggml-org/gemma-4-E2B-it-GGUF, revision: b4243c156154b6dca9324415f8c7ccc098b4aed1,
+          path: gemma-4-E2B-it-Q4_0.gguf, size: 2841481184,
+          sha256: 8e30dff3ac4c8434c49a7036fa15564bdbb6044e42bf04550bf1a096ad7e6a52 }
+      - { repo: ggml-org/gemma-4-E2B-it-GGUF, revision: b4243c156154b6dca9324415f8c7ccc098b4aed1,
+          path: mmproj-gemma-4-E2B-it-Q8_0.gguf, size: 557368064, kind: mmproj,
+          sha256: 9406f99c16d68cda4f1f0552192dcc99021ea1fc6d2fd50b1dc3ccf30d04b292 }
+
+  - id: gemma-4-e4b
+    name: Gemma 4 E4B
+    family: gemma
+    license: Apache-2.0
+    roles: [reasoning, vision]
+    description: El equilibrio para 8 GB de memoria. Multiidioma y con visión.
+    files:
+      - { repo: ggml-org/gemma-4-E4B-it-GGUF, revision: b8093469224f83f5c38f691eb906c380e9e63114,
+          path: gemma-4-E4B-it-Q4_0.gguf, size: 4590807392,
+          sha256: a555b900214b477d8880e7832e0b8925e139b0159640036b09fe472b6f2097f2 }
+      - { repo: ggml-org/gemma-4-E4B-it-GGUF, revision: b8093469224f83f5c38f691eb906c380e9e63114,
+          path: mmproj-gemma-4-E4B-it-Q8_0.gguf, size: 559874816, kind: mmproj,
+          sha256: 197f49a93027f9843772bd24a6a9e0be2a32a788de5a3def330e9c585d86edd1 }
+
+  - id: gemma-4-12b
+    name: Gemma 4 12B (QAT)
+    family: gemma
+    license: Apache-2.0
+    roles: [reasoning, vision]
+    description: Consejos más finos. Cuantizado por Google sin apenas pérdida.
+    files:
+      - { repo: google/gemma-4-12B-it-qat-q4_0-gguf, revision: 29d097773436b69ff9feafd636ab4cf873786537,
+          path: gemma-4-12b-it-qat-q4_0.gguf, size: 6975879296,
+          sha256: 93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b }
+      - { repo: google/gemma-4-12B-it-qat-q4_0-gguf, revision: 29d097773436b69ff9feafd636ab4cf873786537,
+          path: mmproj-gemma-4-12b-it-qat-q4_0.gguf, size: 175115616, kind: mmproj,
+          sha256: cb018338a7538a9814d994bfe54644c71eb7ed54e31eae2f721e45fd3c260da7 }
+
+  - id: gemma-4-26b-a4b
+    name: Gemma 4 26B A4B
+    family: gemma
+    license: Apache-2.0
+    roles: [reasoning, vision]
+    description: "El más capaz. Mezcla de expertos: solo usa 4B por palabra, así que va rápido."
+    files:
+      - { repo: ggml-org/gemma-4-26B-A4B-it-GGUF, revision: bb4531cda34d1ea09d9814959ed4d5833cf2a4c8,
+          path: gemma-4-26B-A4B-it-Q4_0.gguf, size: 14618145824,
+          sha256: d208665ab1cd3a69f7a9a4bc59430e8448c8093d9b06334f566ac59d6d504a03 }
+      - { repo: ggml-org/gemma-4-26B-A4B-it-GGUF, revision: bb4531cda34d1ea09d9814959ed4d5833cf2a4c8,
+          path: mmproj-gemma-4-26B-A4B-it-Q8_0.gguf, size: 806408320, kind: mmproj,
+          sha256: cc4e855736da450bf1e162d8cccfe0ad685727d0c9e04ef7dd8d884f3121039b }
+
+# Lo que propone el asistente de primer uso para cada nivel de hardware.
+tiers:
+  - { tier: 0, reasoning: qwen3.5-2b, fast: qwen3.5-0.8b, vision: "", stt: base, context: 8192, models_max: 2 }
+  - { tier: 1, reasoning: gemma-4-e4b, fast: qwen3.5-0.8b, vision: gemma-4-e4b, stt: small, context: 8192, models_max: 2 }
+  - { tier: 2, reasoning: gemma-4-12b, fast: qwen3.5-0.8b, vision: gemma-4-12b, stt: medium, context: 16384, models_max: 2 }
+  - { tier: 3, reasoning: gemma-4-26b-a4b, fast: gemma-4-e4b, vision: gemma-4-26b-a4b, stt: large-v3-turbo, context: 32768, models_max: 3 }

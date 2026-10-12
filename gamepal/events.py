@@ -94,7 +94,18 @@ class ScreenDetected(Event):
 class StatusChanged(Event):
     topic: ClassVar[str] = "status"
     component: Literal[
-        "capture", "ocr", "provider", "profile", "daemon", "voice", "overlay", "hotkeys", "save", "memory", "knowledge"
+        "capture",
+        "ocr",
+        "provider",
+        "profile",
+        "daemon",
+        "voice",
+        "overlay",
+        "hotkeys",
+        "save",
+        "memory",
+        "knowledge",
+        "runtime",
     ]
     state: Literal["idle", "starting", "running", "paused", "waiting", "error", "ready"]
     detail: str = ""
@@ -176,6 +187,18 @@ class ActivityRecorded(Event):
     output_tokens: int | None = None
     cost: float | None = None
     fallback: bool = False
+
+
+class DownloadProgress(Event):
+    """Descarga del motor o de un modelo del catálogo."""
+
+    topic: ClassVar[str] = "download"
+    item: str
+    label: str
+    received: int = 0
+    total: int = 0
+    state: Literal["queued", "running", "verifying", "done", "error", "cancelled"] = "running"
+    error: str = ""
 
 
 class LogMessage(Event):

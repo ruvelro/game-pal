@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, token, type AppConfig } from "./api";
-import { Downloads } from "./components/Downloads";
+import { StatusDownloads } from "./components/StatusDownloads";
 import { t, type Key } from "./i18n";
 import { Activity } from "./pages/Activity";
 import { Game } from "./pages/Game";
@@ -47,7 +47,6 @@ function Shell() {
   const [setup, setSetup] = useState<boolean | null>(null);
   const live = useLive();
   const { status, refresh } = useStatus();
-
   useEffect(() => {
     api
       .get<AppConfig>("/api/config")
@@ -96,13 +95,13 @@ function Shell() {
         </div>
       </aside>
       <main className="content">
-        <Downloads live={live} />
+        <StatusDownloads live={live} />
         {page === "home" && <Home live={live} status={status} onToggle={() => void toggle()} onNavigate={setPage} />}
         {page === "game" && <Game />}
         {page === "knowledge" && <Knowledge live={live} />}
         {page === "memory" && <Memory />}
         {page === "talk" && <Talk />}
-        {page === "models" && <Models />}
+        {page === "models" && <Models live={live} />}
         {page === "activity" && <Activity live={live} />}
         {page === "settings" && <Settings onSetup={() => setSetup(true)} />}
       </main>
