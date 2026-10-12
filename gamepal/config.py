@@ -195,6 +195,8 @@ class OverlayConfig(_Model):
     font_scale: float = Field(default=1.0, ge=0.7, le=2)
     # Segundos que sigue visible una tarjeta tras terminar.
     linger_seconds: float = Field(default=12, ge=2, le=120)
+    # Atajo que abre y cierra el chat sobre el juego, para escribirle sin salir. Vacío: sin atajo.
+    chat_key: str = "<ctrl>+<alt>+c"
 
 
 class ProactiveConfig(_Model):

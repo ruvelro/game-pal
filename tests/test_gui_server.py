@@ -76,8 +76,11 @@ def test_profiles_and_windows(client: TestClient) -> None:
 
 def test_config_update_validates_and_persists(client: TestClient, app_paths: AppPaths) -> None:
     config = client.get("/api/config", headers=AUTH).json()
-    config["provider"]["base_url"] = "http://192.168.1.4:11434/v1"
+    # Fuera de la red de casa, solo por https: las preguntas y el texto de la pantalla no viajan en claro.
+    config["provider"]["base_url"] = "http://modelos.example.com/v1"
     assert client.put("/api/config", headers=AUTH, json=config).status_code == 422
+    config["provider"]["base_url"] = "http://192.168.1.4:11434/v1"
+    assert client.put("/api/config", headers=AUTH, json=config).status_code == 200
 
     config["provider"]["base_url"] = "http://127.0.0.1:1234/v1"
     config["window_title"] = "Mi Juego"
@@ -224,7 +227,7 @@ def test_evidence_and_memory_endpoints(client: TestClient) -> None:
 
 def test_provider_keys_are_never_returned(client: TestClient) -> None:
     info = client.get("/api/providers", headers=AUTH).json()
-    assert info["keys"] == {"openai": False, "anthropic": False, "openrouter": False}
+    assert info["keys"] == {"openai": False, "anthropic": False, "openrouter": False, "server": False}
     assert (
         client.put("/api/providers/anthropic/key", headers=AUTH, json={"key": "sk-ant-test-123456"}).status_code == 200
     )
@@ -295,3 +298,18 @@ def test_instance_endpoints(app_paths: AppPaths, repo_profiles: Path) -> None:
         assert client.post("/api/instance/show", headers=HOST).status_code == 200
         assert client.post("/api/instance/show", headers=HOST).status_code == 429
         assert shown == [1]
+
+
+def test_connection_test_explains_each_step(client: TestClient) -> None:
+    bad = client.post("/api/providers/test", headers=AUTH, json={"base_url": "http://modelos.example.com/v1"}).json()
+    assert [(step["id"], step["ok"]) for step in bad["steps"]] == [("address", False)]
+    assert "https" in bad["steps"][0]["detail"]
+
+    # Nada escucha en ese puerto: la dirección vale, la conexión no.
+    closed = client.post("/api/providers/test", headers=AUTH, json={"base_url": "http://127.0.0.1:9/v1"}).json()
+    assert [(step["id"], step["ok"]) for step in closed["steps"]] == [("address", True), ("connect", False)]
+    assert closed["ok"] is False
+
+    cloud = client.post("/api/providers/test", headers=AUTH, json={"target": "anthropic"}).json()
+    assert cloud["steps"][0]["id"] == "connect"
+    assert "clave" in cloud["steps"][0]["fix"]

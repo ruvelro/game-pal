@@ -14,6 +14,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -25,19 +26,21 @@ from gamepal import __version__
 from gamepal.autodetect import pick_model
 from gamepal.checks import blocking, daemon_checks, discover_servers
 from gamepal.config import AppConfig
+from gamepal.connection import ConnectionReport, Step, address_failed, check_connection
 from gamepal.daemon import Daemon
 from gamepal.events import AnswerUpdate, SpeechStopped
 from gamepal.explain import explain_error
-from gamepal.keystore import CLOUDS, SecretStoreError
+from gamepal.keystore import CLOUDS, KEYS, SecretStoreError
 from gamepal.knowledge import KnowledgeError
 from gamepal.knowledge.service import MAX_FILE_BYTES as MAX_UPLOAD_BYTES
 from gamepal.perception.classifier import classify
 from gamepal.perception.vocabulary import expand_path
 from gamepal.profiles.lint import lint
-from gamepal.providers import Message, ProviderError
+from gamepal.providers import LocalOpenAIProvider, Message, ProviderError
+from gamepal.providers.hub import model_for
 from gamepal.runtime.llama import EngineError
 from gamepal.runtime.setup import apply_tier
-from gamepal.security import UnsafeUrlError, allowed_host_header, tokens_match
+from gamepal.security import UnsafeUrlError, allowed_host_header, is_loopback_host, tokens_match, validate_model_server
 from gamepal.system import can_open_settings, open_settings, total_memory_gb
 from gamepal.ui_build import STATIC_DIR
 from gamepal.voice.audio import list_devices, measure_input, play_test_tone
@@ -118,6 +121,14 @@ class TierRequest(BaseModel):
 
 class SetupDoneRequest(BaseModel):
     done: bool = True
+
+
+class ConnectionTestRequest(BaseModel):
+    target: Literal["local", "openai", "anthropic", "openrouter"] = "local"
+    # Lo que el jugador tiene escrito, aunque no esté guardado. Vacío: lo de la configuración.
+    base_url: str = Field(default="", max_length=500)
+    model: str = Field(default="", max_length=300)
+    key: str = Field(default="", max_length=400)
 
 
 def create_app(
@@ -491,7 +502,7 @@ def create_app(
 
     @app.put("/api/providers/{name}/key", dependencies=auth)
     async def provider_set_key(name: str, body: SecretRequest) -> dict[str, bool]:
-        if name not in CLOUDS:
+        if name not in KEYS:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Proveedor desconocido")
         try:
             await asyncio.to_thread(daemon.secrets.set, name, body.key)  # type: ignore[arg-type]
@@ -502,7 +513,7 @@ def create_app(
 
     @app.delete("/api/providers/{name}/key", dependencies=auth)
     async def provider_delete_key(name: str) -> dict[str, bool]:
-        if name not in CLOUDS:
+        if name not in KEYS:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Proveedor desconocido")
         await asyncio.to_thread(daemon.secrets.delete, name)  # type: ignore[arg-type]
         await daemon.refresh_providers()
@@ -528,6 +539,44 @@ def create_app(
         except ProviderError as exc:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
         return {"models": list(caps.models)}
+
+    @app.post("/api/providers/test", dependencies=auth)
+    async def provider_test(body: ConnectionTestRequest) -> dict[str, Any]:
+        """Prueba la conexión con el modelo paso a paso, con lo escrito en la GUI aunque no esté guardado."""
+        config = daemon.config
+        model = body.model.strip() or model_for(config, body.target, "reasoning")
+        if body.target != "local":
+            try:
+                client = daemon.hub.client(body.target)
+            except ProviderError as exc:
+                report = ConnectionReport(target=body.target, model=model)
+                report.add(Step(id="connect", ok=False, detail=str(exc), fix="Guarda primero la clave."))
+                return report.model_dump()
+            return (await check_connection(client, body.target, model)).model_dump()
+        if config.provider.kind == "managed" and not body.base_url:
+            try:
+                client = daemon.hub.client("local")
+            except ProviderError as exc:
+                report = ConnectionReport(target="engine", model=model)
+                report.add(Step(id="connect", ok=False, detail=str(exc), fix="Instala o arranca el motor arriba."))
+                return report.model_dump()
+            return (await check_connection(client, "engine", model)).model_dump()
+        url = body.base_url.strip() or config.provider.base_url
+        try:
+            url = validate_model_server(url)
+        except UnsafeUrlError as exc:
+            return address_failed(url, str(exc)).model_dump()
+        saved: str | None = await asyncio.to_thread(daemon.secrets.get, "server")
+        key = body.key.strip() or saved
+        remote = not is_loopback_host(urlsplit(url).hostname)
+        provider = LocalOpenAIProvider(url, model, api_key=key, timeout=config.provider.timeout_seconds)
+        try:
+            report = await check_connection(provider, url, model, remote_hint=remote)
+        finally:
+            await provider.aclose()
+        where = "en otro equipo" if remote else "en este equipo"
+        report.steps.insert(0, Step(id="address", ok=True, detail=f"{url} ({where})"))
+        return report.model_dump()
 
     @app.get("/api/activity", dependencies=auth)
     async def activity(hours: int = 24) -> dict[str, Any]:

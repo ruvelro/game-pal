@@ -14,7 +14,7 @@ from gamepal.assistant import Assistant
 from gamepal.autodetect import choose_local_model, game_is_open, next_profile
 from gamepal.bus import EventBus
 from gamepal.capture import CaptureBackend, CaptureUnavailableError, create_backend
-from gamepal.checks import Probe, probe_local
+from gamepal.checks import KeyedProbe, Probe
 from gamepal.config import AppConfig, load_config, save_config
 from gamepal.events import ScreenDetected, ScreenRead, StatusChanged
 from gamepal.evidence.service import EvidenceService
@@ -31,6 +31,8 @@ from gamepal.perception.text import normalize
 from gamepal.perception.vision import VisionReader
 from gamepal.perception.vocabulary import Entry, Vocabulary, VocabularySource, build_vocabulary, find_install_dir
 from gamepal.perception.watcher import ScreenWatcher, Target
+from gamepal.permissions import Need, needed
+from gamepal.permissions import state as permission_state
 from gamepal.profiles import LoadedProfile, ProfileError, ProfileStore
 from gamepal.providers import Provider, create_provider
 from gamepal.providers.hub import ProviderHub, model_for
@@ -73,11 +75,15 @@ class Daemon:
         secrets: SecretStore | None = None,
         hardware: Callable[[], HardwareInfo] = detect,
         probe: Probe | None = None,
+        permissions: Callable[[set[Need]], object] | None = None,
     ) -> None:
         self.paths = paths
+        # Cómo se piden los permisos del sistema (Grabación de pantalla, teclado, micrófono). Los tests no piden.
+        self._permissions = permissions
+        self._asked: set[Need] = set()
         self._backend_factory = backend_factory
         # Cómo se pregunta a un servidor local por sus modelos (los tests usan uno falso).
-        self.probe = probe or probe_local
+        self.probe = probe or KeyedProbe(lambda: self.secrets.get("server"), lambda: self.config.provider.base_url)
         # Lo que game-pal ha decidido por su cuenta en esta sesión, para contárselo al jugador.
         self.notes: list[str] = []
         self._autodetect: asyncio.Task[None] | None = None
@@ -148,6 +154,8 @@ class Daemon:
         )
         self.overlay: OverlayProcess | None = None
         self._voice_started = False
+        # Si los atajos pudieron escuchar el teclado al arrancar la voz (en macOS hace falta un permiso).
+        self._input_ready = True
 
     def _local_provider(self) -> Provider | None:
         """Los embeddings de conocimiento siempre se calculan en local."""
@@ -279,10 +287,39 @@ class Daemon:
                 await self.autodetect_game()
                 if not self.config.provider.model and ticks % MODEL_RETRY_TICKS == 0:
                     await self.autodetect_model()
+                await self._rearm_hotkeys()
             except Exception:
                 log.debug("Falló la detección automática", exc_info=True)
 
+    async def _rearm_hotkeys(self) -> None:
+        """Si el jugador concede el permiso del teclado con game-pal abierto, los atajos se activan sin reiniciar."""
+        if self._permissions is None or self._input_ready or "input" not in needed(self.config):
+            return
+        if await asyncio.to_thread(permission_state, "input") != "granted":
+            return
+        async with self._lock:
+            log.info("Permiso del teclado concedido: se activan los atajos")
+            await self.voice.stop()
+            await self.voice.start(self.config)
+            self._input_ready = True
+
     # Configuración --------------------------------------------------------------------------
+
+    async def ask_permissions(self) -> None:
+        """Pide al sistema los permisos que necesita la configuración y aún no se han pedido en esta sesión.
+
+        Así el diálogo sale al arrancar, o al activar la voz o un atajo, y no hay que buscarlos en Ajustes.
+        """
+        if self._permissions is None:
+            return
+        wanted = needed(self.config) - self._asked
+        if not wanted:
+            return
+        self._asked |= wanted
+        try:
+            await asyncio.to_thread(self._permissions, wanted)
+        except Exception:
+            log.warning("No se pudieron pedir los permisos del sistema", exc_info=True)
 
     async def apply(self, config: AppConfig, persist: bool = True) -> None:
         """Aplica una configuración nueva recreando solo lo necesario."""
@@ -291,6 +328,8 @@ class Daemon:
             self.config = config
             if persist:
                 save_config(config, self.paths.config_file)
+            # Antes de abrir la captura, el teclado o el micrófono: así cada permiso se pide una vez y a tiempo.
+            await self.ask_permissions()
             first = self.c.backend is None and "capture" not in self.c.errors
 
             profile_changed = first or config.profile != previous.profile or self.c.profile is None
@@ -348,9 +387,13 @@ class Daemon:
                 config.voice != previous.voice
                 or config.output.answers != previous.output.answers
                 or config.output.proactive != previous.output.proactive
+                or config.output.overlay != previous.output.overlay
                 or config.output_language != previous.output_language
             )
             if not self._voice_started or voice_changed:
+                if self._permissions is not None:
+                    # «unknown»: el sistema no limita el teclado (Windows, Linux).
+                    self._input_ready = await asyncio.to_thread(permission_state, "input") in ("granted", "unknown")
                 await self.voice.stop()
                 await self.voice.start(config)
                 self._voice_started = True

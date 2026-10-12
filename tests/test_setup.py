@@ -232,7 +232,27 @@ async def test_models_detects_a_busy_port() -> None:
 
     check = await check_models(AppConfig(), no_keys, busy)
     assert check.state == "error"
-    assert "otro programa" in check.detail
+    # Lo que dice el servidor ayuda: NVIDIA PAIR, por ejemplo, avisa de que no hay ningún equipo conectado.
+    assert "model inventory unavailable" in check.detail
+    assert "otro programa" in check.fix
+
+
+async def test_models_asks_for_the_server_key() -> None:
+    async def locked(url: str) -> tuple[str, ...]:
+        raise ProviderError("local respondió 401: invalid api key")
+
+    check = await check_models(AppConfig(), no_keys, locked)
+    assert "pide una clave" in check.detail
+
+
+async def test_models_explains_a_server_on_another_computer() -> None:
+    async def offline(url: str) -> tuple[str, ...]:
+        raise ProviderError("No se pudo contactar con local: ConnectError")
+
+    config = AppConfig.model_validate({"provider": {"base_url": "http://192.168.1.20:11434/v1", "model": "x"}})
+    check = await check_models(config, no_keys, offline)
+    assert "192.168.1.20" in check.detail
+    assert "OLLAMA_HOST" in check.fix
 
 
 @pytest.mark.parametrize(

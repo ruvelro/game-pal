@@ -34,7 +34,7 @@ from gamepal.providers.base import (
     ProviderError,
     Usage,
 )
-from gamepal.security import validate_local_endpoint, validate_remote_endpoint
+from gamepal.security import validate_model_server, validate_remote_endpoint
 
 MAX_RESPONSE_CHARS = 200_000
 OPENAI_URL = "https://api.openai.com/v1"
@@ -440,7 +440,7 @@ class OpenAICompatibleProvider:
 
 
 class LocalOpenAIProvider(OpenAICompatibleProvider):
-    """El servidor de modelos del jugador, en este mismo equipo."""
+    """El servidor de modelos del jugador: en este equipo, en otro de su red o donde él diga por https."""
 
     name = "local"
     local = True
@@ -453,7 +453,7 @@ class LocalOpenAIProvider(OpenAICompatibleProvider):
 
     @staticmethod
     def _validate(url: str) -> str:
-        return validate_local_endpoint(url)
+        return validate_model_server(url)
 
     async def _probe(self, model: str, traits: ModelTraits) -> None:
         """Ollama dice en /api/show si el modelo piensa. Otros servidores no responden ahí y no pasa nada."""

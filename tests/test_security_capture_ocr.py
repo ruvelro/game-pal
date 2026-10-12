@@ -8,6 +8,7 @@ from gamepal.security import (
     allowed_host_header,
     tokens_match,
     validate_local_endpoint,
+    validate_model_server,
     validate_remote_endpoint,
 )
 from tests.conftest import pattern
@@ -34,6 +35,42 @@ def test_local_endpoints_accept_loopback(url: str) -> None:
 def test_local_endpoints_reject_everything_else(url: str) -> None:
     with pytest.raises(UnsafeUrlError):
         validate_local_endpoint(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:11434/v1",
+        "http://192.168.1.20:11434/v1",
+        "http://10.0.0.7:1234/v1",
+        "http://172.16.4.2:8080/v1",
+        "http://100.101.102.103:11434/v1",  # Tailscale
+        "http://[fd12:3456::1]:11434/v1",
+        "http://mi-pc:11434/v1",
+        "http://torre.local:1234/v1",
+        "http://gpu.tail1234.ts.net:11434/v1",
+        "https://modelos.example.com/v1",
+    ],
+)
+def test_model_servers_on_the_home_network_or_https(url: str) -> None:
+    assert validate_model_server(url) == url.rstrip("/")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://modelos.example.com/v1",
+        "http://8.8.8.8:11434/v1",
+        "http://user:pass@192.168.1.20/v1",
+        "http://192.168.1.20/v1?x=1",
+        "ftp://192.168.1.20/v1",
+        "http://0.0.0.0:11434/v1",
+        "http://192.168.1.20.evil.com/v1",
+    ],
+)
+def test_model_servers_reject_the_rest(url: str) -> None:
+    with pytest.raises(UnsafeUrlError):
+        validate_model_server(url)
 
 
 def test_remote_endpoints_require_https() -> None:

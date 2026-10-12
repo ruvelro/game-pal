@@ -1408,3 +1408,21 @@ pre.log {
 .downloads > button {
   justify-self: start;
 }
+
+/* Prueba de conexión con el modelo -------------------------------------------------------- */
+
+.connection-test {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.connection-test p {
+  margin: 0;
+}
+
+details.notice > summary {
+  cursor: pointer;
+}
