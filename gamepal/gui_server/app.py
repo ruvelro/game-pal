@@ -28,7 +28,7 @@ from gamepal.checks import blocking, daemon_checks, discover_servers
 from gamepal.config import AppConfig
 from gamepal.connection import ConnectionReport, Step, address_failed, check_connection
 from gamepal.daemon import Daemon
-from gamepal.events import AnswerUpdate, SpeechStopped
+from gamepal.events import AnswerUpdate, ChatToggled, SpeechStopped
 from gamepal.explain import explain_error
 from gamepal.keystore import CLOUDS, KEYS, SecretStoreError
 from gamepal.knowledge import KnowledgeError
@@ -121,6 +121,10 @@ class TierRequest(BaseModel):
 
 class SetupDoneRequest(BaseModel):
     done: bool = True
+
+
+class ChatRequest(BaseModel):
+    open: bool | None = None
 
 
 class ConnectionTestRequest(BaseModel):
@@ -824,6 +828,14 @@ def create_app(
                 id="overlay-test", kind="proactive", title="game-pal", text=sample, done=True, outputs=["overlay"]
             )
         )
+        return {"ok": True}
+
+    @app.post("/api/overlay/chat", dependencies=auth)
+    async def overlay_chat(body: ChatRequest) -> dict[str, bool]:
+        """Abre, cierra o alterna el chat sobre el juego."""
+        if daemon.overlay is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "El overlay está desactivado: actívalo en Voz y respuestas")
+        daemon.bus.publish(ChatToggled(open=body.open))
         return {"ok": True}
 
     @app.websocket("/api/events")

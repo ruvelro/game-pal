@@ -13,6 +13,17 @@ STATUS_TEXT = {
     "es": {"armed": "Te escucho…", "recording": "Grabando…", "transcribing": "Entendiendo…", "thinking": "Pensando…"},
     "en": {"armed": "Listening…", "recording": "Recording…", "transcribing": "Transcribing…", "thinking": "Thinking…"},
 }
+CHAT_TEXT = {
+    "es": {
+        "placeholder": "Pregunta a tu compañero…",
+        "hint": "Intro envía · Esc cierra",
+        "empty": "Escribe tu pregunta.",
+    },
+    "en": {"placeholder": "Ask your pal…", "hint": "Enter sends · Esc closes", "empty": "Type your question."},
+}
+# Lo que se guarda del chat: las últimas preguntas y avisos, para no llenar la pantalla.
+CHAT_HISTORY = 12
+CHAT_WIDTH = 560
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +50,32 @@ class View:
     error: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class ChatEntry:
+    kind: str  # «question» o «proactive»
+    question: str
+    answer: str
+    error: bool = False
+    done: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ChatView:
+    """El chat sobre el juego: historial, campo para escribir y dónde va. Origen arriba a la izquierda."""
+
+    entries: tuple[ChatEntry, ...]
+    status: str
+    placeholder: str
+    hint: str
+    empty: str
+    x: int
+    y: int
+    width: int
+    height: int
+    opacity: float
+    font_scale: float
+
+
 @dataclass
 class Card:
     id: str
@@ -63,6 +100,9 @@ class OverlayModel:
     screen: Rect = field(default_factory=lambda: Rect(0, 0, 1920, 1080))
     card: Card | None = None
     voice: str = "idle"
+    chat_open: bool = False
+    chat: list[ChatEntry] = field(default_factory=list)
+    _chat_ids: list[str] = field(default_factory=list)
 
     def configure(self, config: dict[str, Any]) -> None:
         overlay = config.get("output", {}).get("overlay", {})
@@ -80,7 +120,12 @@ class OverlayModel:
             self.game = Rect(int(data.get("left", 0)), int(data.get("top", 0)), int(data["width"]), int(data["height"]))
         elif topic == "voice.state":
             self.voice = str(data.get("state", "idle"))
-        elif topic == "assistant.answer" and "overlay" in (data.get("outputs") or []):
+        elif topic == "overlay.chat":
+            wanted = data.get("open")
+            self.chat_open = (not self.chat_open) if wanted is None else bool(wanted)
+        if topic == "assistant.answer":
+            self._remember(data)
+        if topic == "assistant.answer" and "overlay" in (data.get("outputs") or []):
             if self.card is None or self.card.id != data.get("id"):
                 self.card = Card(str(data.get("id")), str(data.get("title", "")))
             card = self.card
@@ -93,8 +138,67 @@ class OverlayModel:
         elif topic == "voice.stopped" and self.card is not None:
             self.card = None
 
+    def _remember(self, data: dict[str, Any]) -> None:
+        """Toda pregunta y aviso va al historial del chat, aunque no se muestre en la tarjeta."""
+        answer_id = str(data.get("id", ""))
+        if not answer_id or answer_id == "overlay-test":
+            return
+        error = "" if data.get("error") == "cancelada" else str(data.get("error") or "")
+        entry = ChatEntry(
+            kind=str(data.get("kind", "question")),
+            question=str(data.get("title", "")),
+            answer=error or str(data.get("text") or ""),
+            error=bool(error),
+            done=bool(data.get("done")),
+        )
+        if answer_id in self._chat_ids:
+            index = self._chat_ids.index(answer_id)
+            previous = self.chat[index]
+            # Mientras llega, el texto crece; un mensaje sin texto no borra lo que ya había.
+            if not entry.answer and previous.answer:
+                entry = ChatEntry(entry.kind, entry.question, previous.answer, previous.error, entry.done)
+            self.chat[index] = entry
+        else:
+            self.chat.append(entry)
+            self._chat_ids.append(answer_id)
+            del self.chat[:-CHAT_HISTORY], self._chat_ids[:-CHAT_HISTORY]
+
+    def chat_view(self) -> ChatView | None:
+        if not self.chat_open:
+            return None
+        texts = CHAT_TEXT[self.language]
+        area = self.game or self.screen
+        screen = self.screen
+        width = min(CHAT_WIDTH, max(260, area.width - 2 * MARGIN), screen.width - 2 * MARGIN)
+        height = max(220, min(640, int(area.height * 0.6), screen.height - 2 * MARGIN))
+        right = self.corner.endswith("right")
+        bottom = self.corner.startswith("bottom")
+        x = area.left + area.width - width - MARGIN if right else area.left + MARGIN
+        y = area.top + area.height - height - MARGIN if bottom else area.top + MARGIN
+        x = max(screen.left + MARGIN, min(x, screen.left + screen.width - width - MARGIN))
+        y = max(screen.top + MARGIN, min(y, screen.top + screen.height - height - MARGIN))
+        status = STATUS_TEXT[self.language].get(self.voice, "")
+        if any(not entry.done and not entry.answer for entry in self.chat):
+            status = STATUS_TEXT[self.language]["thinking"]
+        return ChatView(
+            entries=tuple(self.chat),
+            status=status,
+            placeholder=texts["placeholder"],
+            hint=texts["hint"],
+            empty=texts["empty"],
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            opacity=max(self.opacity, 0.9),
+            font_scale=self.font_scale,
+        )
+
     def view(self, now: float | None = None) -> View | None:
         now = time.monotonic() if now is None else now
+        if self.chat_open:
+            # Con el chat abierto, la respuesta ya se ve en él: la tarjeta sobraría.
+            return None
         card = self.card
         if card is not None and card.done and now - card.done_at > self.linger:
             self.card = card = None

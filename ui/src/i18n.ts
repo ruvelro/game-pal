@@ -475,6 +475,11 @@ const es = {
   "conn.step.server": "Servidor",
   "conn.step.model": "Modelo",
   "conn.step.reply": "Respuesta",
+  "output.chat.key": "Atajo del chat sobre el juego",
+  "output.chat.key.hint": "Pulsa {key} durante la partida para escribirle sin salir del juego. Intro envía y Esc lo cierra.",
+  "output.chat.key.none": "Sin atajo: el chat solo se abre desde Inicio.",
+  "output.chat.test": "Abrir el chat",
+  "home.chat": "Chat sobre el juego",
 } as const;
 
 export type Key = keyof typeof es;
@@ -954,6 +959,11 @@ const en: Record<Key, string> = {
   "conn.step.server": "Server",
   "conn.step.model": "Model",
   "conn.step.reply": "Answer",
+  "output.chat.key": "In-game chat shortcut",
+  "output.chat.key.hint": "Press {key} while playing to type to your pal without leaving the game. Enter sends and Esc closes it.",
+  "output.chat.key.none": "No shortcut: the chat only opens from Home.",
+  "output.chat.test": "Open the chat",
+  "home.chat": "In-game chat",
 };
 
 const dictionaries = { es, en } as const;

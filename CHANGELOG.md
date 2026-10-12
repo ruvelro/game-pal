@@ -1,5 +1,22 @@
 # Cambios
 
+## Sin publicar
+
+### Para jugar
+
+- Chat encima del juego: Ctrl+Alt+C (o el botón de Inicio) abre el historial de preguntas y avisos con un campo para escribir, sin salir de la partida. Intro envía, Esc cierra y el teclado vuelve al juego.
+
+### Modelos
+
+- El servidor de modelos puede estar en otro equipo de tu red (http con su IP o nombre `.local`) o en internet por https, con clave opcional si la pide.
+- «Probar conexión» en Modelos, en cada nube y en el asistente: dirección, conexión, servidor, modelo y una respuesta real, con qué hacer si algo falla. El error del servidor se muestra tal cual.
+- El asistente deja escribir la dirección del servidor aunque no detecte ninguno, y no obliga a descargar nada.
+
+### Instalar
+
+- En macOS, game-pal pide al arrancar los permisos que necesita (Grabación de pantalla, Monitorización de entrada para los atajos y, con la voz, el micrófono). Los atajos se activan solos en cuanto se concede el permiso del teclado.
+- En Windows avisa si el micrófono está bloqueado y abre su panel.
+
 ## 0.1.0
 
 Primera versión utilizable.

@@ -325,6 +325,7 @@ export interface OutputConfig {
     opacity: number;
     font_scale: number;
     linger_seconds: number;
+    chat_key: string;
   };
   proactive: { enabled: boolean; mute_key: string; min_interval_seconds: number };
 }

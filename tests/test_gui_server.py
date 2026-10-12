@@ -313,3 +313,10 @@ def test_connection_test_explains_each_step(client: TestClient) -> None:
     cloud = client.post("/api/providers/test", headers=AUTH, json={"target": "anthropic"}).json()
     assert cloud["steps"][0]["id"] == "connect"
     assert "clave" in cloud["steps"][0]["fix"]
+
+
+def test_chat_needs_the_overlay(client: TestClient) -> None:
+    # En los tests el overlay está apagado: el chat no tiene dónde abrirse y se dice por qué.
+    response = client.post("/api/overlay/chat", headers=AUTH, json={"open": True})
+    assert response.status_code == 409
+    assert "overlay" in response.json()["detail"]

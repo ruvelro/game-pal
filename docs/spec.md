@@ -199,6 +199,7 @@ Flujo de una pregunta por voz: tono de listo → grabación hasta 0,7 s de silen
 ### 4.7 Salida
 
 - **Overlay**: tarjeta nativa, click-through, no activable, posicionable por esquina o arrastre, con tamaño y opacidad configurables, paginación automática y cierre cuando la pantalla cambia. Tipos: consejo, comparación de opciones, aviso proactivo, estado (escuchando, pensando).
+- **Chat sobre el juego**: un atajo (Ctrl+Alt+C por defecto) abre encima del juego el historial de preguntas y avisos con un campo para escribir. Toma el teclado sin cambiar de app: en macOS es un NSPanel no activador, así el juego sigue delante y no sale de su escritorio a pantalla completa; en Windows, una ventana que pasa a primer plano uniendo un momento la entrada con la del juego. Intro envía, Esc cierra y el teclado vuelve al juego.
 - **Texto**: en la GUI, con histórico de la sesión y fuentes citadas.
 - **Voz**: TTS local en el idioma de salida configurado, con control de volumen, velocidad y ducking opcional del audio del juego.
 
@@ -319,7 +320,8 @@ Overlay y bandeja: la bandeja ofrece iniciar, pausar, silenciar proactivo, abrir
 
 - Secretos solo en Keychain, Credential Manager o Secret Service, nunca en ficheros ni en la línea de comandos. Los procesos hijos reciben claves por variable de entorno limpia.
 - El daemon escucha solo en loopback con token aleatorio por arranque. El panel remoto de fase 2 requiere emparejamiento explícito con código.
-- Todo endpoint local debe ser loopback; los remotos solo HTTPS con certificado válido.
+- El servidor de modelos del jugador puede estar en este equipo, en otro de su red (http con IP privada, enlace local, Tailscale o nombres `.local`) o en cualquier sitio por HTTPS; la GUI avisa de que las preguntas y el texto de la pantalla viajan a ese equipo. Los demás endpoints locales (motor gestionado, transcripción) son loopback y los remotos, solo HTTPS con certificado válido.
+- Los permisos del sistema se piden al arrancar y al activar lo que los necesita: en macOS, Grabación de pantalla, Monitorización de entrada (atajos) y Micrófono (voz); en Windows se comprueba el del micrófono y se abre su panel, porque no se puede pedir.
 - Todo contenido externo (texto OCR, fuentes de conocimiento, ficheros de guardado, transcripciones) se trata como datos no fiables y se delimita en los prompts.
 - Las salidas estructuradas se validan contra esquemas antes de usarse; nombres fuera del vocabulario se rechazan.
 - Captura solo de la ventana del juego. Aviso antes de enviar la primera captura a un proveedor remoto.

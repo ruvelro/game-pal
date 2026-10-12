@@ -146,3 +146,52 @@ def test_overlay_ignores_answers_not_meant_for_it_and_shows_listening() -> None:
     view = model.view()
     assert view is not None
     assert view.status == "Te escucho…"
+
+
+def test_chat_keeps_every_question_and_hides_the_card() -> None:
+    model = OverlayModel(corner="top-right")
+    model.handle({"topic": "capture.window", "data": {"left": 0, "top": 0, "width": 1920, "height": 1080}})
+    assert model.chat_view() is None
+    model.handle({"topic": "overlay.chat", "data": {}})  # el atajo: alterna
+    # Aunque la respuesta no vaya al overlay (solo texto), el chat la muestra.
+    base = {"id": "q1", "kind": "question", "title": "¿Qué planto?", "outputs": ["text"]}
+    model.handle({"topic": "assistant.answer", "data": {**base, "text": ""}})
+    chat = model.chat_view()
+    assert chat is not None
+    assert chat.status == "Pensando…"
+    model.handle({"topic": "assistant.answer", "data": {**base, "text": "Arándanos", "done": True}})
+    tip = {"id": "p1", "kind": "proactive", "title": "Tienda", "text": "Semillas", "done": True, "outputs": ["overlay"]}
+    model.handle({"topic": "assistant.answer", "data": tip})
+    chat = model.chat_view()
+    assert chat is not None
+    assert [(e.kind, e.question, e.answer) for e in chat.entries] == [
+        ("question", "¿Qué planto?", "Arándanos"),
+        ("proactive", "Tienda", "Semillas"),
+    ]
+    assert chat.x + chat.width <= 1920 - 18
+    # Con el chat abierto, la tarjeta no se repite encima.
+    assert model.view() is None
+    model.handle({"topic": "overlay.chat", "data": {"open": False}})
+    assert model.chat_view() is None
+    assert model.view() is not None
+
+
+def test_chat_keeps_only_the_latest_entries() -> None:
+    model = OverlayModel(chat_open=True)
+    for n in range(20):
+        model.handle({"topic": "assistant.answer", "data": {"id": str(n), "title": f"p{n}", "text": "r", "done": True}})
+    chat = model.chat_view()
+    assert chat is not None
+    assert len(chat.entries) == 12
+    assert chat.entries[-1].question == "p19"
+
+
+def test_chat_ignores_open_orders_from_before_it_connected() -> None:
+    from gamepal.overlay.client import OverlayClient
+
+    client = OverlayClient("http://127.0.0.1:1", "ws://127.0.0.1:1/api/events", "t", lambda view: None)
+    client._connected_at = 100.0
+    client._handle({"topic": "overlay.chat", "data": {"at": 99.0}})
+    assert not client.model.chat_open
+    client._handle({"topic": "overlay.chat", "data": {"at": 101.0}})
+    assert client.model.chat_open

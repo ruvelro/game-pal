@@ -83,6 +83,11 @@ function Conversation({ live }: { live: LiveState }) {
           <button onClick={() => void api.post("/api/assistant/stop")}>{t("home.silence")}</button>
         )}
         <button onClick={() => void toggleMute()}>{muted ? t("home.unmute") : t("home.mute")}</button>
+        <button
+          onClick={() => void api.post("/api/overlay/chat", { open: true }).catch((e: Error) => setError(e.message))}
+        >
+          {t("home.chat")}
+        </button>
         {voiceState && voiceState !== "off" && (
           <span className={`chip-static ${voiceState === "error" ? "warn" : ""}`}>
             <span className={`dot ${voiceState === "idle" ? "neutral" : "busy"}`} />

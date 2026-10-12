@@ -16,11 +16,11 @@ Cada juego es un **perfil**: una carpeta con unas reglas en YAML y las webs de d
 
 - **Multiplataforma**: Windows (x64 y ARM64), macOS (Apple Silicon) y Linux.
 - **Local primero**: OCR, visión, razonamiento, voz y búsqueda en tu equipo. Niveles de hardware desde un portátil modesto hasta una GPU grande.
-- **Cualquier modelo**: el motor local que game-pal instala solo (llama.cpp con Gemma 4 y Qwen 3.5), tu propio servidor (Ollama, LM Studio…) u OpenAI, Anthropic y OpenRouter.
+- **Cualquier modelo, esté donde esté**: el motor local que game-pal puede instalar (llama.cpp con Gemma 4 y Qwen 3.5), tu propio servidor (Ollama, LM Studio, NVIDIA PAIR…) en este equipo o en otro de tu red, u OpenAI, Anthropic y OpenRouter. «Probar conexión» dice qué falla.
 - **Cualquier juego**: perfiles declarativos sin coordenadas fijas; conocimiento cargado por URL y actualizable con un botón.
 - **Multiidioma**: idioma del juego, del jugador y de las respuestas configurables por separado.
 - **Tres formas de pedir consejo**: palabra clave, push-to-talk (teclado o mando) y modo proactivo.
-- **Tres formas de recibirlo**: overlay, texto y voz.
+- **Tres formas de recibirlo**: overlay, texto y voz. Y un chat encima del juego (Ctrl+Alt+C) para escribirle sin salir de la partida.
 - **Fuentes de verdad**: lo que se ve en pantalla y, cuando el perfil lo soporta, el fichero de guardado del juego.
 - **Memoria opcional** por sesión, exportable y borrable.
 - **GUI** para configurarlo y controlarlo todo sin tocar ficheros.

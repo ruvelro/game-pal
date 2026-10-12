@@ -26,7 +26,11 @@ ollama pull qwen3:4b
 
 game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Studio, llama.cpp o MLX, o una clave de OpenAI, Claude u OpenRouter en la página Modelos.
 
-**«En http://127.0.0.1:11434/v1 responde otro programa».** Otro programa ocupa el puerto de Ollama (o el de LM Studio, llama.cpp o MLX) y contesta con error. Ciérralo y vuelve a abrir tu servidor de modelos, o configura el servidor en otro puerto y escribe su dirección en Modelos › Opciones avanzadas.
+**Para saber qué falla, pulsa «Probar conexión»** en Modelos (o en el paso Modelo del asistente). Comprueba la dirección, la conexión, el servidor, el modelo y una respuesta de verdad, y dice en qué paso se para. Sirve igual para un servidor en este equipo, en otro de tu red o en la nube.
+
+**«… responde con un error: …».** Algo contesta en esa dirección, pero con un error, que se muestra tal cual. Puede ser otro programa en el puerto de Ollama (o de LM Studio, llama.cpp o MLX), o tu servidor sin un modelo listo. Si usas un programa que sirve los modelos de otro equipo (NVIDIA PAIR, por ejemplo), comprueba que ese equipo está encendido y conectado: «no active node» o «model inventory unavailable» quieren decir eso.
+
+**El servidor está en otro equipo.** Escribe su dirección en Modelos › Dirección del servidor, por ejemplo `http://192.168.1.20:11434/v1`. Dentro de tu red vale `http://` con la IP o el nombre `.local`; fuera de ella, solo `https://`. El servidor tiene que aceptar conexiones de la red: en Ollama, arráncalo con `OLLAMA_HOST=0.0.0.0`; en LM Studio, activa «Serve on Local Network». Y el cortafuegos de ese equipo debe dejar pasar el puerto. Si el servidor pide clave, escríbela en «Clave del servidor».
 
 **«No tiene el modelo…».** El modelo elegido no está descargado en el servidor. En Ollama: `ollama pull <modelo>`. O elige otro en la página Modelos.
 
@@ -40,7 +44,7 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 ## Ver el juego
 
-**macOS: «no da permiso de Grabación de pantalla».** Ajustes del Sistema › Privacidad y seguridad › Grabación de pantalla: activa la app desde la que lanzas game-pal (Terminal, iTerm, VS Code…) y vuelve a arrancar game-pal. El botón «Abrir Ajustes» de la GUI te lleva directo.
+**macOS: «no da permiso de Grabación de pantalla».** game-pal lo pide al arrancar la primera vez. Si dijiste que no, macOS ya no vuelve a preguntar: ve a Ajustes del Sistema › Privacidad y seguridad › Grabación de pantalla, activa game-pal (o la app desde la que lo lanzas: Terminal, iTerm, VS Code…) y vuelve a arrancarlo. El botón «Abrir Ajustes» de la GUI te lleva directo.
 
 **El juego no aparece.** Ponlo en modo ventana o ventana sin bordes: la pantalla completa exclusiva no se puede capturar. Si el juego tiene perfil, game-pal lo reconoce solo al abrirlo; si no, elige su ventana en la página Juego.
 
@@ -56,6 +60,10 @@ game-pal lo detecta solo en unos segundos, sin reiniciar. También valen LM Stud
 
 **Linux: «Sin audio».** Falta PortAudio: `sudo apt install libportaudio2`.
 
-**macOS: no te oye.** Ajustes del Sistema › Privacidad y seguridad › Micrófono: activa la app desde la que lanzas game-pal.
+**macOS: no te oye.** game-pal pide el micrófono al activar la voz. Si lo negaste: Ajustes del Sistema › Privacidad y seguridad › Micrófono, y activa game-pal o la app desde la que lo lanzas.
 
-**Los atajos de teclado no hacen nada.** En macOS hace falta permiso de Accesibilidad (y Monitorización de entrada) para la app desde la que lanzas game-pal; luego vuelve a arrancar. En Wayland los atajos globales no funcionan: usa la voz o los botones de la GUI.
+**Windows: no te oye.** Configuración › Privacidad y seguridad › Micrófono: deja que las aplicaciones de escritorio usen el micrófono. Windows no deja pedirlo desde game-pal; la GUI abre ese panel.
+
+**Los atajos de teclado no hacen nada.** En macOS hace falta el permiso de Monitorización de entrada (o el de Accesibilidad). game-pal lo pide al arrancar; en cuanto lo concedes, los atajos se activan solos, sin reiniciar. En Wayland los atajos globales no funcionan: usa la voz o los botones de la GUI.
+
+**El chat sobre el juego no aparece.** Se abre con Ctrl+Alt+C (se cambia en Voz y respuestas) o con el botón «Chat sobre el juego» de Inicio. Necesita el overlay activado y el juego en modo ventana o ventana sin bordes: encima de la pantalla completa exclusiva no se puede dibujar. Intro envía, Esc lo cierra y devuelve el teclado al juego.
