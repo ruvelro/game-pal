@@ -70,6 +70,9 @@ async def feed(controller: VoiceController, queue: asyncio.Queue[Audio], chunks:
         # Deja correr al transcriptor, como pasaría con audio en tiempo real.
         await asyncio.sleep(0.001)
     await asyncio.sleep(0.05)
+    # Hasta que se transcriba lo encolado: cancelar `run` corta también la transcripción, y en Windows x64 la
+    # de otro hilo podía tardar más de los 50 ms de antes.
+    await asyncio.wait_for(controller.drained(), EXPECT_S)
     task.cancel()
 
 

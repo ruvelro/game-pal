@@ -206,6 +206,12 @@ class VoiceController:
                 log.exception("Error de transcripción")
                 self._set("error", str(exc))
                 self._set("idle")
+            finally:
+                self._work.task_done()  # `drained` espera a que no quede nada por transcribir
+
+    async def drained(self) -> None:
+        """Espera a que se hayan transcrito y atendido todas las frases encoladas."""
+        await self._work.join()
 
     async def _transcribe(self, audio: Audio, hint: str, wake: bool = False) -> str:
         stt = self._wake_stt if wake else self._stt
