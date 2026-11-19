@@ -230,6 +230,12 @@ class Assistant:
         self._entry: tuple[str, int] | None = None
         self._entry_fired = False
         self.proactive_muted = False
+        # La respuesta que está emitiendo `_stream`: desde ahí, él cierra la respuesta pase lo que pase.
+        self._streaming = ""
+        # La pregunta de la tarea en curso y la última que llegó a empezar: una cortada antes de empezar se cierra
+        # al cortarla.
+        self._question: QuestionAsked | None = None
+        self._began = ""
 
     # Entrada -------------------------------------------------------------------------------
 
@@ -237,7 +243,7 @@ class Assistant:
         async with self._bus.subscribe({"assistant.question", "perception.screen", "voice.stopped"}) as sub:
             async for event in sub:
                 if isinstance(event, QuestionAsked):
-                    self._start(self._answer_question(event))
+                    self._start(self._answer_question(event), event)
                 elif isinstance(event, ScreenDetected):
                     self._on_screen(event)
                 elif isinstance(event, SpeechStopped) and event.reason == "voice":
@@ -252,9 +258,14 @@ class Assistant:
     def cancel(self) -> None:
         if self._task is not None and not self._task.done():
             self._task.cancel()
+            question, self._question = self._question, None
+            if question is not None and self._began != question.id:
+                # Cortada antes de empezar siquiera (dos preguntas seguidas): la tarea no llegará a cerrarla.
+                self._emit_error(question.id, "question", question.text, self._outputs(question), "cancelada")
 
-    def _start(self, coroutine: Any) -> None:
+    def _start(self, coroutine: Any, question: QuestionAsked | None = None) -> None:
         self.cancel()
+        self._question = question
         self._task = asyncio.create_task(coroutine)
 
     # Proactivo -----------------------------------------------------------------------------
@@ -468,14 +479,37 @@ class Assistant:
         return "quick" if route == "quick" else "reasoned"
 
     async def _answer_question(self, question: QuestionAsked) -> None:
+        """Responde, y si algo falla antes de que la respuesta empiece, lo dice: una pregunta nunca se queda sin
+        respuesta ni error (una tabla del perfil rota, la memoria o la captura que fallan, otra pregunta que la
+        corta mientras se buscan los datos)."""
+        self._began = question.id
+        try:
+            await self._answer(question)
+        except asyncio.CancelledError:
+            if self._streaming != question.id:
+                self._emit_error(question.id, "question", question.text, self._outputs(question), "cancelada")
+            raise
+        except Exception as exc:
+            log.exception("La pregunta falló antes de responder")
+            if self._streaming != question.id:
+                error = (
+                    f"No he podido preparar la respuesta: {exc}. Vuelve a preguntar; si se repite, mira el registro."
+                )
+                self._emit_error(question.id, "question", question.text, self._outputs(question), error)
+
+    def _outputs(self, question: QuestionAsked) -> list[Output]:
+        outputs = list(self._config().output.answers)
+        if question.source == "text":
+            outputs = [o for o in outputs if o != "voice"] or ["text"]
+        return outputs
+
+    async def _answer(self, question: QuestionAsked) -> None:
         # Al registro (solo en este equipo): lo preguntado, lo que tardó cada parte y lo respondido. Sin esto,
         # tras una prueba no hay forma de saber por qué una respuesta fue lenta o mala.
         log.info("Pregunta (%s): %r", question.source, question.text)
         started = time.perf_counter()
         provider, config = self._provider(), self._config()
-        outputs = list(config.output.answers)
-        if question.source == "text":
-            outputs = [o for o in outputs if o != "voice"] or ["text"]
+        outputs = self._outputs(question)
         if provider is None:
             error = explain_error("No hay modelo seleccionado para local", self._config())
             self._emit_error(question.id, "question", question.text, outputs, error)
@@ -536,6 +570,13 @@ class Assistant:
             self._history.append(Turn(question.text, answer))
 
     async def _answer_task(self, task: str, screen: ScreenDetected, outputs: list[Output]) -> None:
+        try:
+            await self._task_answer(task, screen, outputs)
+        except Exception:
+            # Un aviso que nadie pidió no muestra el error, pero queda en el registro.
+            log.exception("El aviso «%s» falló antes de responder", task)
+
+    async def _task_answer(self, task: str, screen: ScreenDetected, outputs: list[Output]) -> None:
         provider = self._provider()
         if provider is None:
             return
@@ -589,6 +630,7 @@ class Assistant:
                 sources=[s for s in sources or [] if s.get("n") in cited], text=shown, done=True,
             )  # fmt: skip
 
+        self._streaming = answer_id
         self._bus.publish(update())
         shown = ""
         started = time.perf_counter()
@@ -614,6 +656,12 @@ class Assistant:
             return ""
         except ProviderError as exc:
             log.warning("El modelo falló: %s", exc)
+            self._bus.publish(update(text=plain_text(text), done=True, error=explain_error(str(exc), self._config())))
+            return ""
+        except Exception as exc:
+            # Lo que no es un error del proveedor (una respuesta que no es JSON, un fallo de red sin traducir)
+            # también cierra la respuesta: si no, se queda a medias para siempre.
+            log.exception("La respuesta falló")
             self._bus.publish(update(text=plain_text(text), done=True, error=explain_error(str(exc), self._config())))
             return ""
         if not text.strip():
