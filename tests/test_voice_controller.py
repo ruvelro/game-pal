@@ -118,6 +118,27 @@ async def test_only_the_wake_phrase_waits_for_the_question() -> None:
     assert cues == [True]
 
 
+async def test_a_long_push_to_talk_question_keeps_all_its_audio() -> None:
+    bus = EventBus()
+    main = ScriptedStt(lambda s: "¿Qué hago con todo esto?")
+    controller, _, queue = make(bus, ScriptedStt(lambda s: ""), main)
+    async with bus.subscribe({"assistant.question"}) as sub:
+        task = asyncio.create_task(controller.run())
+        controller.ptt_press()
+        # Más de los 15 s que cierran una frase dicha sin pulsar nada.
+        for chunk in frames((VOICE, 19.0)):
+            await queue.put(chunk)
+            await asyncio.sleep(0.001)  # como el audio en tiempo real: el bucle lo va leyendo
+        await asyncio.sleep(0.05)
+        controller.ptt_release()
+        [question] = await expect(sub)
+        task.cancel()
+    assert isinstance(question, QuestionAsked)
+    assert question.source == "push_to_talk"
+    assert main.calls == [main.calls[0]]
+    assert main.calls[0] > 18.5
+
+
 async def test_its_own_voice_does_not_stop_it_but_a_short_stop_phrase_does() -> None:
     bus = EventBus()
     replies = iter(["Úsala para invierno y luego vuelve a casa.", "para"])

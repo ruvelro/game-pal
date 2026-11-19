@@ -74,6 +74,50 @@ async def test_question_streams_answer_with_screen_context(hades: LoadedProfile)
     assert '<pantalla id="boon_choice"' in prompt[-1]["content"]
 
 
+async def test_a_failure_before_answering_is_shown(hades: LoadedProfile, monkeypatch: pytest.MonkeyPatch) -> None:
+    bus, seen = EventBus(), []
+    assistant = _assistant(bus, _provider("Hola.", seen), AppConfig(), hades)
+
+    async def broken(text: str) -> str:
+        raise RuntimeError("tabla rota")
+
+    monkeypatch.setattr(assistant, "_route", broken)
+    runner = asyncio.create_task(assistant.run())
+    await asyncio.sleep(0)
+    events = await _collect(bus, lambda: bus.publish(QuestionAsked(id="q1", text="¿Qué hago?", source="voice")))
+    runner.cancel()
+    assert events[-1].id == "q1"
+    assert events[-1].done
+    assert "tabla rota" in (events[-1].error or "")
+    assert seen == []
+
+
+async def test_a_question_cut_while_preparing_is_closed(hades: LoadedProfile, monkeypatch: pytest.MonkeyPatch) -> None:
+    bus, seen = EventBus(), []
+    assistant = _assistant(bus, _provider("Hola.", seen), AppConfig(), hades)
+    route = assistant._route
+    waiting = asyncio.Event()
+
+    async def slow(text: str) -> str:
+        if text == "primera":
+            await waiting.wait()  # nunca llega: la segunda pregunta la corta antes
+        return await route(text)
+
+    monkeypatch.setattr(assistant, "_route", slow)
+    runner = asyncio.create_task(assistant.run())
+    await asyncio.sleep(0)
+
+    def ask_twice() -> None:
+        bus.publish(QuestionAsked(id="q1", text="primera", source="voice"))
+        bus.publish(QuestionAsked(id="q2", text="segunda", source="voice"))
+
+    events = await _collect(bus, ask_twice, until_done=2)
+    runner.cancel()
+    [first] = [e for e in events if e.id == "q1" and e.done]
+    assert first.error == "cancelada"
+    assert not next(e for e in events if e.id == "q2" and e.done).error
+
+
 async def test_text_questions_are_not_spoken(hades: LoadedProfile) -> None:
     bus, seen = EventBus(), []
     config = AppConfig.model_validate({"output": {"answers": ["overlay", "text", "voice"]}})

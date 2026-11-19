@@ -11,6 +11,8 @@ from gamepal.perception.text import max_edits, normalize
 
 # Palabras de relleno que Whisper suele añadir antes de la frase clave.
 FILLERS = frozenset({"eh", "ey", "oye", "ah", "um", "hm", "pues", "bueno", "ok", "okay", "vale"})
+# Lo que Whisper oye a veces en lugar de «oye» delante de la palabra larga: «puede compañero», «hoy es compañero».
+MISHEARD = frozenset({"hoy", "puede", "o", "oi", "oy", "olle", "hoye"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,16 +39,22 @@ class PhraseMatcher:
         best: tuple[int, int, str] | None = None
         for phrase, target in self._phrases:
             joined = " ".join(target)
-            budget = max(1, max_edits(len(joined)), round(len(joined) * self._tolerance))
+            # Si lo dicho junta o separa palabras («oyecompañero»), se compara entero y con poco margen.
+            budget = max(1, max_edits(len(joined)))
             for start in range(0, min(self._window, len(words)) + 1):
                 # Delante solo puede haber una palabra cualquiera (un error al arrancar) o relleno.
                 if start > 1 and not all(word in FILLERS for word in words[:start]):
                     continue
                 for size in {len(target) - 1, len(target), len(target) + 1} - {0}:
-                    chunk = " ".join(words[start : start + size])
-                    if not chunk:
+                    said = words[start : start + size]
+                    if not said:
                         continue
-                    distance = Levenshtein.distance(joined, chunk, score_cutoff=budget)
+                    if size == len(target):
+                        # Palabra a palabra: el margen de toda la frase dejaba cambiar una entera («hey man»,
+                        # «tu compañero» por «oye compañero»).
+                        distance = self._per_word(target, said)
+                    else:
+                        distance = Levenshtein.distance(joined, " ".join(said), score_cutoff=budget)
                     if distance <= budget and (best is None or distance < best[0]):
                         best = (distance, start + size, phrase)
         if best is None:
@@ -57,6 +65,17 @@ class PhraseMatcher:
         rest = " ".join(original[best[1] :]).lstrip(",.:;!¡¿? ")
         return PhraseHit(best[2], rest)
 
+    def _per_word(self, target: list[str], said: list[str]) -> int:
+        """Los errores sumados si cada palabra se parece a la suya; si alguna no, más que cualquier margen."""
+        total = 0
+        for wanted, heard in zip(target, said, strict=True):
+            budget = max(max_edits(len(wanted)), round(len(wanted) * self._tolerance))
+            distance = Levenshtein.distance(wanted, heard, score_cutoff=budget)
+            if distance > budget:
+                return 1_000
+            total += distance
+        return total
+
     def _anchored(self, words: list[str]) -> tuple[int, str] | None:
         """La palabra larga de la frase casi exacta, con poco delante: Whisper oye «puede compañero» o «hoy es
         compañero» por «oye compañero». La palabra distintiva basta; lo corto de delante se le perdona."""
@@ -64,13 +83,17 @@ class PhraseMatcher:
             anchor = target[-1]
             if len(target) < 2 or len(anchor) < 6:
                 continue
-            # Delante tiene que haber algo («oye»): «compañero» a secas al empezar una frase es demasiado común
-            # («compañero, está listo» lo activó en una prueba).
+            lead = " ".join(target[:-1])
+            # Delante tiene que haber algo parecido a «oye»: «compañero» a secas al empezar una frase es demasiado
+            # común («compañero, está listo» lo activó en una prueba), y cualquier palabra corta también («mi
+            # compañero está aquí», «tu compañero de clase»).
             for index in range(1, min(3, len(words))):
                 if Levenshtein.distance(anchor, words[index], score_cutoff=1) > 1:
                     continue
                 before = words[:index]
-                if all(len(word) <= 5 for word in before):
+                if not all(len(word) <= 5 for word in before):
+                    continue
+                if before[0] in MISHEARD or Levenshtein.distance(lead, " ".join(before), score_cutoff=1) <= 1:
                     return index + 1, phrase
         return None
 

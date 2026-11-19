@@ -8,7 +8,7 @@ import pytest
 from gamepal.voice.models import Artifact, ModelDownloadError, ModelStore, piper_artifacts
 from gamepal.voice.phrases import PhraseMatcher
 from gamepal.voice.tts import SentenceBuffer, speakable
-from gamepal.voice.vad import FRAME, EnergyVad, Segmenter
+from gamepal.voice.vad import FRAME, FRAME_SECONDS, EnergyVad, Segmenter
 
 
 @pytest.mark.parametrize(
@@ -21,6 +21,8 @@ from gamepal.voice.vad import FRAME, EnergyVad, Segmenter
         # Lo que Whisper entiende a veces: la palabra larga casi exacta y algo corto delante.
         ("Puede compañero.", ""),
         ("Hoy es compañero, ¿qué planto?", "qué planto?"),
+        ("Oyecompañero, ¿y ahora?", "y ahora?"),
+        ("hoy compañeros dónde pesco", "dónde pesco"),
     ],
 )
 def test_wake_phrase_at_start(text: str, rest: str) -> None:
@@ -29,7 +31,20 @@ def test_wake_phrase_at_start(text: str, rest: str) -> None:
     assert hit.rest == rest
 
 
-@pytest.mark.parametrize("text", ["Le dije a mi compañero que oye", "Hola qué tal", "pal"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Le dije a mi compañero que oye",
+        "Hola qué tal",
+        "pal",
+        # Frases corrientes que se parecen: una palabra cualquiera delante o una palabra entera cambiada.
+        "Mi compañero está aquí",
+        "Tu compañero de clase",
+        "El compañero dice que no",
+        "Hey man, look at this",
+        "Hey all, welcome",
+    ],
+)
 def test_wake_phrase_not_elsewhere(text: str) -> None:
     assert PhraseMatcher(["oye compañero", "hey pal"]).match_start(text) is None
 
@@ -64,6 +79,18 @@ def test_segmenter_ignores_clicks_and_supports_push_to_talk() -> None:
     utterance = seg.force_end()
     assert utterance is not None
     assert utterance.forced
+
+
+def test_push_to_talk_is_not_cut_at_the_voice_limit() -> None:
+    seg = Segmenter(max_seconds=0.5, forced_max_seconds=1.0)
+    frame = np.zeros(FRAME, dtype=np.float32)
+    seg.force_start()
+    # Más que el límite de una frase normal: con push-to-talk no corta.
+    assert all(seg.feed(frame, 0.9) is None for _ in range(round(0.8 / FRAME_SECONDS)))
+    # El límite de seguridad sí: una tecla que se queda pulsada no graba sin fin.
+    cut = [u for u in (seg.feed(frame, 0.9) for _ in range(round(0.4 / FRAME_SECONDS))) if u is not None]
+    assert len(cut) == 1
+    assert cut[0].forced
 
 
 def test_energy_vad_adapts_to_noise() -> None:

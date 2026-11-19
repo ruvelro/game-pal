@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   formatBytes,
@@ -173,9 +173,13 @@ function LocalModel({ config, setConfig }: { config: AppConfig; setConfig: SetCo
     [config, provider, setConfig],
   );
   // Si el servidor configurado en este equipo no responde pero hay otro, se propone ese. Una dirección
-  // de otro equipo escrita por el jugador no se toca.
+  // de otro equipo escrita por el jugador no se toca. Se propone una vez por búsqueda, no a cada tecla: si no,
+  // una dirección local escrita a mano volvía sola a la detectada.
+  const proposed = useRef<LocalServer[] | undefined>(undefined);
   useEffect(() => {
-    if (servers && servers.length > 0 && !current && !remote && servers[0]) choose(servers[0]);
+    if (!servers || proposed.current === servers) return;
+    proposed.current = servers;
+    if (servers.length > 0 && !current && !remote && servers[0]) choose(servers[0]);
   }, [servers, current, remote, choose]);
   const setUrl = (base_url: string) => {
     setTested(undefined);

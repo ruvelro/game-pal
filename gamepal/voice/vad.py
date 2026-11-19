@@ -94,11 +94,15 @@ class Segmenter:
         hangover: float = 0.7,
         pre_roll: float = 0.3,
         max_seconds: float = 15.0,
+        forced_max_seconds: float = 60.0,
     ) -> None:
         self.threshold = threshold
         self._min_frames = max(1, round(min_speech / FRAME_SECONDS))
         self._hang_frames = max(1, round(hangover / FRAME_SECONDS))
         self._max_frames = round(max_seconds / FRAME_SECONDS)
+        # Con push-to-talk el jugador decide cuándo acaba: el límite solo evita grabar sin fin si la tecla se queda
+        # pulsada (se pierde el evento de soltar, se desconecta el mando).
+        self._forced_max_frames = max(self._max_frames, round(forced_max_seconds / FRAME_SECONDS))
         # +1: el frame que dispara la detección también entra en la cola previa.
         self._pre: deque[Audio] = deque(maxlen=max(1, round(pre_roll / FRAME_SECONDS)) + 1)
         self._frames: list[Audio] = []
@@ -163,7 +167,7 @@ class Segmenter:
             self._silence = 0
         else:
             self._silence += 1
-        too_long = len(self._frames) >= self._max_frames
+        too_long = len(self._frames) >= (self._forced_max_frames if self.forced else self._max_frames)
         ended = not self.forced and self._silence >= self._hang_frames
         if not (ended or too_long):
             return None

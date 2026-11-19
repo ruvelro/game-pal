@@ -172,7 +172,15 @@ class VoiceController:
                         self._cue(False)
                     self._following = False
                     self._set("idle")
-                if utterance is None or utterance.forced:
+                if utterance is not None and utterance.forced:
+                    # Push-to-talk que llegó al límite de seguridad: se da por soltado y se pregunta lo grabado.
+                    if self._ptt:
+                        log.warning("Push-to-talk cerrado tras %.0f s sin soltar", utterance.seconds)
+                        self._ptt = False
+                        self._set("idle")
+                        self._enqueue(utterance, "push_to_talk", segment)
+                    continue
+                if utterance is None:
                     continue
                 if self._early_hit == segment:
                     # La frase clave ya se oyó al vuelo en esta misma frase: puede llevar la pregunta detrás.
